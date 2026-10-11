@@ -48,6 +48,8 @@ export interface Campaign {
   journal: JournalEntry[];
   chapterSummary: string;
   campaignSummary: string;
+  /** Çevrimiçi modda vektör aramasıyla gelen eski anlatı parçaları (yoksa günlükten anahtar kelime). */
+  memories?: string[];
 }
 
 export interface NewCampaignInput {
@@ -147,7 +149,7 @@ export function buildContext(c: Campaign): TurnPacketInput {
     chapterSummary: c.chapterSummary,
     campaignSummary: c.campaignSummary,
     openQuests: Object.values(c.state.world?.quests ?? {}).filter((q) => q.status === "open").map((q) => q.title),
-    memories: recallMemories(c, here.filter((x) => x.id !== c.playerId).map((x) => x.name), 6),
+    memories: c.memories ?? recallMemories(c, here.filter((x) => x.id !== c.playerId).map((x) => x.name), 6),
   };
 }
 

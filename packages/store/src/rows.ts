@@ -2,10 +2,7 @@
  * Supabase satırları ↔ motor tipleri. Saf fonksiyonlar: hem Edge Function
  * (Deno) hem Node testleri kullanır.
  */
-import type {
-  Creature, Effect, Encounter, Faction, GameState, InventoryEntry, RollRecord, RuleOptions,
-} from "@kader/engine";
-import { DEFAULT_RULES, relKey } from "@kader/engine";
+import type { Creature, Faction } from "@kader/engine";
 
 export interface CreatureRow {
   id: string;
@@ -13,6 +10,8 @@ export interface CreatureRow {
   kind: Creature["kind"];
   name: string;
   template_key: string | null;
+  race_key: string | null;
+  class_key: string | null;
   level: number;
   cr: number | string | null;
   size: Creature["size"];
@@ -20,6 +19,8 @@ export interface CreatureRow {
   save_proficiencies: Creature["saveProficiencies"];
   skill_proficiencies: Creature["skillProficiencies"];
   expertise: Creature["expertise"];
+  weapon_proficiencies: string[] | null;
+  armor_proficiencies: string[] | null;
   hp: number;
   max_hp: number;
   temp_hp: number;
@@ -37,48 +38,19 @@ export interface CreatureRow {
   inspiration: boolean;
   spellcasting: Creature["spellcasting"] | null;
   features: Creature["features"];
+  resources: Creature["resources"] | null;
+  buffs: Creature["buffs"] | null;
+  attacks: string[] | null;
   xp: number;
   is_alive: boolean;
-  attacks: string[];
+  looted: boolean;
+  stealth_disadvantage: boolean;
+  darkvision: number | null;
+  languages: string[] | null;
+  background: string | null;
   location_id: string | null;
   faction_id: string | null;
 }
-
-export interface FactionRow {
-  id: string;
-  campaign_id: string;
-  name: string;
-  treasury: number | string;
-  military: number;
-  stability: number;
-  population: number | string;
-  tech: number | string;
-  intelligence: number;
-  traits: Faction["traits"];
-  region_ids: string[];
-  at_war_with: string[];
-  alliances: string[];
-}
-
-export interface CampaignRow {
-  id: string;
-  owner_id: string;
-  world_id: string;
-  title: string;
-  settings: Partial<RuleOptions>;
-  seed: string;
-  turn_count: number;
-  game_time: number;
-  player_character_id: string | null;
-  scene_location_id: string | null;
-  encounter: Encounter | null;
-  chapter_summary: string;
-  campaign_summary: string;
-}
-
-export interface InventoryRow { owner_id: string; item_key: string; qty: number; equipped: boolean; attuned: boolean }
-export interface WalletRow { owner_id: string; cp: number | string }
-export interface RelationshipRow { a: string; b: string; score: number }
 
 export function toCreature(r: CreatureRow): Creature {
   const c: Creature = {
@@ -114,17 +86,31 @@ export function toCreature(r: CreatureRow): Creature {
   if (r.spellcasting) c.spellcasting = r.spellcasting;
   if (r.location_id) c.locationId = r.location_id;
   if (r.faction_id) c.factionId = r.faction_id;
-  if (r.attacks?.length) c.attacks = r.attacks;
+  if (r.template_key) c.templateKey = r.template_key;
+  if (r.race_key) c.raceKey = r.race_key;
+  if (r.class_key) c.classKey = r.class_key;
+  if (r.weapon_proficiencies) c.weaponProficiencies = r.weapon_proficiencies;
+  if (r.armor_proficiencies) c.armorProficiencies = r.armor_proficiencies;
+  if (r.resources) c.resources = r.resources;
+  if (r.buffs && r.buffs.length) c.buffs = r.buffs;
+  if (r.attacks) c.attacks = r.attacks;
+  if (r.looted) c.looted = true;
+  if (r.stealth_disadvantage) c.stealthDisadvantage = true;
+  if (r.darkvision) c.darkvision = r.darkvision;
+  if (r.languages) c.languages = r.languages;
+  if (r.background) c.background = r.background;
   return c;
 }
 
-export function fromCreature(c: Creature, campaignId: string, templateKey: string | null = null): CreatureRow {
+export function fromCreature(c: Creature, campaignId: string): CreatureRow {
   return {
     id: c.id,
     campaign_id: campaignId,
     kind: c.kind,
     name: c.name,
-    template_key: templateKey,
+    template_key: c.templateKey ?? null,
+    race_key: c.raceKey ?? null,
+    class_key: c.classKey ?? null,
     level: c.level,
     cr: c.cr ?? null,
     size: c.size,
@@ -132,6 +118,8 @@ export function fromCreature(c: Creature, campaignId: string, templateKey: strin
     save_proficiencies: c.saveProficiencies,
     skill_proficiencies: c.skillProficiencies,
     expertise: c.expertise,
+    weapon_proficiencies: c.weaponProficiencies ?? null,
+    armor_proficiencies: c.armorProficiencies ?? null,
     hp: c.hp,
     max_hp: c.maxHp,
     temp_hp: c.tempHp,
@@ -149,12 +137,35 @@ export function fromCreature(c: Creature, campaignId: string, templateKey: strin
     inspiration: c.inspiration,
     spellcasting: c.spellcasting ?? null,
     features: c.features,
+    resources: c.resources ?? null,
+    buffs: c.buffs ?? null,
+    attacks: c.attacks ?? null,
     xp: c.xp,
     is_alive: c.isAlive,
-    attacks: c.attacks ?? [],
+    looted: !!c.looted,
+    stealth_disadvantage: !!c.stealthDisadvantage,
+    darkvision: c.darkvision ?? null,
+    languages: c.languages ?? null,
+    background: c.background ?? null,
     location_id: c.locationId ?? null,
     faction_id: c.factionId ?? null,
   };
+}
+
+export interface FactionRow {
+  id: string;
+  campaign_id: string;
+  name: string;
+  treasury: number | string;
+  military: number;
+  stability: number;
+  population: number | string;
+  tech: number | string;
+  intelligence: number;
+  traits: Faction["traits"];
+  region_ids: string[];
+  at_war_with: string[];
+  alliances: string[];
 }
 
 export function toFaction(r: FactionRow): Faction {
@@ -189,125 +200,5 @@ export function fromFaction(f: Faction, campaignId: string): FactionRow {
     region_ids: f.regionIds,
     at_war_with: f.atWarWith,
     alliances: f.alliances,
-  };
-}
-
-export interface LoadedRows {
-  campaign: CampaignRow;
-  creatures: CreatureRow[];
-  inventory: InventoryRow[];
-  wallets: WalletRow[];
-  relationships: RelationshipRow[];
-  factions: FactionRow[];
-}
-
-export function buildGameState(rows: LoadedRows): { state: GameState; rules: RuleOptions } {
-  const inventories: Record<string, InventoryEntry[]> = {};
-  for (const i of rows.inventory) {
-    (inventories[i.owner_id] ??= []).push({ itemKey: i.item_key, qty: i.qty, equipped: i.equipped, attuned: i.attuned });
-  }
-  return {
-    state: {
-      campaignId: rows.campaign.id,
-      gameTime: rows.campaign.game_time,
-      sceneLocationId: rows.campaign.scene_location_id,
-      creatures: Object.fromEntries(rows.creatures.map((r) => [r.id, toCreature(r)])),
-      inventories,
-      wallets: Object.fromEntries(rows.wallets.map((w) => [w.owner_id, Number(w.cp)])),
-      relationships: Object.fromEntries(rows.relationships.map((r) => [relKey(r.a, r.b), r.score])),
-      factions: Object.fromEntries(rows.factions.map((r) => [r.id, toFaction(r)])),
-      encounter: rows.campaign.encounter,
-    },
-    rules: { ...DEFAULT_RULES, ...(rows.campaign.settings ?? {}) },
-  };
-}
-
-export interface TurnRecordInput {
-  playerInput: string;
-  intent: unknown;
-  action: unknown;
-  outcome: unknown;
-  narration: unknown;
-  narrationSource: "model" | "model_retry" | "template";
-  validation: unknown[];
-  rngNonce: string;
-  usage: unknown[];
-  hooks: { type: string; text: string }[];
-  facts: { subject: string; predicate: string; value: string }[];
-}
-
-/**
- * Turun yan etkilerinden apply_turn() yükünü üret. Yalnızca DOKUNULAN
- * varlıklar gönderilir; son hâlleri motorun ürettiği durumdan alınır.
- */
-export function buildApplyPayload(
-  before: GameState,
-  after: GameState,
-  effects: Effect[],
-  rolls: RollRecord[],
-  rec: TurnRecordInput,
-): Record<string, unknown> {
-  const creatureIds = new Set<string>();
-  const inventoryOwners = new Set<string>();
-  const walletOwners = new Set<string>();
-  const relPairs = new Set<string>();
-  const factionIds = new Set<string>();
-  const regionOwners = new Map<string, string>();
-
-  for (const e of effects) {
-    switch (e.op) {
-      case "creature.update": creatureIds.add(e.id); break;
-      case "move": creatureIds.add(e.id); break;
-      case "inventory.add":
-      case "inventory.remove": inventoryOwners.add(e.ownerId); break;
-      case "wallet": walletOwners.add(e.ownerId); break;
-      case "relationship": relPairs.add(relKey(e.a, e.b)); break;
-      case "faction.update": {
-        factionIds.add(e.id);
-        const ids = e.after.regionIds;
-        if (ids) for (const r of ids) regionOwners.set(r, e.id);
-        break;
-      }
-      default: break;
-    }
-  }
-
-  const playerMoved = effects.find((e): e is Extract<Effect, { op: "move" }> => e.op === "move");
-
-  return {
-    turn: {
-      player_input: rec.playerInput,
-      intent: rec.intent ?? null,
-      action: rec.action,
-      outcome: rec.outcome,
-      narration: rec.narration,
-      narration_source: rec.narrationSource,
-      validation: rec.validation,
-      rng_nonce: rec.rngNonce,
-      usage: rec.usage,
-      game_time_before: before.gameTime,
-      game_time_after: after.gameTime,
-    },
-    game_time: after.gameTime,
-    encounter: after.encounter,
-    scene_location_id: playerMoved?.to ?? null,
-    creatures: [...creatureIds].map((id) => fromCreature(after.creatures[id]!, after.campaignId)),
-    inventory: [...inventoryOwners].map((owner) => ({
-      owner_id: owner,
-      items: (after.inventories[owner] ?? []).map((i) => ({
-        item_key: i.itemKey, qty: i.qty, equipped: !!i.equipped, attuned: !!i.attuned,
-      })),
-    })),
-    wallets: [...walletOwners].map((o) => ({ owner_id: o, cp: after.wallets[o] ?? 0 })),
-    relationships: [...relPairs].map((k) => {
-      const [a, b] = k.split("|") as [string, string];
-      return { a, b, score: after.relationships[k] ?? 0 };
-    }),
-    factions: [...factionIds].map((id) => fromFaction(after.factions[id]!, after.campaignId)),
-    regions: [...regionOwners].map(([id, owner]) => ({ id, owner_faction_id: owner })),
-    rolls,
-    effects,
-    hooks: rec.hooks,
-    facts: rec.facts,
   };
 }

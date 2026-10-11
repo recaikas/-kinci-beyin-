@@ -1,0 +1,16 @@
+{
+  "imports": {
+    "@kader/dice": "../../packages/dice/src/index.ts",
+    "@kader/engine": "../../packages/engine/src/index.ts",
+    "@kader/llm": "../../packages/llm/src/index.ts",
+    "@kader/store": "../../packages/store/src/index.ts",
+    "@kader/game": "../../packages/game/src/index.ts",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.133.0",
+    "@anthropic-ai/sdk/": "npm:/@anthropic-ai/sdk@0.133.0/",
+    "zod/v4": "npm:zod@4.6.5/v4",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.3"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "esnext"]
+  }
+}

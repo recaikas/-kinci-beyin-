@@ -82,7 +82,7 @@ export function refreshDerived(w: StateWriter, id: string): void {
   const heavyPenalty = body?.strRequirement && c.abilities.str < body.strRequirement ? 10 : 0;
   w.updateCreature(id, {
     ac: computeAc(c, inv),
-    stealthDisadvantage: !!body?.stealthDisadvantage,
+    stealthDisadvantage: body?.stealthDisadvantage ? true : undefined,
     speed: baseSpeed - heavyPenalty,
   });
 }
