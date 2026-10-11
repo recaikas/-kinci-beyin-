@@ -15,3 +15,6 @@ export * from "./actions.ts";
 export * from "./srd/content.ts";
 export * from "./tr.ts";
 export * from "./ai.ts";
+export * from "./character.ts";
+export * from "./abilities.ts";
+export * from "./hostility.ts";

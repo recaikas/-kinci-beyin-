@@ -7,9 +7,12 @@ import { type Ability, abilityModifier, type DamageType, proficiencyBonus } from
 import type { Condition } from "./conditions.ts";
 import type { EngineContext } from "./context.ts";
 import { savingThrow } from "./checks.ts";
-import { applyDamage, attack, type AttackResult, type DamageApplied, grantTempHp, heal, rollDamage } from "./combat.ts";
+import {
+  applyDamage, attack, type AttackResult, type DamageApplied, endConcentration, grantTempHp,
+  heal, rollDamage,
+} from "./combat.ts";
 import { StateError, type StateWriter } from "./state.ts";
-import type { Creature } from "./types.ts";
+import type { Buff, Creature } from "./types.ts";
 
 /** SRD tam büyücü (bard, cleric, druid, sorcerer, wizard) yuva tablosu: seviye → [1..9]. */
 export const FULL_CASTER_SLOTS: number[][] = [
@@ -76,6 +79,8 @@ export interface SpellDef {
   rangeFt: number;
   concentration: boolean;
   ritual?: boolean;
+  /** Bu büyüyü öğrenebilen sınıflar. */
+  classes: string[];
   /** Saldırı büyüsü. */
   attack?: "melee" | "ranged";
   /** Kurtarma atışı büyüsü. */
@@ -94,10 +99,32 @@ export interface SpellDef {
   addAbilityMod?: boolean;
   /** Başarısız kurtarmada uygulanan koşullar. */
   conditionsOnFail?: Condition[];
+  /** Koşullu hedef her turunun sonunda kurtarmayı tekrarlar (Kişiyi Tut). */
+  repeatSaveEachTurn?: boolean;
+  /** Kurtarma olmadan hedefe uygulanan koşullar (Görünmezlik). */
+  conditionsApply?: Condition[];
   /** Otomatik isabet eden oklar (Magic Missile). */
   autoHitDarts?: { count: number; damage: string };
+  /** Birden çok saldırı ışını (Scorching Ray). Üst yuvada +1 ışın. */
+  rays?: { count: number; damage: string };
   tempHp?: string;
   maxTargets?: number;
+  /** Hedeflere verilen süreli etki. */
+  buff?: Omit<Buff, "sourceId" | "expiresAt" | "key" | "name">;
+  /** Başarısız kurtarmada hedefe verilen süreli etki (Bane, Faerie Fire). */
+  debuffOnFail?: Omit<Buff, "sourceId" | "expiresAt" | "key" | "name">;
+  /** Etki süresi (dakika). */
+  durationMin?: number;
+  /** Kaldırdığı koşullar (Lesser Restoration). */
+  cures?: Condition[];
+  /** Uyku havuzu (Sleep): en düşük HP'lilerden başlayarak bilinçsiz eder. */
+  sleepPool?: { dice: string; upcastDice: string };
+  /** Son 1 dakikada ölen yaratığı 1 HP ile diriltir (Revivify). */
+  revive?: boolean;
+  /** Büyü Zırhı: zırhsız hedefin AC'si 13 + DEX olur. */
+  mageArmor?: boolean;
+  /** Mekanik etkisi yok; anlatısal (Light, Mage Hand, Detect Magic …). */
+  utility?: boolean;
   /** Anlatıcı için kısa açıklama. */
   summary: string;
 }
@@ -108,6 +135,8 @@ export interface CastRequest {
   /** Cantrip için 0; diğerleri için ≥ spell.level. */
   slotLevel: number;
   targetIds: string[];
+  /** Parşömenden atılıyorsa yuva harcanmaz ve bilmek gerekmez. */
+  fromScroll?: boolean;
 }
 
 export interface SpellTargetResult {
@@ -117,6 +146,10 @@ export interface SpellTargetResult {
   damage?: DamageApplied;
   healed?: number;
   conditionsApplied?: Condition[];
+  conditionsRemoved?: Condition[];
+  buffed?: string;
+  revived?: boolean;
+  slept?: boolean;
 }
 
 export interface CastResult {
@@ -134,47 +167,99 @@ export function expendSlot(w: StateWriter, casterId: string, slotLevel: number):
   w.updateCreature(casterId, { spellcasting: { ...sc, slots: { ...sc.slots, [slotLevel]: left - 1 } } });
 }
 
+function addBuff(w: StateWriter, targetId: string, buff: Buff): void {
+  const t = w.creature(targetId);
+  const others = (t.buffs ?? []).filter((b) => !(b.key === buff.key && b.sourceId === buff.sourceId));
+  w.updateCreature(targetId, { buffs: [...others, buff] });
+}
+
 export function castSpell(ctx: EngineContext, w: StateWriter, req: CastRequest): CastResult {
   const { spell } = req;
   const caster = w.creature(req.casterId);
   const sc = caster.spellcasting;
-  if (!sc) throw new StateError(`${caster.name} büyü yapamaz`);
-  if (!sc.known.includes(spell.key)) throw new StateError(`${caster.name} ${spell.name} büyüsünü bilmiyor`);
+  if (!sc && !req.fromScroll) throw new StateError(`${caster.name} büyü yapamaz`);
+  if (!req.fromScroll && !sc!.known.includes(spell.key)) throw new StateError(`${caster.name} ${spell.name} büyüsünü bilmiyor`);
   if (spell.level > 0 && req.slotLevel < spell.level) throw new StateError("Yuva seviyesi büyüden düşük olamaz");
   if (spell.level === 0 && req.slotLevel !== 0) throw new StateError("Cantrip yuva kullanmaz");
+  if (req.targetIds.length === 0 && !spell.utility) throw new StateError("Büyü için hedef gerekli");
+  for (const id of req.targetIds) {
+    const t = w.creature(id);
+    if (!t.isAlive && !spell.revive) throw new StateError(`${t.name} ölü`);
+  }
 
   const upcast = spell.level > 0 ? req.slotLevel - spell.level : 0;
   const maxTargets = (spell.maxTargets ?? 1) + upcast * (spell.upcastTargets ?? 0);
-  if (req.targetIds.length > maxTargets && !spell.autoHitDarts) {
+  if (req.targetIds.length > maxTargets && !spell.autoHitDarts && !spell.rays) {
     throw new StateError(`En fazla ${maxTargets} hedef seçilebilir`);
   }
 
-  if (spell.level > 0) expendSlot(w, caster.id, req.slotLevel);
+  if (spell.level > 0 && !req.fromScroll) expendSlot(w, caster.id, req.slotLevel);
   if (spell.concentration) {
-    const cur = w.creature(caster.id).spellcasting!;
-    if (cur.concentratingOn) w.event("concentration.broken", { id: caster.id, spell: cur.concentratingOn, reason: "yeni büyü" });
-    w.updateCreature(caster.id, { spellcasting: { ...cur, concentratingOn: spell.key } });
+    if (w.creature(caster.id).spellcasting?.concentratingOn) endConcentration(w, caster.id, "yeni büyü");
+    const cur = w.creature(caster.id).spellcasting;
+    if (cur) w.updateCreature(caster.id, { spellcasting: { ...cur, concentratingOn: spell.key } });
   }
   w.event("spell.cast", { casterId: caster.id, spell: spell.key, slotLevel: req.slotLevel, targets: req.targetIds });
 
-  const mod = abilityModifier(caster.abilities[sc.ability]);
+  // Parşömende büyü yeteneği yoksa INT kullanılır (basitleştirme).
+  const ability: Ability = sc?.ability ?? "int";
+  const mod = abilityModifier(caster.abilities[ability]);
   const scaleDice = (base: string): string => {
     let n = spell.level === 0 ? multiplyDice(base, cantripMultiplier(caster.level)) : base;
     if (upcast > 0 && spell.upcastDice) n += `+${multiplyDice(spell.upcastDice, upcast)}`;
     if (spell.addAbilityMod && mod !== 0) n += mod > 0 ? `+${mod}` : `-${-mod}`;
     return n;
   };
-
+  const now = w.state.gameTime;
+  const expiresAt = now + (spell.durationMin ?? 1);
   const results: SpellTargetResult[] = [];
+
+  if (spell.utility) {
+    return { spell: spell.key, slotLevel: req.slotLevel, targets: req.targetIds.map((targetId) => ({ targetId })) };
+  }
 
   // Magic Missile: oklar hedeflere dağıtılır, her ok ayrı hasar.
   if (spell.autoHitDarts) {
     const darts = spell.autoHitDarts.count + upcast;
     for (let i = 0; i < darts; i++) {
       const tid = req.targetIds[i % req.targetIds.length]!;
+      if (!w.creature(tid).isAlive) continue;
       const dmg = ctx.roll(spell.autoHitDarts.damage, `${spell.name} ok ${i + 1}`, { actorId: caster.id, targetId: tid }).total;
-      const applied = applyDamage(ctx, w, tid, dmg, spell.damageType ?? "force");
-      results.push({ targetId: tid, damage: applied });
+      results.push({ targetId: tid, damage: applyDamage(ctx, w, tid, dmg, spell.damageType ?? "force") });
+    }
+    return { spell: spell.key, slotLevel: req.slotLevel, targets: results };
+  }
+
+  // Scorching Ray: her ışın ayrı saldırı atışı.
+  if (spell.rays) {
+    const rays = spell.rays.count + upcast;
+    for (let i = 0; i < rays; i++) {
+      const tid = req.targetIds[i % req.targetIds.length]!;
+      if (!w.creature(tid).isAlive) continue;
+      const a = attack(ctx, w, caster.id, tid, {
+        name: `${spell.name} ışını ${i + 1}`,
+        attackBonus: spellAttackBonus(caster, ability),
+        damage: spell.rays.damage,
+        damageType: spell.damageType ?? "fire",
+        ranged: true,
+        range: [spell.rangeFt, spell.rangeFt],
+      }, { distance: 5 });
+      results.push({ targetId: tid, attack: a, ...(a.damage ? { damage: a.damage } : {}) });
+    }
+    return { spell: spell.key, slotLevel: req.slotLevel, targets: results };
+  }
+
+  // Sleep: HP havuzu, en düşük HP'liden başlayarak.
+  if (spell.sleepPool) {
+    let pool = ctx.roll(`${spell.sleepPool.dice}${upcast > 0 ? `+${multiplyDice(spell.sleepPool.upcastDice, upcast)}` : ""}`, spell.name, { actorId: caster.id }).total;
+    const targets = req.targetIds.map((id) => w.creature(id))
+      .filter((t) => t.isAlive && t.hp > 0 && !t.conditions.includes("unconscious"))
+      .sort((a, b) => a.hp - b.hp);
+    for (const t of targets) {
+      if (t.hp > pool) { results.push({ targetId: t.id, slept: false }); continue; }
+      pool -= t.hp;
+      w.addCondition(t.id, "unconscious");
+      results.push({ targetId: t.id, slept: true, conditionsApplied: ["unconscious"] });
     }
     return { spell: spell.key, slotLevel: req.slotLevel, targets: results };
   }
@@ -186,10 +271,20 @@ export function castSpell(ctx: EngineContext, w: StateWriter, req: CastRequest):
 
   for (const tid of req.targetIds) {
     const r: SpellTargetResult = { targetId: tid };
+    if (spell.revive) {
+      const t = w.creature(tid);
+      if (t.isAlive) throw new StateError(`${t.name} zaten yaşıyor`);
+      w.updateCreature(tid, { isAlive: true, hp: 1, deathSaves: { successes: 0, failures: 0, stable: false } });
+      w.removeCondition(tid, "unconscious");
+      w.event("creature.revived", { id: tid, hp: 1, by: spell.key });
+      r.revived = true;
+      results.push(r);
+      continue;
+    }
     if (spell.attack && spell.damage && spell.damageType) {
       r.attack = attack(ctx, w, caster.id, tid, {
         name: spell.name,
-        attackBonus: spellAttackBonus(caster, sc.ability),
+        attackBonus: spellAttackBonus(caster, ability),
         damage: scaleDice(spell.damage),
         damageType: spell.damageType,
         ranged: spell.attack === "ranged",
@@ -198,17 +293,32 @@ export function castSpell(ctx: EngineContext, w: StateWriter, req: CastRequest):
       if (r.attack.damage) r.damage = r.attack.damage;
     } else if (spell.save) {
       const target = w.creature(tid);
-      const save = savingThrow(ctx, target, spell.save, spellSaveDC(caster, sc.ability), {
+      const save = savingThrow(ctx, target, spell.save, spellSaveDC(caster, ability), {
         reason: `${spell.name} kurtarma`,
       });
       r.saveSuccess = save.success;
       if (sharedDamage !== null && spell.damageType) {
         const amount = save.success ? (spell.halfOnSave ? Math.floor(sharedDamage / 2) : 0) : sharedDamage;
-        if (amount > 0) r.damage = applyDamage(ctx, w, tid, amount, spell.damageType);
+        if (amount > 0 && w.creature(tid).isAlive) r.damage = applyDamage(ctx, w, tid, amount, spell.damageType);
       }
-      if (!save.success && spell.conditionsOnFail?.length) {
+      if (!save.success && spell.conditionsOnFail?.length && w.creature(tid).isAlive) {
         r.conditionsApplied = spell.conditionsOnFail.filter((c) => w.addCondition(tid, c));
+        if (r.conditionsApplied.length) {
+          addBuff(w, tid, {
+            key: spell.key, name: spell.name, sourceId: caster.id, expiresAt, concentration: spell.concentration,
+            conditions: r.conditionsApplied,
+            ...(spell.repeatSaveEachTurn ? { repeatSave: { ability: spell.save, dc: spellSaveDC(caster, ability) } } : {}),
+          });
+        }
       }
+      if (!save.success && spell.debuffOnFail) {
+        addBuff(w, tid, { ...spell.debuffOnFail, key: spell.key, name: spell.name, sourceId: caster.id, expiresAt, concentration: spell.concentration });
+        r.buffed = spell.name;
+      }
+    }
+    if (spell.conditionsApply?.length) {
+      r.conditionsApplied = spell.conditionsApply.filter((c) => w.addCondition(tid, c));
+      addBuff(w, tid, { key: spell.key, name: spell.name, sourceId: caster.id, expiresAt, concentration: spell.concentration, conditions: r.conditionsApplied });
     }
     if (spell.heal) {
       const amount = ctx.roll(scaleDice(spell.heal), `${spell.name} iyileştirme`, { actorId: caster.id, targetId: tid }).total;
@@ -217,6 +327,20 @@ export function castSpell(ctx: EngineContext, w: StateWriter, req: CastRequest):
     if (spell.tempHp) {
       const amount = ctx.roll(scaleDice(spell.tempHp), `${spell.name} geçici HP`, { actorId: caster.id, targetId: tid }).total;
       grantTempHp(w, tid, amount);
+    }
+    if (spell.cures?.length) {
+      r.conditionsRemoved = spell.cures.filter((c) => w.removeCondition(tid, c));
+    }
+    if (spell.buff) {
+      addBuff(w, tid, { ...spell.buff, key: spell.key, name: spell.name, sourceId: caster.id, expiresAt, concentration: spell.concentration });
+      r.buffed = spell.name;
+    }
+    if (spell.mageArmor) {
+      const t = w.creature(tid);
+      const target = 13 + abilityModifier(t.abilities.dex);
+      const bonus = Math.max(0, target - t.ac);
+      addBuff(w, tid, { key: spell.key, name: spell.name, sourceId: caster.id, expiresAt, acBonus: bonus });
+      r.buffed = spell.name;
     }
     results.push(r);
   }

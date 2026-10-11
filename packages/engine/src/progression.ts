@@ -83,7 +83,8 @@ export function awardXp(w: StateWriter, id: string, amount: number): { level: nu
   const level = levelForXp(xp);
   w.updateCreature(id, { xp });
   const leveledUp = level > c.level;
-  if (leveledUp) w.event("level.up", { id, from: c.level, to: level, pending: "sınıf seçimi ve HP artışı" });
+  // Sınıfı olan karakterlerde seviye atlamayı levelUp() yapar ve olayı o üretir.
+  if (leveledUp && !c.classKey) w.event("level.up", { id, from: c.level, to: level });
   return { level, leveledUp };
 }
 
@@ -116,6 +117,7 @@ export function shortRest(
     hd[sides] = (hd[sides] ?? 0) - n;
   }
   w.updateCreature(id, { hitDice: hd });
+  rechargeResources(w, id, "short");
   const gained = heal(w, id, total);
   if (options.pactSlots && c.spellcasting) {
     const sc = w.creature(id).spellcasting!;
@@ -147,7 +149,21 @@ export function longRest(ctx: EngineContext, w: StateWriter, id: string): void {
   }
   if (ctx.rules.longRestReducesExhaustion && c.exhaustion > 0) patch.exhaustion = c.exhaustion - 1;
   w.updateCreature(id, patch);
+  rechargeResources(w, id, "long");
   if (c.conditions.includes("unconscious") && c.hp === 0) w.removeCondition(id, "unconscious");
   w.advanceTime(8 * 60);
   w.event("rest.long", { id });
+}
+
+/** Kaynakları yenile; kısa dinlenmede yalnızca "short" olanlar ve cadı pakt yuvaları. */
+export function rechargeResources(w: StateWriter, id: string, kind: "short" | "long"): void {
+  const c = w.creature(id);
+  if (c.resources) {
+    const next = Object.fromEntries(Object.entries(c.resources).map(([k, r]) =>
+      [k, kind === "long" || r.recharge === "short" ? { ...r, current: r.max } : r]));
+    w.updateCreature(id, { resources: next });
+  }
+  if (kind === "short" && c.classKey === "warlock" && c.spellcasting) {
+    w.updateCreature(id, { spellcasting: { ...c.spellcasting, slots: { ...c.spellcasting.maxSlots } } });
+  }
 }

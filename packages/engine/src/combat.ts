@@ -123,24 +123,59 @@ export interface AttackProfile {
   ranged: boolean;
   /** [normal, uzun] menzil (fit). */
   range?: [number, number];
+  /** Sinsi Saldırı için: finesse ya da menzilli silah. */
+  finesse?: boolean;
+  /** Silah saldırısı mı (büyü değil) — Öfke, Sinsi Saldırı, Kutsal Darbe için. */
+  weapon?: boolean;
+  /** Güç tabanlı yakın dövüş mü (Öfke hasar bonusu). */
+  strengthBased?: boolean;
 }
 
-/** Silah + yaratıktan saldırı profili (yeterli olduğu varsayılır). */
-export function weaponProfile(c: Creature, wpn: Weapon, twoHanded = false): AttackProfile {
+/** Yaratık bu silahta yeterli mi? Tanımsız liste = her silahta yeterli (NPC/canavar). */
+export function isWeaponProficient(c: Creature, wpn: Weapon): boolean {
+  const p = c.weaponProficiencies;
+  if (!p || wpn.category === "natural" || wpn.key === "unarmed") return true;
+  return p.includes(wpn.key) || (wpn.category !== undefined && p.includes(wpn.category));
+}
+
+/** Silah + yaratıktan saldırı profili. thrown: yakın dövüş silahını fırlatma. */
+export function weaponProfile(c: Creature, wpn: Weapon, twoHanded = false, thrown = false): AttackProfile {
   const str = abilityModifier(c.abilities.str);
   const dex = abilityModifier(c.abilities.dex);
-  const mod = wpn.ranged ? dex : wpn.finesse ? Math.max(str, dex) : str;
+  const monk = wpn.key === "unarmed" && c.features.martialArtsDie;
+  const mod = wpn.ranged && !wpn.thrown ? dex : wpn.finesse || monk ? Math.max(str, dex) : str;
   const magic = wpn.magicBonus ?? 0;
-  const dice = twoHanded && wpn.versatile ? wpn.versatile : wpn.damage;
-  const flat = mod + magic;
+  let dice = twoHanded && wpn.versatile ? wpn.versatile : wpn.damage;
+  if (monk) dice = `1d${c.features.martialArtsDie}`;
+  // Silahsız vuruş: 1 + GÜÇ (SRD)
+  let flat = mod + magic;
+  const style = c.features.fightingStyle;
+  if (style === "dueling" && !wpn.ranged && !wpn.twoHanded && !twoHanded) flat += 2;
+  const prof = isWeaponProficient(c, wpn) ? proficiencyBonus(c.level) : 0;
+  const archery = style === "archery" && wpn.ranged && !wpn.thrown ? 2 : 0;
+  const ranged = !!wpn.ranged || (thrown && !!wpn.thrown);
+  if (thrown && !wpn.thrown) throw new StateError(`${wpn.name} fırlatılamaz`);
   return {
     name: wpn.name,
-    attackBonus: mod + proficiencyBonus(c.level) + magic,
+    attackBonus: mod + prof + magic + archery,
     damage: flat === 0 ? dice : `${dice}${flat > 0 ? "+" : "-"}${Math.abs(flat)}`,
     damageType: wpn.damageType,
-    ranged: !!wpn.ranged,
-    ...(wpn.range ? { range: wpn.range } : {}),
+    ranged,
+    ...(wpn.range && ranged ? { range: wpn.range } : {}),
+    finesse: !!wpn.finesse || (!!wpn.ranged && !wpn.thrown),
+    weapon: true,
+    strengthBased: !ranged && !(wpn.finesse && dex > str) && !monk,
   };
+}
+
+/** Yaratığın aktif buff'ları (süresi dolmamış). */
+export function activeBuffs(c: Creature, now: number): NonNullable<Creature["buffs"]> {
+  return (c.buffs ?? []).filter((b) => b.expiresAt > now);
+}
+
+/** Buff'lar dahil etkin AC. */
+export function effectiveAc(c: Creature, now: number): number {
+  return c.ac + activeBuffs(c, now).reduce((s, b) => s + (b.acBonus ?? 0), 0);
 }
 
 export interface AttackSituation {
@@ -151,7 +186,11 @@ export interface AttackSituation {
   distance?: number;
   /** Menzilli saldırıda 5 ft içinde düşman var mı. */
   hostileAdjacent?: boolean;
+  /** Hedefin yanında saldıranın müttefiki var mı (Sinsi Saldırı). */
+  allyAdjacent?: boolean;
   bonusDice?: string[];
+  /** İsabette eklenen hasar (Kutsal Darbe). Aynı hasar türüne eklenir. */
+  extraDamage?: { dice: string; reason: string }[];
 }
 
 export interface AttackResult {
@@ -162,6 +201,8 @@ export interface AttackResult {
   damage?: DamageApplied;
   advantageSources: string[];
   disadvantageSources: string[];
+  /** Ek hasar kaynakları açıklamaları. */
+  extras: string[];
 }
 
 export function attack(
@@ -208,18 +249,26 @@ export function attack(
     adv.push("yardım");
     setTag(w, attackerId, "helped", false);
   }
+  const now = w.state.gameTime;
+  const aBuffs = activeBuffs(attacker, now);
+  const tBuffs = activeBuffs(target, now);
+  if (tBuffs.some((b) => b.revealed)) adv.push("hedef ışıldıyor");
+  const bonusDice = [...(s.bonusDice ?? []), ...aBuffs.flatMap((b) => (b.attackDice ? [b.attackDice] : []))];
 
   const roll = d20Test(ctx, {
     modifier: profile.attackBonus,
     advantage: adv.length > 0,
     disadvantage: dis.length > 0,
     lucky: attacker.features.lucky,
-    bonusDice: s.bonusDice,
+    bonusDice,
     reason: `saldırı: ${profile.name}`,
     actorId: attackerId,
     targetId,
   });
-  const targetAc = target.ac + COVER_AC[cover];
+  if (aBuffs.some((b) => b.consumeOnUse && b.attackDice)) {
+    removeBuffs(w, attackerId, (b) => !!b.consumeOnUse && !!b.attackDice);
+  }
+  const targetAc = effectiveAc(target, now) + COVER_AC[cover];
   const critMin = attacker.features.critRange ?? 20;
   const natCrit = roll.natural >= critMin;
   const hit = roll.natural !== 1 && (natCrit || roll.total >= targetAc);
@@ -228,15 +277,38 @@ export function attack(
     : crit ? "critical_success" : "success";
   roll.record.dc = targetAc;
 
-  const result: AttackResult = { roll, targetAc, hit, crit, advantageSources: adv, disadvantageSources: dis };
+  const result: AttackResult = { roll, targetAc, hit, crit, advantageSources: adv, disadvantageSources: dis, extras: [] };
   if (hit) {
-    const dmg = rollDamage(ctx, profile.damage, crit, {
+    let dmg = rollDamage(ctx, profile.damage, crit, {
       extraCritDice: attacker.features.extraCritDice ?? 0,
       savage: attacker.features.savageAttacker ?? false,
       reason: `hasar: ${profile.name}`,
       actorId: attackerId,
       targetId,
     });
+    // Öfke vb. sabit hasar bonusu: Güç tabanlı yakın dövüş silah saldırıları.
+    if (profile.weapon && profile.strengthBased) {
+      const bonus = aBuffs.reduce((sum, b) => sum + (b.damageBonus ?? 0), 0);
+      if (bonus) {
+        dmg += bonus;
+        result.extras.push(`Öfke +${bonus} hasar`);
+      }
+    }
+    // Sinsi Saldırı: finesse/menzilli, avantajlı (ya da hedefin yanında müttefik), turda bir kez.
+    const sneak = attacker.features.sneakAttackDice ?? 0;
+    const allyAdjacent = s.allyAdjacent ?? false;
+    if (sneak > 0 && profile.weapon && profile.finesse && (roll.mode === "advantage" || (allyAdjacent && roll.mode !== "disadvantage"))
+      && !hasTag(w, attackerId, "sneak_used")) {
+      const extra = rollDamage(ctx, `${sneak}d6`, crit, { reason: "Sinsi Saldırı", actorId: attackerId, targetId });
+      dmg += extra;
+      result.extras.push(`Sinsi Saldırı +${extra}`);
+      setTag(w, attackerId, "sneak_used", true);
+    }
+    for (const x of s.extraDamage ?? []) {
+      const extra = rollDamage(ctx, x.dice, crit, { reason: x.reason, actorId: attackerId, targetId });
+      dmg += extra;
+      result.extras.push(`${x.reason} +${extra}`);
+    }
     result.damage = applyDamage(ctx, w, targetId, dmg, profile.damageType, { crit });
   }
   return result;
@@ -308,7 +380,8 @@ export function adjustForType(c: Creature, amount: number, type: DamageType): { 
   if (c.immunities.includes(type)) return { final: 0, modifier: "immune" };
   let final = amount;
   let modifier: DamageApplied["modifier"] = "normal";
-  if (c.resistances.includes(type) || fx.resistAllDamage) {
+  const buffResist = (c.buffs ?? []).some((b) => b.resist?.includes(type));
+  if (c.resistances.includes(type) || fx.resistAllDamage || buffResist) {
     final = Math.floor(final / 2);
     modifier = "resistant";
   }
@@ -319,12 +392,42 @@ export function adjustForType(c: Creature, amount: number, type: DamageType): { 
   return { final, modifier };
 }
 
-function endConcentration(w: StateWriter, id: string, reason: string): void {
+export function endConcentration(w: StateWriter, id: string, reason: string): void {
   const c = w.creature(id);
   if (!c.spellcasting?.concentratingOn) return;
   const spell = c.spellcasting.concentratingOn;
   w.updateCreature(id, { spellcasting: { ...c.spellcasting, concentratingOn: null } });
+  removeConcentrationEffects(w, id, spell);
   w.event("concentration.broken", { id, spell, reason });
+}
+
+/** Bir buff'ı kaldır; ona bağlı koşulları da kaldır (başka bir buff aynı koşulu tutmuyorsa). */
+export function removeBuffs(w: StateWriter, id: string, pred: (b: NonNullable<Creature["buffs"]>[number]) => boolean): void {
+  const c = w.creature(id);
+  const buffs = c.buffs ?? [];
+  const gone = buffs.filter(pred);
+  if (!gone.length) return;
+  const keep = buffs.filter((b) => !pred(b));
+  w.updateCreature(id, { buffs: keep });
+  const stillHeld = new Set(keep.flatMap((b) => b.conditions ?? []));
+  for (const cond of gone.flatMap((b) => b.conditions ?? [])) {
+    if (!stillHeld.has(cond)) w.removeCondition(id, cond);
+  }
+}
+
+/** Konsantrasyon bitince o büyünün etkileri (ve bağlı koşulları) kalkar. */
+export function removeConcentrationEffects(w: StateWriter, casterId: string, spellKey: string): void {
+  for (const other of Object.values(w.state.creatures)) {
+    removeBuffs(w, other.id, (b) => b.sourceId === casterId && b.key === spellKey && !!b.concentration);
+  }
+}
+
+/** Süresi dolan tüm buff'ları kaldır (zaman ilerledikten sonra çağrılır). */
+export function pruneExpiredBuffs(w: StateWriter): void {
+  const now = w.state.gameTime;
+  for (const c of Object.values(w.state.creatures)) {
+    if (c.buffs?.some((b) => b.expiresAt <= now)) removeBuffs(w, c.id, (b) => b.expiresAt <= now);
+  }
 }
 
 function killCreature(w: StateWriter, id: string, cause: string): void {
@@ -397,6 +500,17 @@ export function applyDamage(
   if (overflow >= c.maxHp) {
     out.instantDeath = out.died = true;
     killCreature(w, targetId, "anlık ölüm (taşan hasar)");
+    return out;
+  }
+  const relentless = c.resources?.relentless_endurance;
+  if (relentless && relentless.current > 0) {
+    w.updateCreature(targetId, {
+      hp: 1,
+      resources: { ...c.resources, relentless_endurance: { ...relentless, current: relentless.current - 1 } },
+    });
+    out.hpAfter = 1;
+    out.droppedToZero = false;
+    w.event("creature.revived", { id: targetId, hp: 1, by: "Amansız Dayanıklılık" });
     return out;
   }
   if (c.kind !== "pc" && ctx.rules.monstersDieAtZero) {

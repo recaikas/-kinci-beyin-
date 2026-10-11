@@ -98,7 +98,7 @@ export function skillCheck(
   const roll = d20Test(ctx, {
     modifier: skillModifier(c, skill, abilityOverride) + (s.extraModifier ?? 0),
     advantage: s.advantage,
-    disadvantage: s.disadvantage || fx.abilityCheckDisadvantage,
+    disadvantage: s.disadvantage || fx.abilityCheckDisadvantage || (skill === "stealth" && !!c.stealthDisadvantage),
     lucky: c.features.lucky,
     ...(c.features.reliableTalent && proficient ? { minimum: 10 } : {}),
     bonusDice: s.bonusDice,
@@ -148,12 +148,13 @@ export function savingThrow(
   s: CheckSituation = {},
 ): CheckResult {
   const fx = conditionEffects(c.conditions, c.exhaustion);
+  const buffDice = (c.buffs ?? []).filter((b) => b.saveDice).map((b) => b.saveDice!);
   const roll = d20Test(ctx, {
     modifier: saveModifier(c, ability) + (s.extraModifier ?? 0),
     advantage: s.advantage,
     disadvantage: s.disadvantage || fx.saveDisadvantage.has(ability),
     lucky: c.features.lucky,
-    bonusDice: s.bonusDice,
+    bonusDice: [...(s.bonusDice ?? []), ...buffDice],
     reason: s.reason ?? `${ability} kurtarma atışı`,
     actorId: c.id,
     targetId: s.targetId,

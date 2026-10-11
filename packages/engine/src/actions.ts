@@ -10,15 +10,21 @@ import { conditionEffects } from "./conditions.ts";
 import { EngineContext, type RollRecord } from "./context.ts";
 import { abilityCheck, type CheckResult, passiveScore, skillCheck } from "./checks.ts";
 import {
-  attack, currentTurnId, deathSave, endEncounter, heal, nextTurn, setTag, spend, stabilize,
-  startEncounter, weaponProfile,
+  applyDamage, attack, type AttackResult, currentTurnId, deathSave, endEncounter, grantTempHp, heal, nextTurn,
+  pruneExpiredBuffs, removeBuffs, setTag, spend, stabilize, startEncounter, weaponProfile,
 } from "./combat.ts";
+import { savingThrow } from "./checks.ts";
+import { type ClassAbility, CLASS_ABILITY_TR, useClassAbility } from "./abilities.ts";
+import { levelUp, setEquipped } from "./character.ts";
+import { awardXp } from "./progression.ts";
+import { xpForCR } from "./progression.ts";
+import { isHostileTo } from "./hostility.ts";
 import { castSpell } from "./spells.ts";
 import { longRest, shortRest } from "./progression.ts";
 import { APPROACH_TR, ATTITUDE_TR, type RequestRisk, resolveSocial, type SocialApproach } from "./social.ts";
 import { type FactionAction, factionTick, resolveFactionAction } from "./faction.ts";
 import { type Effect, type GameState, StateError, StateWriter } from "./state.ts";
-import { ITEMS, type ItemDef, NATURAL_WEAPONS, SPELLS, WEAPONS } from "./srd/content.ts";
+import { ITEMS, type ItemDef, MONSTERS, NATURAL_WEAPONS, SPELLS, WEAPONS } from "./srd/content.ts";
 import type { SpellDef } from "./spells.ts";
 import type { Cover, ResultTier, Weapon } from "./types.ts";
 import type { Rng } from "@kader/dice";
@@ -41,11 +47,14 @@ export const DIFFICULTY_DC: Record<Difficulty, number> = {
 export type GameAction =
   | { type: "skill_check"; actorId: string; skill: Skill; difficulty: Difficulty; dc?: number; targetId?: string; sense?: "sight" | "hearing"; ability?: Ability; minutes?: number }
   | { type: "ability_check"; actorId: string; ability: Ability; difficulty: Difficulty; dc?: number; minutes?: number }
-  | { type: "attack"; actorId: string; targetId: string; weaponKey: string; distance?: number; cover?: Cover; twoHanded?: boolean }
+  | { type: "attack"; actorId: string; targetId: string; weaponKey: string; distance?: number; cover?: Cover; twoHanded?: boolean; thrown?: boolean; smiteSlot?: number }
+  | { type: "class_ability"; actorId: string; ability: ClassAbility; targetId?: string; targetIds?: string[]; amount?: number; mode?: "dash" | "disengage" | "hide" }
+  | { type: "equip"; actorId: string; itemKey: string; equipped: boolean }
+  | { type: "loot"; actorId: string; targetId: string }
   | { type: "cast_spell"; actorId: string; spellKey: string; slotLevel: number; targetIds: string[] }
   | { type: "social"; actorId: string; targetId: string; approach: SocialApproach; risk: RequestRisk; bribeCp?: number }
   | { type: "move"; actorId: string; toLocationId: string; minutes: number }
-  | { type: "use_item"; actorId: string; itemKey: string; targetId?: string }
+  | { type: "use_item"; actorId: string; itemKey: string; targetId?: string; targetIds?: string[] }
   | { type: "give_item"; actorId: string; targetId: string; itemKey: string; qty: number }
   | { type: "trade"; actorId: string; targetId: string; itemKey: string; qty: number; priceCp: number; direction: "buy" | "sell" }
   | { type: "rest"; actorId: string; kind: "short" | "long"; hitDice?: Partial<Record<number, number>> }
@@ -144,6 +153,7 @@ export function resolveAction(state: GameState, action: GameAction, o: ResolveOp
   const newId = o.newId ?? (() => crypto.randomUUID());
   try {
     const outcome = run(ctx, w, action, catalog, newId);
+    afterAction(ctx, w, outcome);
     outcome.facts.push(...describeEffects(w.effects, w.state));
     return { ok: true, action, outcome, rolls: ctx.rolls, effects: w.effects, state: w.state };
   } catch (e) {
@@ -203,28 +213,118 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       const attacker = w.creature(a.actorId);
       const carries = attacker.kind !== "pc" || a.weaponKey === "unarmed" || w.itemQty(a.actorId, a.weaponKey) > 0;
       if (!carries) throw new StateError(`${attacker.name} elinde ${wpn.name} yok`);
-      spend(w, a.actorId, "action");
-      const r = attack(ctx, w, a.actorId, a.targetId, weaponProfile(attacker, wpn, a.twoHanded), {
-        ...(a.distance !== undefined ? { distance: a.distance } : {}),
-        ...(a.cover ? { cover: a.cover } : {}),
-      });
-      const tier: ResultTier = !r.hit ? (r.roll.natural === 1 ? "critical_failure" : "failure") : r.crit ? "critical_success" : "success";
-      const facts = [
-        `${attacker.name} → ${name(w, a.targetId)} (${wpn.name}): ${r.roll.record.breakdown} vs AC ${r.targetAc} → ${r.crit ? "KRİTİK İSABET" : r.hit ? "isabet" : "ıska"}`,
-      ];
-      if (r.advantageSources.length) facts.push(`Avantaj kaynakları: ${r.advantageSources.join(", ")}`);
-      if (r.disadvantageSources.length) facts.push(`Dezavantaj kaynakları: ${r.disadvantageSources.join(", ")}`);
-      if (r.damage) {
-        const d = r.damage;
-        facts.push(`Hasar: ${d.final} ${d.type}${d.modifier !== "normal" ? ` (${d.modifier})` : ""}; HP ${d.hpBefore} → ${d.hpAfter}`);
-        if (d.concentration) facts.push(checkFact("Konsantrasyon kurtarması", d.concentration));
+      if (a.smiteSlot !== undefined) {
+        if (attacker.classKey !== "paladin" || attacker.level < 2) throw new StateError("Kutsal Darbe 2. seviye paladinlere özgü");
+        if ((attacker.spellcasting?.slots[a.smiteSlot] ?? 0) <= 0) throw new StateError(`${a.smiteSlot}. seviye yuva kalmadı`);
       }
+      spend(w, a.actorId, "action");
+      // Ek Saldırı / çoklu saldırı: canavarlar şablondaki saldırıları sırayla kullanır.
+      const count = 1 + (attacker.features.extraAttacks ?? 0);
+      const sequence: string[] = [];
+      const npcMelee = attacker.kind !== "pc" && !wpn.ranged
+        ? (attacker.attacks ?? []).filter((k) => cat.weapons[k] && !cat.weapons[k]!.ranged)
+        : [];
+      for (let i = 0; i < count; i++) {
+        sequence.push(npcMelee.length > 1 ? npcMelee[(npcMelee.indexOf(a.weaponKey) + i) % npcMelee.length]! : a.weaponKey);
+      }
+      const facts: string[] = [];
+      let anyHit = false;
+      let anyCrit = false;
+      let totalDamage = 0;
+      let smiteUsed = false;
+      let first: AttackResult | null = null;
+      const allyAdjacent = Object.values(w.state.creatures).some((c) =>
+        c.id !== attacker.id && c.isAlive && c.hp > 0 && c.locationId === attacker.locationId && !isHostileTo(w.state, c, attacker));
+      for (const key of sequence) {
+        if (!w.creature(a.targetId).isAlive) break;
+        const weapon = cat.weapons[key]!;
+        const extraDamage = a.smiteSlot !== undefined && !smiteUsed
+          ? [{ dice: `${Math.min(5, 1 + a.smiteSlot)}d8`, reason: "Kutsal Darbe" }] : [];
+        const r = attack(ctx, w, a.actorId, a.targetId, weaponProfile(w.creature(a.actorId), weapon, a.twoHanded, a.thrown), {
+          ...(a.distance !== undefined ? { distance: a.distance } : {}),
+          ...(a.cover ? { cover: a.cover } : {}),
+          allyAdjacent,
+          ...(extraDamage.length ? { extraDamage } : {}),
+        });
+        first ??= r;
+        if (r.hit && extraDamage.length) {
+          smiteUsed = true;
+          const sc = w.creature(a.actorId).spellcasting!;
+          w.updateCreature(a.actorId, { spellcasting: { ...sc, slots: { ...sc.slots, [a.smiteSlot!]: (sc.slots[a.smiteSlot!] ?? 1) - 1 } } });
+        }
+        facts.push(`${attacker.name} → ${name(w, a.targetId)} (${weapon.name}): ${r.roll.record.breakdown} vs AC ${r.targetAc} → ${r.crit ? "KRİTİK İSABET" : r.hit ? "isabet" : "ıska"}`);
+        if (r.advantageSources.length) facts.push(`Avantaj kaynakları: ${r.advantageSources.join(", ")}`);
+        if (r.disadvantageSources.length) facts.push(`Dezavantaj kaynakları: ${r.disadvantageSources.join(", ")}`);
+        if (r.extras.length) facts.push(`Ek hasar: ${r.extras.join(", ")}`);
+        if (r.damage) {
+          const d = r.damage;
+          facts.push(`Hasar: ${d.final} ${d.type}${d.modifier !== "normal" ? ` (${d.modifier})` : ""}; HP ${d.hpBefore} → ${d.hpAfter}`);
+          if (d.concentration) facts.push(checkFact("Konsantrasyon kurtarması", d.concentration));
+          totalDamage += d.final;
+        }
+        if (r.hit) {
+          anyHit = true;
+          if (r.crit) anyCrit = true;
+          facts.push(...applyOnHit(ctx, w, weapon, a.actorId, a.targetId));
+        }
+      }
+      const tier: ResultTier = !anyHit ? (first?.roll.natural === 1 ? "critical_failure" : "failure") : anyCrit ? "critical_success" : "success";
       return {
         tier,
-        headline: `${attacker.name} ${name(w, a.targetId)} hedefine saldırdı: ${r.crit ? "kritik isabet" : r.hit ? "isabet" : "ıska"}`,
+        headline: `${attacker.name} ${name(w, a.targetId)} hedefine saldırdı: ${anyCrit ? "kritik isabet" : anyHit ? "isabet" : "ıska"}`,
         facts,
-        details: { hit: r.hit, crit: r.crit, damage: r.damage?.final ?? 0, died: r.damage?.died ?? false },
+        details: { hit: anyHit, crit: anyCrit, damage: totalDamage, died: !w.creature(a.targetId).isAlive, attacks: sequence.length },
       };
+    }
+
+    case "class_ability": {
+      requireActorCanAct(w, a.actorId);
+      const r = useClassAbility(ctx, w, a);
+      return { tier: "success", headline: `${name(w, a.actorId)}: ${CLASS_ABILITY_TR[a.ability]}`, facts: r.facts, details: r.details };
+    }
+
+    case "equip": {
+      if (inCombat(w)) spend(w, a.actorId, "action");
+      setEquipped(w, a.actorId, a.itemKey, a.equipped);
+      const item = cat.items[a.itemKey]?.name ?? a.itemKey;
+      return {
+        tier: "success",
+        headline: `${name(w, a.actorId)} ${item} ${a.equipped ? "kuşandı" : "çıkardı"}`,
+        facts: [`${name(w, a.actorId)} AC: ${w.creature(a.actorId).ac}`],
+        details: {},
+      };
+    }
+
+    case "loot": {
+      const me = w.creature(a.actorId);
+      const t = w.creature(a.targetId);
+      if (t.isAlive) throw new StateError(`${t.name} yaşıyor; yağmalanamaz`);
+      if (t.locationId !== me.locationId) throw new StateError(`${t.name} burada değil`);
+      if (t.looted) throw new StateError(`${t.name} zaten arandı`);
+      const facts: string[] = [];
+      for (const e of [...(w.state.inventories[t.id] ?? [])]) {
+        w.removeItem(t.id, e.itemKey, e.qty);
+        w.addItem(me.id, e.itemKey, e.qty);
+      }
+      const cash = w.walletCp(t.id);
+      if (cash > 0) {
+        w.adjustWallet(t.id, -cash);
+        w.adjustWallet(me.id, cash);
+      }
+      const table = t.templateKey ? MONSTERS[t.templateKey]?.loot : undefined;
+      if (table?.goldCp) {
+        const cp = ctx.roll(table.goldCp, `${t.name} ganimeti`, { actorId: me.id }).total;
+        if (cp > 0) w.adjustWallet(me.id, cp);
+      }
+      for (const it of table?.items ?? []) {
+        const chance = ctx.die(100);
+        if (chance <= Math.round(it.chance * 100)) w.addItem(me.id, it.key, it.qty ?? 1);
+      }
+      w.updateCreature(t.id, { looted: true });
+      if (!inCombat(w)) w.advanceTime(2);
+      const found = w.effects.filter((e) => (e.op === "inventory.add" || e.op === "wallet") && ("ownerId" in e) && e.ownerId === me.id);
+      if (!found.length) facts.push(`${t.name} üzerinde değerli bir şey yok`);
+      return { tier: "success", headline: `${me.name} ${t.name} cesedini aradı`, facts, details: {} };
     }
 
     case "cast_spell": {
@@ -292,13 +392,31 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       spend(w, a.actorId, "action");
       const target = a.targetId ?? a.actorId;
       const facts: string[] = [];
+      let effect = false;
       if (item.heal) {
         const amt = ctx.roll(item.heal, `${item.name}`, { actorId: a.actorId, targetId: target }).total;
         const gained = heal(w, target, amt);
         facts.push(`${item.name}: ${name(w, target)} ${gained} HP iyileşti`);
-      } else {
-        facts.push(`${item.name} kullanıldı (mekanik etkisi yok; anlatısal kullanım)`);
+        effect = true;
       }
+      if (item.tempHp) {
+        const amt = ctx.roll(item.tempHp, `${item.name}`, { actorId: a.actorId, targetId: target }).total;
+        grantTempHp(w, target, amt);
+        facts.push(`${item.name}: ${name(w, target)} ${amt} geçici HP kazandı`);
+        effect = true;
+      }
+      for (const cond of item.cures ?? []) {
+        if (w.removeCondition(target, cond as never)) effect = true;
+      }
+      if (item.spellKey) {
+        const spell = cat.spells[item.spellKey];
+        if (!spell) throw new StateError(`Parşömendeki büyü bilinmiyor: ${item.spellKey}`);
+        const targets = a.targetIds?.length ? a.targetIds : [target];
+        const r = castSpell(ctx, w, { casterId: a.actorId, spell, slotLevel: spell.level, targetIds: targets, fromScroll: true });
+        facts.push(`Parşömen okundu: ${spell.name} → ${r.targets.length} hedef`);
+        effect = true;
+      }
+      if (!effect) facts.push(`${item.name} kullanıldı (mekanik etkisi yok; anlatısal kullanım)`);
       if (item.consumable) w.removeItem(a.actorId, a.itemKey, 1);
       return { tier: "success", headline: `${name(w, a.actorId)} ${item.name} kullandı`, facts, details: { item: item.key } };
     }
@@ -371,8 +489,15 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       const enc = w.state.encounter;
       if (!enc?.active) throw new StateError("Aktif savaş yok");
       if (currentTurnId(enc) !== a.actorId) throw new StateError("Sıra bu yaratıkta değil");
+      const repeatFacts: string[] = [];
+      const me = w.creature(a.actorId);
+      for (const b of (me.buffs ?? []).filter((x) => x.repeatSave)) {
+        const save = savingThrow(ctx, w.creature(a.actorId), b.repeatSave!.ability, b.repeatSave!.dc, { reason: `${b.name} (tekrar kurtarma)` });
+        repeatFacts.push(`${me.name} ${b.name} etkisine karşı tekrar kurtarma: ${save.roll.record.breakdown} vs DC ${save.dc} → ${save.success ? "kurtuldu" : "kurtulamadı"}`);
+        if (save.success) removeBuffs(w, a.actorId, (x) => x === b || (x.key === b.key && x.sourceId === b.sourceId));
+      }
       const next = nextTurn(w);
-      return { tier: "success", headline: `Sıra ${locative(name(w, next))}`, facts: [`Raunt ${w.state.encounter!.round}, sıra: ${name(w, next)}`], details: { next } };
+      return { tier: "success", headline: `Sıra ${locative(name(w, next))}`, facts: [...repeatFacts, `Raunt ${w.state.encounter!.round}, sıra: ${name(w, next)}`], details: { next } };
     }
 
     case "end_combat": {
@@ -465,4 +590,62 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       return { tier: "success", headline: `${a.days} gün geçti`, facts, details: { reports } };
     }
   }
+}
+
+/** İsabette silahın ek etkisi (zehir, felç, yere düşme). */
+function applyOnHit(ctx: EngineContext, w: StateWriter, weapon: Weapon, attackerId: string, targetId: string): string[] {
+  const oh = weapon.onHit;
+  const t = w.creature(targetId);
+  if (!oh || !t.isAlive || t.hp <= 0) return [];
+  const save = savingThrow(ctx, t, oh.ability, oh.dc, { reason: `${weapon.name} etkisi` });
+  const facts = [`${t.name} ${weapon.name} etkisine karşı kurtarma: ${save.roll.record.breakdown} vs DC ${oh.dc} → ${save.success ? "başarılı" : "başarısız"}`];
+  if (oh.damage && oh.damageType) {
+    const dmg = ctx.roll(oh.damage, `${weapon.name} ek hasar`, { actorId: attackerId, targetId }).total;
+    const amount = save.success ? (oh.halfOnSave ? Math.floor(dmg / 2) : 0) : dmg;
+    if (amount > 0) {
+      const d = applyDamage(ctx, w, targetId, amount, oh.damageType);
+      facts.push(`Ek ${d.final} ${d.type} hasar; HP ${d.hpBefore} → ${d.hpAfter}`);
+    }
+  }
+  if (!save.success && oh.condition && w.creature(targetId).isAlive) {
+    if (w.addCondition(targetId, oh.condition) && oh.durationMin) {
+      const cur = w.creature(targetId);
+      w.updateCreature(targetId, {
+        buffs: [...(cur.buffs ?? []), {
+          key: `${weapon.key}:${oh.condition}`, name: weapon.name, sourceId: attackerId,
+          expiresAt: w.state.gameTime + oh.durationMin, conditions: [oh.condition],
+          ...(oh.repeatSave ? { repeatSave: { ability: oh.ability, dc: oh.dc } } : {}),
+        }],
+      });
+    }
+  }
+  return facts;
+}
+
+/**
+ * Her eylemden sonra: ölen düşmanlar için XP (bölgedeki canlı PC'lere bölünür),
+ * eşik geçilirse otomatik seviye atlama, süresi dolan buff'ların temizlenmesi.
+ */
+function afterAction(ctx: EngineContext, w: StateWriter, outcome: Outcome): void {
+  void ctx;
+  const deaths = w.effects.filter((e): e is Extract<Effect, { op: "event" }> => e.op === "event" && e.type === "creature.died");
+  for (const d of deaths) {
+    const dead = w.state.creatures[String(d.payload.id)];
+    if (!dead || dead.kind === "pc" || dead.cr === undefined) continue;
+    const pcs = Object.values(w.state.creatures).filter((c) => c.kind === "pc" && c.isAlive && c.locationId === dead.locationId);
+    if (!pcs.length) continue;
+    const share = Math.floor(xpForCR(dead.cr) / pcs.length);
+    for (const pc of pcs) {
+      const before = pc.level;
+      const r = awardXp(w, pc.id, share);
+      outcome.facts.push(`${pc.name} ${share} XP kazandı`);
+      if (r.leveledUp && pc.classKey) {
+        for (let lv = before; lv < r.level; lv++) {
+          const up = levelUp(w, pc.id);
+          outcome.facts.push(`${pc.name} ${up.to}. SEVİYEYE YÜKSELDİ (+${up.hpGain} maks HP${up.gained.length ? `; ${up.gained.join(", ")}` : ""})`);
+        }
+      }
+    }
+  }
+  pruneExpiredBuffs(w);
 }

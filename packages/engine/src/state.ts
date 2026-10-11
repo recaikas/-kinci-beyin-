@@ -7,7 +7,7 @@
 import type { Condition } from "./conditions.ts";
 import type { Creature, InventoryEntry } from "./types.ts";
 
-export type TurnTag = "dodging" | "disengaged" | "hidden" | "helped";
+export type TurnTag = "dodging" | "disengaged" | "hidden" | "helped" | "sneak_used" | "action_surged";
 
 export interface TurnEconomy {
   action: boolean;
@@ -69,6 +69,7 @@ export type Effect =
   | { op: "creature.update"; id: string; before: Partial<Creature>; after: Partial<Creature> }
   | { op: "inventory.add"; ownerId: string; itemKey: string; qty: number }
   | { op: "inventory.remove"; ownerId: string; itemKey: string; qty: number }
+  | { op: "inventory.equip"; ownerId: string; itemKey: string; equipped: boolean }
   | { op: "wallet"; ownerId: string; deltaCp: number; afterCp: number }
   | { op: "relationship"; a: string; b: string; delta: number; after: number }
   | { op: "time"; minutes: number; after: number }

@@ -5,25 +5,15 @@
  */
 import type { Rng } from "@kader/dice";
 import { conditionEffects } from "./conditions.ts";
-import { relKey } from "./state.ts";
+import { isHostileTo } from "./hostility.ts";
 import type { GameState } from "./state.ts";
 import type { Creature } from "./types.ts";
 import { type Catalog, DEFAULT_CATALOG, type GameAction, resolveAction, type TurnResolution } from "./actions.ts";
 import type { RuleOptions } from "./rules.ts";
 
-function rel(s: GameState, a: string, b: string): number {
-  return s.relationships[relKey(a, b)] ?? 0;
-}
-
-/** a, b'ye düşman mı? Canavarlar varsayılan düşman; NPC'ler ilişki −25 ve altındaysa. */
+/** a, b'ye düşman mı? (hostility.ts'deki kuralın kısayolu) */
 export function isHostile(s: GameState, a: Creature, b: Creature): boolean {
-  if (a.id === b.id) return false;
-  if (a.kind === "pc" && b.kind === "pc") return false;
-  if (a.kind !== "pc" && b.kind !== "pc") return false;
-  const npc = a.kind === "pc" ? b : a;
-  const pc = a.kind === "pc" ? a : b;
-  const r = rel(s, npc.id, pc.id);
-  return npc.kind === "monster" ? r < 25 : r <= -25;
+  return isHostileTo(s, a, b);
 }
 
 /** Karşılaşmadaki düşman tarafların hâlâ ayakta olup olmadığı. */
@@ -54,10 +44,38 @@ export function chooseNpcAction(s: GameState, id: string, catalog: Catalog = DEF
     return { type: "dodge", actorId: id };
   }
 
+  // Büyücü NPC: yaralı müttefiki iyileştir, kontrol büyüsü, sonra hasar büyüsü.
+  const spell = chooseNpcSpell(s, me, target, catalog);
+  if (spell) return spell;
+
   const attacks = (me.attacks ?? []).filter((k) => catalog.weapons[k]);
   const melee = attacks.find((k) => !catalog.weapons[k]!.ranged);
   const weaponKey = melee ?? attacks[0] ?? "unarmed";
   return { type: "attack", actorId: id, targetId: target.id, weaponKey, distance: catalog.weapons[weaponKey]?.ranged ? 30 : 5 };
+}
+
+function chooseNpcSpell(s: GameState, me: Creature, target: Creature, catalog: Catalog): GameAction | null {
+  const sc = me.spellcasting;
+  if (!sc) return null;
+  const known = sc.known.map((k) => catalog.spells[k]).filter((x): x is NonNullable<typeof x> => !!x && !x.utility);
+  const slotFor = (lv: number): number | null => {
+    if (lv === 0) return 0;
+    for (let l = lv; l <= 9; l++) if ((sc.slots[l] ?? 0) > 0) return l;
+    return null;
+  };
+  const allies = Object.values(s.creatures).filter((c) => c.isAlive && c.locationId === me.locationId && c.kind !== "pc" && !isHostileTo(s, c, me));
+  const hurt = allies.filter((c) => c.hp > 0 && c.hp < c.maxHp / 2).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+  const healer = known.find((x) => x.heal && x.level > 0 && slotFor(x.level) !== null);
+  if (hurt && healer) return { type: "cast_spell", actorId: me.id, spellKey: healer.key, slotLevel: slotFor(healer.level)!, targetIds: [hurt.id] };
+  const control = known.find((x) => x.conditionsOnFail?.length && x.concentration && slotFor(x.level) !== null);
+  if (control && !sc.concentratingOn && target.kind === "pc" && !target.conditions.includes("paralyzed")) {
+    return { type: "cast_spell", actorId: me.id, spellKey: control.key, slotLevel: slotFor(control.level)!, targetIds: [target.id] };
+  }
+  const damaging = known
+    .filter((x) => (x.damage || x.autoHitDarts || x.rays) && slotFor(x.level) !== null)
+    .sort((a, b) => b.level - a.level)[0];
+  if (damaging) return { type: "cast_spell", actorId: me.id, spellKey: damaging.key, slotLevel: slotFor(damaging.level)!, targetIds: [target.id] };
+  return null;
 }
 
 export interface AutopilotOptions {
