@@ -57,6 +57,8 @@ export function describeEffects(effects: Effect[], s: GameState): string[] {
               out.push(`Muharebe: ${nm(s, p.attackerId)} ${String(p.attHits)} – ${String(p.defHits)} ${nm(s, p.defenderId)}; kayıplar ${String(p.attLoss)} / ${String(p.defLoss)}${p.capturedRegion ? `; ${String(p.capturedRegion)} bölgesi el değiştirdi` : ""}`);
             }
             break;
+          case "creature.spawned": out.push(`${String(p.name)} ortaya çıktı`); break;
+          case "quest.completed": break;
           default: break;
         }
         break;

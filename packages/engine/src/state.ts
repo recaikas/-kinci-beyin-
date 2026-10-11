@@ -6,6 +6,7 @@
  */
 import type { Condition } from "./conditions.ts";
 import type { Creature, InventoryEntry } from "./types.ts";
+import type { Quest, WorldState } from "./world.ts";
 
 export type TurnTag = "dodging" | "disengaged" | "hidden" | "helped" | "sneak_used" | "action_surged";
 
@@ -63,6 +64,8 @@ export interface GameState {
   relationships: Record<string, number>;
   factions: Record<string, Faction>;
   encounter: Encounter | null;
+  /** Mekânlar, çıkışlar, dükkânlar, görevler (yoksa serbest hareket). */
+  world?: WorldState;
 }
 
 export type Effect =
@@ -76,6 +79,8 @@ export type Effect =
   | { op: "move"; id: string; from: string | null; to: string }
   | { op: "faction.update"; id: string; before: Partial<Faction>; after: Partial<Faction> }
   | { op: "encounter"; encounter: Encounter | null }
+  | { op: "creature.spawn"; creature: Creature }
+  | { op: "quest.update"; quest: Quest }
   | { op: "event"; type: GameEventType; payload: Record<string, unknown> };
 
 /** Anlatıcı ve hafıza sistemi için önemli olaylar. */
@@ -97,7 +102,13 @@ export type GameEventType =
   | "rest.long"
   | "faction.war"
   | "faction.treaty"
-  | "faction.event";
+  | "faction.event"
+  | "creature.spawned"
+  | "quest.accepted"
+  | "quest.completed"
+  | "social.success"
+  | "talked"
+  | "travel.ambush";
 
 export class StateError extends Error {
   constructor(message: string) {

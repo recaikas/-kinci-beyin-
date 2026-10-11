@@ -116,6 +116,9 @@ export function resolveSocial(ctx: EngineContext, w: StateWriter, i: SocialInput
     tier = check.tier;
   }
 
+  if (tier === "success" || tier === "critical_success") {
+    w.event("social.success", { actorId: i.actorId, targetId: i.targetId, approach: i.approach });
+  }
   const delta = REL_DELTA[i.approach][tier];
   const after = w.adjustRelationship(i.actorId, i.targetId, delta);
   const newAttitude = attitudeFromScore(after);

@@ -18,3 +18,4 @@ export * from "./ai.ts";
 export * from "./character.ts";
 export * from "./abilities.ts";
 export * from "./hostility.ts";
+export * from "./world.ts";

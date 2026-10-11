@@ -19,6 +19,8 @@ import { levelUp, setEquipped } from "./character.ts";
 import { awardXp } from "./progression.ts";
 import { xpForCR } from "./progression.ts";
 import { isHostileTo } from "./hostility.ts";
+import { evaluateQuests, findExit, grantQuestRewards, priceFor, rollTravelEncounter, setQuest } from "./world.ts";
+import { formatCp } from "./facts.ts";
 import { castSpell } from "./spells.ts";
 import { longRest, shortRest } from "./progression.ts";
 import { APPROACH_TR, ATTITUDE_TR, type RequestRisk, resolveSocial, type SocialApproach } from "./social.ts";
@@ -51,6 +53,9 @@ export type GameAction =
   | { type: "class_ability"; actorId: string; ability: ClassAbility; targetId?: string; targetIds?: string[]; amount?: number; mode?: "dash" | "disengage" | "hide" }
   | { type: "equip"; actorId: string; itemKey: string; equipped: boolean }
   | { type: "loot"; actorId: string; targetId: string }
+  | { type: "buy"; actorId: string; merchantId: string; itemKey: string; qty: number; haggle?: boolean }
+  | { type: "sell"; actorId: string; merchantId: string; itemKey: string; qty: number; haggle?: boolean }
+  | { type: "accept_quest"; actorId: string; questId: string }
   | { type: "cast_spell"; actorId: string; spellKey: string; slotLevel: number; targetIds: string[] }
   | { type: "social"; actorId: string; targetId: string; approach: SocialApproach; risk: RequestRisk; bribeCp?: number }
   | { type: "move"; actorId: string; toLocationId: string; minutes: number }
@@ -379,9 +384,82 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
     case "move": {
       requireActorCanAct(w, a.actorId);
       if (inCombat(w)) throw new StateError("Savaş sırasında bölge değiştirilemez; önce savaşı bitir veya kaç");
+      const me = w.creature(a.actorId);
+      let minutes = Math.max(1, a.minutes);
+      if (w.state.world) {
+        const exit = findExit(w.state, me.locationId ?? "", a.toLocationId);
+        if (!exit) throw new StateError("Buradan oraya giden bir yol yok");
+        if (exit.requiresItem && w.itemQty(a.actorId, exit.requiresItem) < 1) {
+          throw new StateError(`Bu yol için ${cat.items[exit.requiresItem]?.name ?? exit.requiresItem} gerekli`);
+        }
+        minutes = exit.minutes;
+      }
       w.move(a.actorId, a.toLocationId);
-      w.advanceTime(Math.max(1, a.minutes));
-      return { tier: "success", headline: `${name(w, a.actorId)} yeni konuma geçti`, facts: [], details: { to: a.toLocationId } };
+      w.advanceTime(minutes);
+      const place = w.state.world?.places[a.toLocationId];
+      const facts: string[] = [];
+      if (place) facts.push(`Varış: ${place.name} (${minutes} dakika yol)`);
+      const ambush = rollTravelEncounter(ctx, w, a.toLocationId, newId);
+      if (ambush) {
+        const enc = startEncounter(ctx, w, [a.actorId, ...ambush.ids], newId());
+        w.event("travel.ambush", { placeId: a.toLocationId, templateKey: ambush.templateKey, count: ambush.ids.length });
+        facts.push(`PUSU! ${ambush.ids.length} × ${MONSTERS[ambush.templateKey]!.name} saldırıyor`);
+        facts.push(`İnisiyatif sırası: ${enc.order.map((o) => `${name(w, o.id)} (${o.initiative})`).join(", ")}`);
+        return { tier: "partial", headline: `${name(w, a.actorId)} yolda pusuya düştü`, facts, details: { to: a.toLocationId, ambush: ambush.ids } };
+      }
+      return { tier: "success", headline: `${name(w, a.actorId)} ${place?.name ?? "yeni konuma"} vardı`, facts, details: { to: a.toLocationId } };
+    }
+
+    case "buy":
+    case "sell": {
+      requireActorCanAct(w, a.actorId);
+      if (inCombat(w)) throw new StateError("Savaşta alışveriş olmaz");
+      if (a.qty <= 0 || !Number.isInteger(a.qty)) throw new StateError("Geçersiz miktar");
+      const merchant = w.creature(a.merchantId);
+      const shop = w.state.world?.shops[a.merchantId];
+      if (!shop || !merchant.isAlive) throw new StateError(`${merchant.name} bir tüccar değil`);
+      if (merchant.locationId !== w.creature(a.actorId).locationId) throw new StateError(`${merchant.name} burada değil`);
+      const item = cat.items[a.itemKey];
+      if (!item) throw new StateError(`Bilinmeyen eşya: ${a.itemKey}`);
+      const facts: string[] = [];
+      let haggle = 0;
+      if (a.haggle) {
+        const r = skillCheck(ctx, w.creature(a.actorId), "persuasion", 15, { reason: "pazarlık", targetId: a.merchantId });
+        facts.push(checkFact("Pazarlık (İkna)", r));
+        haggle = r.tier === "critical_success" ? 0.2 : r.success ? 0.1 : r.tier === "critical_failure" ? -0.1 : 0;
+        if (r.tier === "critical_failure") w.adjustRelationship(a.actorId, a.merchantId, -5);
+      }
+      const unit = priceFor(shop, a.itemKey, a.type, haggle);
+      const total = unit * a.qty;
+      if (a.type === "buy") {
+        if (w.itemQty(a.merchantId, a.itemKey) < a.qty) throw new StateError(`${merchant.name} elinde yeterli ${item.name} yok`);
+        w.adjustWallet(a.actorId, -total);
+        w.adjustWallet(a.merchantId, total);
+        w.removeItem(a.merchantId, a.itemKey, a.qty);
+        w.addItem(a.actorId, a.itemKey, a.qty);
+      } else {
+        if (item.type === "key") throw new StateError(`${item.name} satılamaz`);
+        w.removeItem(a.actorId, a.itemKey, a.qty);
+        w.adjustWallet(a.merchantId, -total);
+        w.adjustWallet(a.actorId, total);
+        w.addItem(a.merchantId, a.itemKey, a.qty);
+      }
+      w.advanceTime(5);
+      facts.push(`${a.qty} × ${item.name}: birim ${formatCp(unit)}, toplam ${formatCp(total)}`);
+      return { tier: "success", headline: `${name(w, a.actorId)} ${a.type === "buy" ? "satın aldı" : "sattı"}: ${item.name}`, facts, details: { unitCp: unit, totalCp: total } };
+    }
+
+    case "accept_quest": {
+      const q = w.state.world?.quests[a.questId];
+      if (!q) throw new StateError("Böyle bir görev yok");
+      if (q.status !== "available") throw new StateError("Bu görev alınamaz");
+      if (q.giverId) {
+        const giver = w.creature(q.giverId);
+        if (!giver.isAlive || giver.locationId !== w.creature(a.actorId).locationId) throw new StateError(`Görevi vermek için ${giver.name} yanında olmalı`);
+      }
+      setQuest(w, { ...q, status: "open" });
+      w.event("quest.accepted", { questId: q.id, title: q.title });
+      return { tier: "success", headline: `Yeni görev: ${q.title}`, facts: [`Görev kabul edildi: ${q.title} — ${q.description}`], details: {} };
     }
 
     case "use_item": {
@@ -560,6 +638,11 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
     }
 
     case "talk": {
+      if (a.targetId) {
+        const t = w.creature(a.targetId);
+        if (!t.isAlive || t.hp <= 0) throw new StateError(`${t.name} konuşamaz`);
+        w.event("talked", { actorId: a.actorId, targetId: a.targetId });
+      }
       w.advanceTime(a.minutes ?? 2);
       return { tier: "success", headline: "Konuşma", facts: [], details: {} };
     }
@@ -646,6 +729,23 @@ function afterAction(ctx: EngineContext, w: StateWriter, outcome: Outcome): void
         }
       }
     }
+  }
+  // Görevler
+  const playerIds = Object.values(w.state.creatures).filter((c) => c.kind === "pc").map((c) => c.id);
+  const q = evaluateQuests(w, w.effects, playerIds);
+  outcome.facts.push(...q.progressed);
+  for (const done of q.completed) {
+    outcome.facts.push(`GÖREV TAMAMLANDI: ${done.title}`);
+    outcome.facts.push(...grantQuestRewards(w, done, playerIds, (id, xp) => {
+      const before = w.creature(id).level;
+      const r = awardXp(w, id, xp);
+      if (r.leveledUp && w.creature(id).classKey) {
+        for (let lv = before; lv < r.level; lv++) {
+          const up = levelUp(w, id);
+          outcome.facts.push(`${w.creature(id).name} ${up.to}. SEVİYEYE YÜKSELDİ`);
+        }
+      }
+    }));
   }
   pruneExpiredBuffs(w);
 }
