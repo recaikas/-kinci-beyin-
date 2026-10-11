@@ -5,7 +5,7 @@
  * çevirebilir. Çözücü eylemi doğrular, zarları atar, durumu günceller ve
  * anlatıcıya verilecek değişmez gerçekleri (facts) üretir.
  */
-import { type Ability, DC, type Skill, SKILL_NAMES_TR, ABILITY_NAMES_TR } from "./core.ts";
+import { type Ability, ABILITY_NAMES_TR, DAMAGE_MOD_TR, DAMAGE_TR, DC, type Skill, SKILL_NAMES_TR } from "./core.ts";
 import { conditionEffects } from "./conditions.ts";
 import { EngineContext, type RollRecord } from "./context.ts";
 import { abilityCheck, type CheckResult, passiveScore, skillCheck } from "./checks.ts";
@@ -24,7 +24,7 @@ import { formatCp } from "./facts.ts";
 import { castSpell } from "./spells.ts";
 import { longRest, shortRest } from "./progression.ts";
 import { APPROACH_TR, ATTITUDE_TR, type RequestRisk, resolveSocial, type SocialApproach } from "./social.ts";
-import { type FactionAction, factionTick, resolveFactionAction } from "./faction.ts";
+import { FACTION_ACTION_TR, type FactionAction, factionTick, resolveFactionAction } from "./faction.ts";
 import { type Effect, type GameState, StateError, StateWriter } from "./state.ts";
 import { ITEMS, type ItemDef, MONSTERS, NATURAL_WEAPONS, SPELLS, WEAPONS } from "./srd/content.ts";
 import type { SpellDef } from "./spells.ts";
@@ -263,7 +263,7 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
         if (r.extras.length) facts.push(`Ek hasar: ${r.extras.join(", ")}`);
         if (r.damage) {
           const d = r.damage;
-          facts.push(`Hasar: ${d.final} ${d.type}${d.modifier !== "normal" ? ` (${d.modifier})` : ""}; HP ${d.hpBefore} → ${d.hpAfter}`);
+          facts.push(`Hasar: ${d.final} ${DAMAGE_TR[d.type]}${d.modifier !== "normal" ? ` (${DAMAGE_MOD_TR[d.modifier]})` : ""}; HP ${d.hpBefore} → ${d.hpAfter}`);
           if (d.concentration) facts.push(checkFact("Konsantrasyon kurtarması", d.concentration));
           totalDamage += d.final;
         }
@@ -350,7 +350,7 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
         const parts: string[] = [];
         if (t.attack) parts.push(`${t.attack.roll.record.breakdown} vs AC ${t.attack.targetAc} → ${t.attack.crit ? "kritik" : t.attack.hit ? "isabet" : "ıska"}`);
         if (t.saveSuccess !== undefined) parts.push(`kurtarma ${t.saveSuccess ? "başarılı" : "başarısız"}`);
-        if (t.damage) parts.push(`${t.damage.final} ${t.damage.type} hasar (HP ${t.damage.hpBefore} → ${t.damage.hpAfter})`);
+        if (t.damage) parts.push(`${t.damage.final} ${DAMAGE_TR[t.damage.type]} hasar (HP ${t.damage.hpBefore} → ${t.damage.hpAfter})`);
         if (t.healed !== undefined) parts.push(`${t.healed} HP iyileşti`);
         if (t.conditionsApplied?.length) parts.push(`koşul: ${t.conditionsApplied.join(", ")}`);
         facts.push(`${name(w, t.targetId)}: ${parts.join("; ") || "etkilendi"}`);
@@ -669,8 +669,8 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       const r = resolveFactionAction(ctx, w, a.action);
       return {
         tier: r.tier,
-        headline: `${w.faction(a.action.actorId).name}: ${a.action.type} → ${tierHeadline(r.tier)}`,
-        facts: [`Fraksiyon eylemi ${a.action.type}: ${tierHeadline(r.tier)}`],
+        headline: `${w.faction(a.action.actorId).name}: ${FACTION_ACTION_TR[a.action.type]} → ${tierHeadline(r.tier)}`,
+        facts: [`Fraksiyon eylemi (${FACTION_ACTION_TR[a.action.type]}): ${tierHeadline(r.tier)}`],
         details: r.details,
       };
     }
@@ -699,7 +699,7 @@ function applyOnHit(ctx: EngineContext, w: StateWriter, weapon: Weapon, attacker
     const amount = save.success ? (oh.halfOnSave ? Math.floor(dmg / 2) : 0) : dmg;
     if (amount > 0) {
       const d = applyDamage(ctx, w, targetId, amount, oh.damageType);
-      facts.push(`Ek ${d.final} ${d.type} hasar; HP ${d.hpBefore} → ${d.hpAfter}`);
+      facts.push(`Ek ${d.final} ${DAMAGE_TR[d.type]} hasar; HP ${d.hpBefore} → ${d.hpAfter}`);
     }
   }
   if (!save.success && oh.condition && w.creature(targetId).isAlive) {

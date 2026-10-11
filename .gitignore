@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+!apps/web/.env.production
+!apps/web/.env.development
 supabase/.temp/
 supabase/.branches/
 coverage/

@@ -18,6 +18,10 @@ export function traitMod(f: Faction, t: FactionTrait): number {
 
 export type FactionActionType = "diplomacy" | "trade" | "espionage" | "reform" | "war" | "fortify" | "recruit";
 
+export const FACTION_ACTION_TR: Record<FactionActionType, string> = {
+  diplomacy: "diplomasi", trade: "ticaret", espionage: "casusluk", reform: "reform", war: "savaş", fortify: "tahkimat", recruit: "askere alma",
+};
+
 export interface FactionAction {
   type: FactionActionType;
   actorId: string;

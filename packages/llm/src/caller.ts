@@ -106,7 +106,13 @@ export class AnthropicCaller implements StructuredCaller {
   }
 }
 
-/** Ortam değişkeninden istemci kur (ANTHROPIC_API_KEY). */
-export function createCaller(apiKey?: string): AnthropicCaller {
-  return new AnthropicCaller(new Anthropic(apiKey ? { apiKey } : {}));
+/**
+ * İstemci kur. Sunucuda ANTHROPIC_API_KEY ortam değişkeni; tarayıcıda (yerel mod)
+ * oyuncunun kendi anahtarı ile `browser: true`.
+ */
+export function createCaller(apiKey?: string, o: { browser?: boolean } = {}): AnthropicCaller {
+  return new AnthropicCaller(new Anthropic({
+    ...(apiKey ? { apiKey } : {}),
+    ...(o.browser ? { dangerouslyAllowBrowser: true } : {}),
+  }));
 }

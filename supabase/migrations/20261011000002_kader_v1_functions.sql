@@ -281,7 +281,7 @@ grant execute on function public.match_memories(uuid, extensions.vector, integer
 -- ---------------------------------------------------------------- RLS
 create or replace function public.owns_campaign(p_campaign_id uuid)
 returns boolean
-language sql stable security definer
+language sql stable security invoker
 set search_path = ''
 as $$
   select exists (select 1 from public.campaigns c where c.id = p_campaign_id and c.owner_id = (select auth.uid()));

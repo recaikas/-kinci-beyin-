@@ -4,6 +4,7 @@
  */
 import { CONDITION_NAMES_TR } from "./conditions.ts";
 import { dative } from "./tr.ts";
+import { ITEMS } from "./srd/items.ts";
 import { ATTITUDE_TR } from "./social.ts";
 import type { Attitude } from "./types.ts";
 import type { Effect, GameState } from "./state.ts";
@@ -30,13 +31,13 @@ export function describeEffects(effects: Effect[], s: GameState): string[] {
         out.push(`${nm(s, e.ownerId)} ${e.deltaCp >= 0 ? "kazandı" : "harcadı"}: ${formatCp(e.deltaCp)} (kalan ${formatCp(e.afterCp)})`);
         break;
       case "inventory.add":
-        out.push(`${nm(s, e.ownerId)} envanterine eklendi: ${e.itemKey} ×${e.qty}`);
+        if (e.qty > 0) out.push(`${nm(s, e.ownerId)} envanterine eklendi: ${ITEMS[e.itemKey]?.name ?? e.itemKey} ×${e.qty}`);
         break;
       case "inventory.remove":
-        out.push(`${nm(s, e.ownerId)} envanterinden çıktı: ${e.itemKey} ×${e.qty}`);
+        out.push(`${nm(s, e.ownerId)} envanterinden çıktı: ${ITEMS[e.itemKey]?.name ?? e.itemKey} ×${e.qty}`);
         break;
       case "move":
-        out.push(`${nm(s, e.id)} artık burada: ${e.to}`);
+        out.push(`${nm(s, e.id)} artık burada: ${s.world?.places[e.to]?.name ?? e.to}`);
         break;
       case "event": {
         const p = e.payload;

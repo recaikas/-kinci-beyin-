@@ -10,10 +10,14 @@
     "check": "npm run typecheck && npm test",
     "play": "tsx scripts/play.ts",
     "test:db": "vitest run packages/store",
-    "gen:seed": "tsx scripts/gen-seed.ts"
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "e2e": "npm run e2e -w apps/web",
+    "bundle:functions": "node scripts/bundle-functions.mjs"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -26,5 +30,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "zod": "^4.6.5"
-  }
+  },
+  "version": "1.0.0"
 }

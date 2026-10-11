@@ -95,6 +95,16 @@ export const DAMAGE_TYPES = [
 ] as const;
 export type DamageType = (typeof DAMAGE_TYPES)[number];
 
+export const DAMAGE_TR: Record<DamageType, string> = {
+  acid: "asit", bludgeoning: "ezici", cold: "soğuk", fire: "ateş", force: "güç", lightning: "yıldırım",
+  necrotic: "nekrotik", piercing: "delici", poison: "zehir", psychic: "psişik", radiant: "ışıltı",
+  slashing: "kesici", thunder: "gök gürültüsü",
+};
+
+export const DAMAGE_MOD_TR: Record<string, string> = {
+  immune: "bağışık", resistant: "dirençli", vulnerable: "zayıf", normal: "",
+};
+
 export const SIZES = ["tiny", "small", "medium", "large", "huge", "gargantuan"] as const;
 export type Size = (typeof SIZES)[number];
 
