@@ -135,6 +135,32 @@ describe.skipIf(!DB_URL)("Supabase v1 şeması (gerçek PostgreSQL)", () => {
     campaign = c;
   });
 
+  it("tarihî dünya (Rodos 1570): kâtip Bekir'i alt eder, anahtarı yağmalar; DB == motor", async () => {
+    let c = createCampaign({
+      templateKey: "akdeniz1570",
+      character: {
+        name: "Piri", raceKey: "human", classKey: "fighter", method: "standard_array",
+        abilities: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 }, skills: ["athletics", "perception"],
+      },
+    }, newId);
+    Object.assign(c.state.creatures[c.playerId]!, { hp: 300, maxHp: 300 });
+    await db.query(`select public.create_campaign($1, $2)`, [OWNER, createPayload(c)]);
+    const loaded = await load(c.id);
+    expect(normalize(loaded.state)).toEqual(normalize(c.state));
+    expect(loaded.templateKey).toBe("akdeniz1570");
+    expect(loaded.state.creatures[c.playerId]!.background).toBe("Gemi Kâtibi");
+    c = await play(c, "ambara in", "h1");
+    for (let i = 0; i < 60; i++) {
+      const bekir = Object.values(c.state.creatures).find((x) => x.name === "Ambar Ağası Bekir")!;
+      if (!bekir.isAlive) break;
+      c = await play(c, "bekir'e kılıçla saldırıyorum", `h-fight-${i}`);
+    }
+    c = await play(c, "bekir'in cesedini ara", "h-loot");
+    expect((c.state.inventories[c.playerId] ?? []).some((x) => x.itemKey === "warehouse_key")).toBe(true);
+    const keyRow = (await db.query(`select count(*)::int n from public.inventory where campaign_id = $1 and owner_id = $2 and item_key = 'warehouse_key'`, [c.id, c.playerId])).rows[0].n;
+    expect(keyRow).toBe(1);
+  });
+
   it("eski tur numarasıyla yazma reddedilir", async () => {
     await expect(db.query(`select public.apply_turn($1, $2, $3)`, [campaign.id, 0, { turn: {}, game_time: 0 }])).rejects.toThrow(/turn_conflict/);
   });

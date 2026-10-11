@@ -60,3 +60,19 @@ export function locative(name: string): string {
   const hard = HARD.includes(w.toLocaleLowerCase("tr").slice(-1));
   return `${name}'${hard ? "t" : "d"}${a2(w)}`;
 }
+
+/**
+ * Yer adının yönelme hâli. Çok kelimeli tamlamalar (Kadırga Ambarı, Rodos Limanı) iyelik
+ * ekiyle bittiği için "n" kaynaştırması alır: Kadırga Ambarı'na. Parantezli adlarda ek
+ * paranteze yapışmasın diye "… (Güverte)" kısmı ekten sonra korunur.
+ */
+export function placeDative(name: string): string {
+  const m = /^(.*?)\s*(\([^)]*\))$/.exec(name.trim());
+  const core = m ? m[1]! : name.trim();
+  const tail = m ? ` ${m[2]}` : "";
+  const words = core.split(/\s+/);
+  const w = words[words.length - 1] ?? core;
+  const compound = words.length > 1 && /[ıiuü]$/.test(w.toLocaleLowerCase("tr"));
+  const suffix = compound ? `n${a2(w)}` : `${endsWithVowel(w) ? "y" : ""}${a2(w)}`;
+  return `${core}'${suffix}${tail}`;
+}

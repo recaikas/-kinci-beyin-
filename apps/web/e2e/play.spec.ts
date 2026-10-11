@@ -7,6 +7,9 @@ test("yerel mod: karakter yarat, Karaçam'da oyna", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Kader Zarı" })).toBeVisible();
   await page.getByRole("button", { name: "+ Yeni kampanya" }).click();
 
+  // Dünya (varsayılan: Karaçam)
+  await expect(page.getByRole("button", { name: /Karaçam Sınırı/ })).toBeVisible();
+  await page.getByRole("button", { name: "İleri →" }).click();
   // Irk ve sınıf
   await page.getByRole("button", { name: /Tepe Cücesi/ }).click();
   await page.getByRole("button", { name: "İleri →" }).click();
@@ -74,6 +77,7 @@ test("yerel mod: savaş akışı", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "+ Yeni kampanya" }).click();
   await page.getByRole("button", { name: "İleri →" }).click();
+  await page.getByRole("button", { name: "İleri →" }).click();
   await page.getByRole("button", { name: /Barbar/ }).click();
   await page.getByRole("button", { name: "İleri →" }).click();
   await page.getByRole("button", { name: "İleri →" }).click();
@@ -101,4 +105,42 @@ test("yerel mod: savaş akışı", async ({ page }) => {
     await page.waitForTimeout(150);
   }
   await page.screenshot({ path: "e2e/out/06-savas-sonu.png" });
+});
+
+test("yerel mod: tarihî dünya — Rodos 1570, gemi kâtibi (büyüsüz)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page.getByRole("button", { name: "+ Yeni kampanya" }).click();
+  await page.getByRole("button", { name: /Rodos, 1570/ }).click();
+  await page.getByRole("button", { name: "İleri →" }).click();
+  // Yalnızca insan seçilebilir
+  await expect(page.getByRole("button", { name: /Tepe Cücesi/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "İleri →" }).click();
+  // Büyücü sınıflar yok; tarihî adlar var
+  await expect(page.getByRole("button", { name: /Büyücü/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /Levent/ }).click();
+  await page.getByRole("button", { name: "İleri →" }).click();
+  await page.getByRole("button", { name: "İleri →" }).click();
+  await page.getByRole("checkbox", { name: /Atletizm/ }).click();
+  await page.getByRole("checkbox", { name: /Algı/ }).click();
+  await page.getByRole("button", { name: "İleri →" }).click();
+  await page.getByLabel("Karakterin adı").fill("Piri");
+  await page.getByRole("button", { name: "İleri →" }).click();
+  await expect(page.getByText(/Levent, 1\. seviye · Gemi Kâtibi/)).toBeVisible();
+  await expect(page.getByText(/Fitilli Tüfek/)).toBeVisible();
+  await page.screenshot({ path: "e2e/out/07-tarihi-ozet.png" });
+  await page.getByRole("button", { name: "Maceraya başla" }).click();
+
+  await expect(page.locator(".topbar")).toContainText("Yeşil Yılan Kadırgası");
+  await expect(page.locator(".topbar")).toContainText("Akdeniz, 1570");
+  await expect(page.locator(".entry").first()).toContainText("Gemi Kâtibi");
+  await expect(page.getByRole("tab", { name: "Büyü" })).toHaveCount(0);
+  await page.getByLabel("Eylem").fill("ambara in");
+  await page.getByLabel("Eylem").press("Enter");
+  await expect(page.locator(".topbar")).toContainText("Kadırga Ambarı");
+  await page.getByRole("tab", { name: "Karakter" }).click();
+  await expect(page.locator(".panel")).toContainText("Levent");
+  await page.screenshot({ path: "e2e/out/08-tarihi-ambar.png" });
+  expect(errors).toEqual([]);
 });

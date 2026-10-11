@@ -6,6 +6,7 @@ export interface CampaignSummary {
   title: string;
   turnCount: number;
   updatedAt: string;
+  templateKey?: string;
   player: { name: string; level: number; classKey: string | null; raceKey: string | null; alive: boolean } | null;
 }
 

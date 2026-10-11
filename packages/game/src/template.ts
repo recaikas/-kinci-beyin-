@@ -2,7 +2,7 @@
  * Dünya şablonu → oynanabilir kampanya durumu.
  */
 import {
-  type BuiltCharacter, type Creature, type Faction, type GameState, type InventoryEntry, type ObjectiveKind,
+  type BuiltCharacter, type CharacterLimits, type StartingKit, type Creature, type Faction, type GameState, type InventoryEntry, type ObjectiveKind,
   type PlaceInfo, type Quest, relKey, type ShopInfo, spawnMonster, type WorldState,
 } from "@kader/engine";
 import type { CanonFact, Persona, WorldBible } from "@kader/llm";
@@ -43,8 +43,28 @@ export interface FactionTemplate extends Omit<Faction, "id" | "regionIds" | "atW
   key: string;
 }
 
+/** Dünyanın türü ve kural sınırları (fantastik / büyüsüz tarihî). */
+export interface WorldSetting {
+  era: "fantasy" | "historical";
+  /** Seçim ekranında gösterilen kısa tanıtım. */
+  tagline: string;
+  /** Örn. "Akdeniz, 1570". */
+  period?: string;
+  /** false: büyü yok; büyü sekmesi gizlenir, büyücü sınıflar seçilemez. */
+  magic: boolean;
+  limits?: CharacterLimits;
+  /** Sınıfların bu dünyadaki adları/açıklamaları (ör. Savaşçı → Levent). */
+  classNames?: Record<string, { name: string; description: string }>;
+  kit?: StartingKit;
+  /** Oyuncunun başlangıç rolü (ör. "Gemi Kâtibi"); kökeni boşsa bu yazılır. */
+  role?: { name: string; description: string };
+}
+
+export const FANTASY_SETTING: WorldSetting = { era: "fantasy", tagline: "", magic: true };
+
 export interface WorldTemplate {
   key: string;
+  setting?: WorldSetting;
   bible: WorldBible;
   start: { locationId: string; gameTime: number; playerItems: { key: string; qty: number }[] };
   places: PlaceInfo[];

@@ -10,10 +10,27 @@ import {
   type CanonFact, type Persona, playTurn, type PlayTurnResult, type RecentTurn, type StructuredCaller,
   summarizeTurns, type TurnPacketInput, type WorldBible, fold,
 } from "@kader/llm";
-import { instantiateWorld, type WorldTemplate } from "./template.ts";
+import { FANTASY_SETTING, instantiateWorld, type WorldSetting, type WorldTemplate } from "./template.ts";
+import { AKDENIZ } from "./templates/akdeniz.ts";
 import { KARACAM } from "./templates/karacam.ts";
 
-export const TEMPLATES: Record<string, WorldTemplate> = { [KARACAM.key]: KARACAM };
+KARACAM.setting ??= {
+  ...FANTASY_SETTING,
+  period: "Fantastik sınır diyarı",
+  tagline: "Kılıç ve büyü. Çöken bir krallığın sınır kasabasında goblinler, haydutlar ve huzursuz ölüler.",
+};
+
+export const TEMPLATES: Record<string, WorldTemplate> = { [KARACAM.key]: KARACAM, [AKDENIZ.key]: AKDENIZ };
+
+/** Şablonun dünya ayarı (eski şablonlar için fantastik varsayılan). */
+export function settingOf(templateKey: string | undefined): WorldSetting {
+  return (templateKey ? TEMPLATES[templateKey]?.setting : undefined) ?? FANTASY_SETTING;
+}
+
+/** Sınıfın bu dünyadaki görünen adı (ör. tarihî dünyada Savaşçı → Levent). */
+export function classNameIn(templateKey: string | undefined, classKey: string | undefined, fallback: string): string {
+  return (classKey && settingOf(templateKey).classNames?.[classKey]?.name) || fallback;
+}
 
 export interface JournalEntry {
   n: number;
@@ -64,14 +81,19 @@ export function createCampaign(input: NewCampaignInput, newId: () => string, now
   if (!t) throw new Error(`Bilinmeyen dünya: ${input.templateKey}`);
   const id = newId();
   const playerId = newId();
-  const built = buildCharacter(input.character, playerId, t.start.locationId);
+  const setting = t.setting ?? FANTASY_SETTING;
+  const character: CharacterInput = setting.role && !input.character.background?.trim()
+    ? { ...input.character, background: setting.role.name }
+    : input.character;
+  const built = buildCharacter(character, playerId, t.start.locationId, setting.kit, setting.limits);
   const w = instantiateWorld(t, id, built, newId);
+  const roleLine = setting.role ? `Rolün — ${setting.role.name}: ${setting.role.description}\n\n` : "";
   const intro: JournalEntry = {
     n: 0,
     input: "",
     headline: "Yolculuk başlıyor",
     tier: "success",
-    narration: `${t.bible.premise}\n\n${built.creature.name}, ${w.state.world!.places[t.start.locationId]!.description}`,
+    narration: `${t.bible.premise}\n\n${roleLine}${w.state.world!.places[t.start.locationId]!.name}: ${w.state.world!.places[t.start.locationId]!.description}`,
     dialogue: [],
     rolls: [],
     facts: [],

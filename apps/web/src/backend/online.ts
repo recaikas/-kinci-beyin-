@@ -46,9 +46,9 @@ export class OnlineBackend implements Backend {
   }
 
   async listCampaigns(): Promise<CampaignSummary[]> {
-    const r = await call<{ campaigns: { id: string; title: string; turn_count: number; updated_at: string; player: { name: string; level: number; class_key: string | null; race_key: string | null; is_alive: boolean } | null }[] }>("campaign", { op: "list" });
+    const r = await call<{ campaigns: { id: string; title: string; template_key: string | null; turn_count: number; updated_at: string; player: { name: string; level: number; class_key: string | null; race_key: string | null; is_alive: boolean } | null }[] }>("campaign", { op: "list" });
     return r.campaigns.map((c) => ({
-      id: c.id, title: c.title, turnCount: c.turn_count, updatedAt: c.updated_at,
+      id: c.id, title: c.title, turnCount: c.turn_count, updatedAt: c.updated_at, ...(c.template_key ? { templateKey: c.template_key } : {}),
       player: c.player ? { name: c.player.name, level: c.player.level, classKey: c.player.class_key, raceKey: c.player.race_key, alive: c.player.is_alive } : null,
     }));
   }

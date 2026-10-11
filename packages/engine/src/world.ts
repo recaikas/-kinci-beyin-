@@ -100,7 +100,8 @@ export function rollTravelEncounter(ctx: EngineContext, w: StateWriter, placeId:
   if (!tmpl) throw new StateError(`Bilinmeyen canavar: ${entry.templateKey}`);
   for (let i = 0; i < n; i++) {
     const id = newId();
-    const c = spawnMonster(entry.templateKey, id, { locationId: placeId, name: n > 1 ? `${tmpl.name} ${i + 1}` : tmpl.name });
+    // Yol karşılaşmaları her zaman düşmandır (insansı NPC şablonları dahil).
+    const c = spawnMonster(entry.templateKey, id, { locationId: placeId, name: n > 1 ? `${tmpl.name} ${i + 1}` : tmpl.name, kind: "monster" });
     spawnCreature(w, c);
     ids.push(id);
   }

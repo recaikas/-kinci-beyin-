@@ -53,6 +53,7 @@ function summary(c: Campaign): CampaignSummary {
     title: c.title,
     turnCount: c.turnCount,
     updatedAt: new Date().toISOString(),
+    templateKey: c.templateKey,
     player: pc ? { name: pc.name, level: pc.level, classKey: pc.classKey ?? null, raceKey: pc.raceKey ?? null, alive: pc.isAlive } : null,
   };
 }

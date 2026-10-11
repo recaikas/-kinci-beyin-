@@ -143,7 +143,7 @@ export function ruleIntent(text: string, scene: RuleScene): RuleIntent | null {
   }
 
   // ---- Ganimet
-  if (has(t, "yagmala", "cesedi ara", "cesetleri ara", "ustunu ara", "ganimet", "ceplerini ara", "ustunu yokla")) {
+  if (has(t, "yagmala", "ganimet") || /(^|\s)(cesed|cesetler|ustun|ceplerin|cebin|uzerin)\S*\s+(ara|ari|yokla|kar)/.test(t)) {
     const c = matchName(t, corpses) ?? corpses.find((x) => x.kind !== "pc");
     if (!c) return ask("Aranacak bir ceset göremiyorum. Kimi arıyorsun?");
     return act({ type: "loot", actorId: me, targetId: c.id });

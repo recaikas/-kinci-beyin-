@@ -52,6 +52,12 @@ const RAW_WEAPONS: Record<string, W> = {
   hand_crossbow: martial({ name: "El Arbaleti", damage: "1d6", damageType: "piercing", ranged: true, light: true, range: [30, 120], loading: true, valueCp: gp(75), weightLb: 3 }),
   heavy_crossbow: martial({ name: "Ağır Arbalet", damage: "1d10", damageType: "piercing", ranged: true, heavy: true, range: [100, 400], loading: true, twoHanded: true, valueCp: gp(50), weightLb: 18 }),
   longbow: martial({ name: "Uzun Yay", damage: "1d8", damageType: "piercing", ranged: true, heavy: true, range: [150, 600], twoHanded: true, valueCp: gp(50), weightLb: 2 }),
+  // Tarihî (SRD dışı; DMG'deki Rönesans ateşli silahlarına benzer değerler, ev kuralı)
+  yatagan: martial({ name: "Yatağan", damage: "1d6", damageType: "slashing", finesse: true, light: true, valueCp: gp(15), weightLb: 2 }),
+  kilic: martial({ name: "Kılıç", damage: "1d8", damageType: "slashing", versatile: "1d10", valueCp: gp(20), weightLb: 3 }),
+  arquebus: martial({ name: "Fitilli Tüfek", damage: "1d12", damageType: "piercing", ranged: true, range: [40, 120], loading: true, twoHanded: true, valueCp: gp(250), weightLb: 10 }),
+  pistol: martial({ name: "Çarklı Tabanca", damage: "1d10", damageType: "piercing", ranged: true, range: [30, 90], loading: true, valueCp: gp(300), weightLb: 3 }),
+  belaying_pin: simple({ name: "Armadora Çivisi", damage: "1d4", damageType: "bludgeoning", light: true, valueCp: 5, weightLb: 1 }),
   // Silahsız
   unarmed: { name: "Silahsız Vuruş", damage: "1", damageType: "bludgeoning", category: "simple", valueCp: 0, weightLb: 0 },
 };

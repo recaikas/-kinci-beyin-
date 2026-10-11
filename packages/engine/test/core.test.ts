@@ -118,7 +118,7 @@ describe("kontroller", () => {
   });
 });
 
-import { accusative, dative, genitive, locative } from "../src/index.ts";
+import { accusative, dative, genitive, locative, placeDative } from "../src/index.ts";
 
 describe("Türkçe ekler", () => {
   it("ünlü uyumu ve kaynaştırma", () => {
@@ -134,5 +134,16 @@ describe("Türkçe ekler", () => {
     expect(locative("Arda")).toBe("Arda'da");
     expect(locative("Ahmet")).toBe("Ahmet'te");
     expect(locative("Pıtpıt")).toBe("Pıtpıt'ta");
+  });
+
+  it("yer adlarında yönelme: tamlamalarda n kaynaştırması, parantez korunur", () => {
+    expect(placeDative("Kadırga Ambarı")).toBe("Kadırga Ambarı'na");
+    expect(placeDative("Rodos Limanı")).toBe("Rodos Limanı'na");
+    expect(placeDative("Karaçam Pazarı")).toBe("Karaçam Pazarı'na");
+    expect(placeDative("Eski Mezarlık")).toBe("Eski Mezarlık'a");
+    expect(placeDative("Kurt Sırtı")).toBe("Kurt Sırtı'na");
+    expect(placeDative("Yeşil Yılan Kadırgası (Güverte)")).toBe("Yeşil Yılan Kadırgası'na (Güverte)");
+    expect(placeDative("Kızıl Geyik Hanı")).toBe("Kızıl Geyik Hanı'na");
+    expect(placeDative("Kostas'ın Meyhanesi")).toBe("Kostas'ın Meyhanesi'ne");
   });
 });

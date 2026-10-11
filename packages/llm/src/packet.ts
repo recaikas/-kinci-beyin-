@@ -68,6 +68,8 @@ export interface SceneEntity {
   health: HealthBand;
   conditions: string[];
   attitudeToPlayer: string;
+  /** Oyuncunun kökeni/rolü (ör. "Gemi Kâtibi"). */
+  role?: string;
   personality?: string;
   goals?: string;
   speechStyle?: string;
@@ -87,6 +89,7 @@ export function sceneEntities(input: TurnPacketInput): SceneEntity[] {
         health: healthBand(c),
         conditions: c.conditions.map((x) => CONDITION_NAMES_TR[x]),
         attitudeToPlayer: c.id === playerId ? "—" : attitudeFromScore(rel),
+        ...(c.id === playerId && c.background ? { role: c.background } : {}),
         ...(p?.personality ? { personality: p.personality } : {}),
         ...(p?.goals ? { goals: p.goals } : {}),
         ...(p?.speechStyle ? { speechStyle: p.speechStyle } : {}),

@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import {
   ABILITIES, ABILITY_NAMES_TR, type Ability, type AbilityMethod, type AbilityScores, abilityModifier, buildCharacter,
   type CharacterInput, CLASSES, POINT_BUY_BUDGET, POINT_BUY_COST, RACES, SKILL_LIST, SKILL_NAMES_TR, SKILLS,
-  type Skill, SPELLS, STANDARD_ARRAY, validateCharacter,
+  CLASS_ABILITY_TR, ITEMS, type Skill, SPELLS, STANDARD_ARRAY, validateCharacter,
 } from "@kader/engine";
+import { TEMPLATES } from "@kader/game";
 import type { Backend, CampaignData } from "../backend/types.ts";
 import { BackendError } from "../backend/types.ts";
 
-const STEPS = ["Irk", "Sınıf", "Yetenekler", "Beceriler", "Kimlik", "Özet"];
+const STEPS = ["Dünya", "Irk", "Sınıf", "Yetenekler", "Beceriler", "Kimlik", "Özet"];
 const fmt = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 
 /** Sınıfın birincil yeteneğine göre standart dizinin önerilen dağılımı. */
@@ -28,6 +29,7 @@ function suggested(classKey: string): AbilityScores {
 
 export function Create({ backend, onCancel, onCreated }: { backend: Backend; onCancel: () => void; onCreated: (c: CampaignData) => void }) {
   const [step, setStep] = useState(0);
+  const [templateKey, setTemplate] = useState("karacam");
   const [raceKey, setRace] = useState("human");
   const [classKey, setClass] = useState("fighter");
   const [method, setMethod] = useState<AbilityMethod>("standard_array");
@@ -42,6 +44,12 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const world = TEMPLATES[templateKey]!;
+  const setting = world.setting!;
+  const limits = setting.limits ?? {};
+  const races = Object.values(RACES).filter((r) => !limits.races || limits.races.includes(r.key));
+  const classes = Object.values(CLASSES).filter((c) => !limits.classes || limits.classes.includes(c.key));
+  const clsName = (k: string) => setting.classNames?.[k]?.name ?? CLASSES[k]?.name ?? k;
   const race = RACES[raceKey]!;
   const cls = CLASSES[classKey]!;
   const raceSkills = race.skillProficiencies ?? [];
@@ -57,14 +65,21 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
     ...(background ? { background } : {}),
     ...(method === "rolled" && rolled ? { rolledValues: rolled.values } : {}),
   };
-  const errors = useMemo(() => validateCharacter(input), [JSON.stringify(input)]);
+  const errors = useMemo(() => validateCharacter(input, limits), [JSON.stringify(input), templateKey]);
   const preview = useMemo(() => {
     try {
-      return buildCharacter({ ...input, name: input.name }, "preview", "x");
+      return buildCharacter({ ...input, name: input.name }, "preview", "x", setting.kit, limits);
     } catch {
       return null;
     }
-  }, [JSON.stringify(input)]);
+  }, [JSON.stringify(input), templateKey]);
+
+  const changeWorld = (k: string) => {
+    setTemplate(k);
+    const l = TEMPLATES[k]!.setting?.limits ?? {};
+    if (l.races && !l.races.includes(raceKey)) changeRace(l.races[0]!);
+    if (l.classes && !l.classes.includes(classKey)) changeClass(l.classes[0]!);
+  };
 
   const changeClass = (k: string) => {
     setClass(k);
@@ -121,6 +136,7 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
   const stepOk = [
     true,
     true,
+    true,
     method === "rolled" ? !!rolled && !errors.some((e) => /Yetenek|zar|dizi|Puan/.test(e)) : !errors.some((e) => /Yetenek|dizi|Puan/.test(e)),
     !errors.some((e) => /beceri|uzmanlık|Yarı Elf|seç/i.test(e)),
     name.trim().length > 0,
@@ -132,7 +148,7 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
     setError(null);
     try {
       const c = await backend.createCampaign({
-        templateKey: "karacam",
+        templateKey,
         character: { ...input, name: name.trim() },
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(rolled?.token ? { rollToken: rolled.token } : {}),
@@ -162,7 +178,22 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
 
       {step === 0 && (
         <div className="choices">
-          {Object.values(RACES).map((r) => (
+          {Object.values(TEMPLATES).map((t) => (
+            <button key={t.key} className={`card choice ${t.key === templateKey ? "selected" : ""}`} onClick={() => changeWorld(t.key)}>
+              <h3>{t.bible.title}</h3>
+              <div className="small" style={{ color: "var(--gold-2)" }}>
+                {t.setting?.era === "historical" ? "Tarihî · büyüsüz" : "Fantastik · büyülü"}{t.setting?.period ? ` · ${t.setting.period}` : ""}
+              </div>
+              <div className="muted small">{t.setting?.tagline}</div>
+              {t.setting?.role && <div className="small" style={{ marginTop: 6 }}>Rolün: <b>{t.setting.role.name}</b></div>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="choices">
+          {races.map((r) => (
             <button key={r.key} className={`card choice ${r.key === raceKey ? "selected" : ""}`} onClick={() => changeRace(r.key)}>
               <h3>{r.name}</h3>
               <div className="small" style={{ color: "var(--gold-2)" }}>
@@ -176,19 +207,19 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
         </div>
       )}
 
-      {step === 1 && (
+      {step === 2 && (
         <div className="choices">
-          {Object.values(CLASSES).map((c) => (
+          {classes.map((c) => (
             <button key={c.key} className={`card choice ${c.key === classKey ? "selected" : ""}`} onClick={() => changeClass(c.key)}>
-              <h3>{c.name}</h3>
-              <div className="small" style={{ color: "var(--gold-2)" }}>d{c.hitDie} · {ABILITY_NAMES_TR[c.primary]}{c.caster !== "none" ? " · büyücü" : ""}</div>
-              <div className="muted small">{c.description}</div>
+              <h3>{clsName(c.key)}</h3>
+              <div className="small" style={{ color: "var(--gold-2)" }}>d{c.hitDie} · {ABILITY_NAMES_TR[c.primary]}{c.caster !== "none" ? " · büyücü" : ""}{setting.classNames?.[c.key] ? ` · (SRD: ${c.name})` : ""}</div>
+              <div className="muted small">{setting.classNames?.[c.key]?.description ?? c.description}</div>
             </button>
           ))}
         </div>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <div className="card" style={{ display: "grid", gap: 14 }}>
           <div className="row">
             <button className={`btn small ${method === "standard_array" ? "active" : ""}`} onClick={() => changeMethod("standard_array")}>Standart dizi</button>
@@ -238,10 +269,10 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="card" style={{ display: "grid", gap: 12 }}>
           <div className="row">
-            <span className={`chip ${classChosen === cls.skillCount ? "green" : "gold"}`}>{cls.name}: {classChosen}/{cls.skillCount} sınıf becerisi</span>
+            <span className={`chip ${classChosen === cls.skillCount ? "green" : "gold"}`}>{clsName(cls.key)}: {classChosen}/{cls.skillCount} sınıf becerisi</span>
             {extra > 0 && <span className="chip gold">{race.name}: +{extra} serbest beceri</span>}
             <span className={`chip ${skills.length === skillTarget ? "green" : "gold"}`}>Toplam {skills.length}/{skillTarget}</span>
           </div>
@@ -276,19 +307,19 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="card" style={{ display: "grid", gap: 12 }}>
           <label className="field">Karakterin adı<input className="input" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="ör. Arda, Elif, Kara Murat" autoFocus /></label>
-          <label className="field">Kısa geçmiş / görünüm (anlatıcı kullanır)<textarea className="input" rows={3} maxLength={400} value={background} onChange={(e) => setBackground(e.target.value)} placeholder="ör. Güneyli bir demircinin kaçak oğlu; sol yanağında yanık izi." /></label>
-          <label className="field">Kampanya başlığı (isteğe bağlı)<input className="input" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ör. Karaçam Günlükleri" /></label>
+          <label className="field">Kısa geçmiş / görünüm (anlatıcı kullanır)<textarea className="input" rows={3} maxLength={400} value={background} onChange={(e) => setBackground(e.target.value)} placeholder={setting.role ? `Boş bırakırsan: ${setting.role.name}. ör. Kalemi kılıcından keskin, Midillili bir kâtip.` : "ör. Güneyli bir demircinin kaçak oğlu; sol yanağında yanık izi."} /></label>
+          <label className="field">Kampanya başlığı (isteğe bağlı)<input className="input" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`ör. ${world.bible.title} Günlükleri`} /></label>
         </div>
       )}
 
-      {step === 5 && preview && (
+      {step === 6 && preview && (
         <div className="grid2">
           <div className="card">
             <h2>{name || "Adsız"}</h2>
-            <div className="muted">{race.name} {cls.name}, 1. seviye</div>
+            <div className="muted">{race.name} {clsName(cls.key)}, 1. seviye{setting.role ? ` · ${setting.role.name}` : ""}</div>
             <div className="stat-big" style={{ marginTop: 10 }}>
               <div className="stat"><div className="v">{preview.creature.maxHp}</div><div className="k">HP</div></div>
               <div className="stat"><div className="v">{preview.creature.ac}</div><div className="k">AC</div></div>
@@ -305,7 +336,8 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
             <h3>Beceriler</h3>
             <div>{preview.creature.skillProficiencies.map((s) => SKILL_NAMES_TR[s]).join(", ")}</div>
             <h3 style={{ marginTop: 10 }}>Başlangıç ekipmanı</h3>
-            <div>{preview.inventory.map((i) => `${i.qty > 1 ? `${i.qty}× ` : ""}${i.itemKey.replace(/_/g, " ")}${i.equipped ? " (kuşanılı)" : ""}`).join(", ")}</div>
+            <div>{[...preview.inventory, ...world.start.playerItems.map((i) => ({ itemKey: i.key, qty: i.qty, equipped: false }))]
+              .map((i) => `${i.qty > 1 ? `${i.qty}× ` : ""}${ITEMS[i.itemKey]?.name ?? i.itemKey}${i.equipped ? " (kuşanılı)" : ""}`).join(", ")}</div>
             {preview.creature.spellcasting && (
               <>
                 <h3 style={{ marginTop: 10 }}>Büyüler</h3>
@@ -315,21 +347,24 @@ export function Create({ backend, onCancel, onCreated }: { backend: Backend; onC
             {Object.keys(preview.creature.resources ?? {}).length > 0 && (
               <>
                 <h3 style={{ marginTop: 10 }}>Yetenekler</h3>
-                <div>{Object.keys(preview.creature.resources ?? {}).join(", ").replace(/_/g, " ")}</div>
+                <div>{Object.keys(preview.creature.resources ?? {}).map((k) => CLASS_ABILITY_TR[k as keyof typeof CLASS_ABILITY_TR] ?? k.replace(/_/g, " ")).join(", ")}</div>
               </>
             )}
-            <div className="notice" style={{ marginTop: 12 }}>Mühürlü bir mektupla Karaçam'ın kuzey kapısında başlayacaksın.</div>
+            <div className="notice" style={{ marginTop: 12 }}>
+              {world.bible.title}: {world.places.find((p) => p.id === world.start.locationId)?.name} konumunda başlayacaksın.
+              {setting.magic ? "" : " Bu dünyada büyü yok; tehlike insandan ve denizden gelir."}
+            </div>
           </div>
         </div>
       )}
 
-      {step > 1 && errors.length > 0 && step < 5 && !stepOk[step] && <div className="notice" style={{ marginTop: 12 }}>{errors.join(" · ")}</div>}
-      {step === 5 && errors.length > 0 && <div className="error" style={{ marginTop: 12 }}>{errors.join(" · ")}</div>}
+      {step > 2 && errors.length > 0 && step < 6 && !stepOk[step] && <div className="notice" style={{ marginTop: 12 }}>{errors.join(" · ")}</div>}
+      {step === 6 && errors.length > 0 && <div className="error" style={{ marginTop: 12 }}>{errors.join(" · ")}</div>}
       {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
 
       <div className="wizard-nav">
         <button className="btn" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>← Geri</button>
-        {step < 5 ? (
+        {step < 6 ? (
           <button className="btn primary" disabled={!stepOk[step]} onClick={() => setStep((s) => s + 1)}>İleri →</button>
         ) : (
           <button className="btn primary" disabled={busy || errors.length > 0} onClick={create}>{busy ? "Dünya kuruluyor…" : "Maceraya başla"}</button>

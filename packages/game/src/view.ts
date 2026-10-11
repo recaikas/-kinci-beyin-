@@ -8,13 +8,16 @@ import {
   skillModifier, SPELLS, XP_THRESHOLDS, formatCp,
 } from "@kader/engine";
 import { healthBand } from "@kader/llm";
-import { type Campaign, currentExits, currentLocation } from "./campaign.ts";
+import { type Campaign, classNameIn, currentExits, currentLocation, settingOf } from "./campaign.ts";
 
 export interface SheetView {
   id: string;
   name: string;
   race: string;
   className: string;
+  /** Köken/rol (ör. "Gemi Kâtibi"). */
+  background: string;
+  hitDie: number;
   level: number;
   xp: number;
   xpNext: number | null;
@@ -66,6 +69,7 @@ export interface EntityView {
 export interface GameView {
   campaignId: string;
   title: string;
+  world: { key: string; era: "fantasy" | "historical"; period: string; magic: boolean };
   turn: number;
   clock: string;
   location: { id: string; name: string; description: string; danger: number; safeRest: boolean };
@@ -105,6 +109,8 @@ export function sheetOf(state: GameState, id: string): SheetView {
     name: c.name,
     race: c.raceKey ? RACES[c.raceKey]?.name ?? c.raceKey : "",
     className: c.classKey ? CLASSES[c.classKey]?.name ?? c.classKey : "",
+    background: c.background ?? "",
+    hitDie: Math.max(6, ...Object.keys(c.hitDiceMax).map(Number)),
     level: c.level,
     xp: c.xp,
     xpNext: nextXp,
@@ -177,14 +183,18 @@ export function buildView(c: Campaign): GameView {
   }));
   const myInv = s.inventories[c.playerId] ?? [];
   const enc = s.encounter;
+  const setting = settingOf(c.templateKey);
+  const sheet = sheetOf(s, c.playerId);
+  sheet.className = classNameIn(c.templateKey, me.classKey, sheet.className);
   return {
     campaignId: c.id,
     title: c.title,
+    world: { key: c.templateKey, era: setting.era, period: setting.period ?? "", magic: setting.magic },
     turn: c.turnCount,
     clock: clock(s.gameTime),
     location: { id: loc.id, name: loc.name, description: loc.description, danger: loc.danger, safeRest: !!loc.safeRest },
     exits: currentExits(c).map((e) => ({ id: e.id, name: e.name, minutes: e.minutes, locked: !!e.requiresItem && !myInv.some((i) => i.itemKey === e.requiresItem) })),
-    sheet: sheetOf(s, c.playerId),
+    sheet,
     entities,
     shops: here.filter((x) => shops[x.id] && x.isAlive).map((x) => ({
       merchantId: x.id,

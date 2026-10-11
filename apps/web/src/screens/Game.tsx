@@ -26,6 +26,9 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const me = view.sheet.id;
+  const magic = view.world?.magic !== false;
+  const historical = view.world?.era === "historical";
+  const tabs = TABS.filter(([k]) => magic || k !== "spells");
   const enc = view.encounter;
   const dying = view.sheet.isAlive && view.sheet.hp === 0 && !view.sheet.deathSaves.stable;
   const dead = !view.sheet.isAlive;
@@ -73,6 +76,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
     }
     const weapon = view.sheet.inventory.find((i) => i.type === "weapon" && i.equipped) ?? view.sheet.inventory.find((i) => i.type === "weapon");
     const potion = view.sheet.inventory.find((i) => i.type === "potion" && i.key.includes("healing"));
+    const potionLabel = potion?.key === "healing_salve" ? "🩹 Merhem" : "🧪 İksir";
     if (enc) {
       if (enc.myTurn) {
         for (const h of view.entities.filter((e) => e.hostile && e.alive).slice(0, 4)) {
@@ -80,7 +84,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
         }
         q.push({ label: "🛡 Kaçın", run: () => act({ type: "dodge", actorId: me }, "Kaçınmaya odaklanıyorum") });
         q.push({ label: "↩ Geri çekil", run: () => act({ type: "disengage", actorId: me }, "Geri çekiliyorum") });
-        if (potion) q.push({ label: "🧪 İksir", run: () => act({ type: "use_item", actorId: me, itemKey: potion.key }, "İksir içiyorum") });
+        if (potion) q.push({ label: potionLabel, run: () => act({ type: "use_item", actorId: me, itemKey: potion.key }, `${potion.name} kullanıyorum`) });
         q.push({ label: "⏭ Turu bitir", run: () => act({ type: "end_turn", actorId: me }, "Turumu bitiriyorum") });
       }
       return q;
@@ -88,9 +92,9 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
     q.push({ label: "👁 Etrafa bak", run: () => act({ type: "look", actorId: me }, "Etrafa bakıyorum") });
     q.push({ label: "🔍 Araştır", run: () => act({ type: "skill_check", actorId: me, skill: "investigation", difficulty: "medium" }, "Çevreyi dikkatle araştırıyorum") });
     q.push({ label: "🥷 Saklan", run: () => act({ type: "hide", actorId: me }, "Gölgelere saklanıyorum") });
-    if (view.sheet.hp < view.sheet.maxHp) q.push({ label: "☕ Kısa dinlen", run: () => act({ type: "rest", actorId: me, kind: "short", hitDice: { [hitDie(view)]: 1 } }, "Kısa bir mola veriyorum") });
+    if (view.sheet.hp < view.sheet.maxHp) q.push({ label: "☕ Kısa dinlen", run: () => act({ type: "rest", actorId: me, kind: "short", hitDice: { [view.sheet.hitDie ?? hitDie(view)]: 1 } }, "Kısa bir mola veriyorum") });
     q.push({ label: "🌙 Uzun dinlen", run: () => act({ type: "rest", actorId: me, kind: "long" }, "Kamp kurup uyuyorum") });
-    if (potion && view.sheet.hp < view.sheet.maxHp) q.push({ label: "🧪 İksir iç", run: () => act({ type: "use_item", actorId: me, itemKey: potion.key }, "İyileştirme iksiri içiyorum") });
+    if (potion && view.sheet.hp < view.sheet.maxHp) q.push({ label: potionLabel, run: () => act({ type: "use_item", actorId: me, itemKey: potion.key }, `${potion.name} kullanıyorum`) });
     return q;
   }, [view, busy]);
 
@@ -113,6 +117,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
         <div className="title grow">{view.title}</div>
         <span className="chip">{view.clock}</span>
         <span className="chip gold" title="Konum">📍 {view.location.name}</span>
+        {view.world?.period && <span className="chip" title="Dünya">{view.world.period}</span>}
         <span className="chip" title="Anlatıcı">{backend.aiLabel()}</span>
         {backend instanceof LocalBackend && <button className="btn small" onClick={exportSave} title="Kaydı indir">💾</button>}
       </div>
@@ -149,7 +154,8 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
                 <textarea
                   ref={inputRef}
                   className="input"
-                  placeholder={enc ? (enc.myTurn ? "Hamleni yaz… (ör. goblin'e kılıçla saldırıyorum)" : "Sıra düşmanda…") : "Ne yapıyorsun? (ör. Muhafıza mektubu gösterip kapıdan geçmek istiyorum)"}
+                  placeholder={enc ? (enc.myTurn ? (historical ? "Hamleni yaz… (ör. korsana kılıçla saldırıyorum)" : "Hamleni yaz… (ör. goblin'e kılıçla saldırıyorum)") : "Sıra düşmanda…")
+                    : historical ? "Ne yapıyorsun? (ör. Defteri açıp ambar hesabını Bekir'e soruyorum)" : "Ne yapıyorsun? (ör. Muhafıza mektubu gösterip kapıdan geçmek istiyorum)"}
                   value={text}
                   maxLength={1000}
                   disabled={busy}
@@ -166,7 +172,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
 
       <div className={`side ${collapsed ? "collapsed" : ""}`}>
         <div className="tabs" role="tablist">
-          {TABS.map(([k, label]) => (
+          {tabs.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? "on" : ""}`}
               onClick={() => { if (tab === k) setCollapsed((c) => !c); else { setTab(k); setCollapsed(false); } }}>
               {label}{k === "quests" && view.quests.some((q) => q.status === "available") ? " •" : ""}

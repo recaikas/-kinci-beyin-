@@ -110,6 +110,25 @@ export interface CharacterInput {
   rolledValues?: number[];
 }
 
+/** Dünyaya özel başlangıç donanımı (ör. büyüsüz tarihî dünya). */
+export interface StartingKit {
+  /** Sınıf anahtarı → başlangıç ekipmanı (verilmezse SRD sınıf ekipmanı). */
+  classEquipment?: Record<string, [string, number, boolean?][]>;
+  /** Her sınıfa verilen temel eşyalar (verilmezse iksir, erzak, meşale…). */
+  basics?: [string, number][];
+  /** Sınıf anahtarı → ek silah yeterlilikleri (dünyanın yerel silahları). */
+  weaponProficiencies?: Record<string, string[]>;
+  walletCp?: number;
+}
+
+/** Dünyanın izin verdiği ırk ve sınıflar (boş = hepsi). */
+export interface CharacterLimits {
+  races?: string[];
+  classes?: string[];
+}
+
+const DEFAULT_BASICS: [string, number][] = [["potion_of_healing", 1], ["rations", 5], ["torch", 3], ["waterskin", 1], ["bedroll", 1]];
+
 export interface BuiltCharacter {
   creature: Creature;
   inventory: InventoryEntry[];
@@ -128,13 +147,15 @@ export function rollAbilityScores(rng: Rng): number[] {
   return Array.from({ length: 6 }, () => roll("4d6kh3", rng).total);
 }
 
-export function validateCharacter(input: CharacterInput): string[] {
+export function validateCharacter(input: CharacterInput, limits: CharacterLimits = {}): string[] {
   const errors: string[] = [];
   const race = RACES[input.raceKey];
   const cls = CLASSES[input.classKey];
   if (!input.name.trim() || input.name.length > 40) errors.push("İsim 1–40 karakter olmalı");
   if (!race) errors.push("Geçersiz ırk");
+  else if (limits.races && !limits.races.includes(race.key)) errors.push(`${race.name} bu dünyada seçilemez`);
   if (!cls) errors.push("Geçersiz sınıf");
+  else if (limits.classes && !limits.classes.includes(cls.key)) errors.push(`${cls.name} bu dünyada seçilemez`);
   const values = ABILITIES.map((a) => input.abilities[a]);
   if (values.some((v) => !Number.isInteger(v) || v < 3 || v > 18)) errors.push("Yetenek değerleri 3–18 olmalı");
   if (input.method === "standard_array") {
@@ -173,8 +194,14 @@ export function validateCharacter(input: CharacterInput): string[] {
 }
 
 /** Doğrulanmış girdiden 1. seviye karakter kur. */
-export function buildCharacter(input: CharacterInput, id: string, locationId: string): BuiltCharacter {
-  const errors = validateCharacter(input);
+export function buildCharacter(
+  input: CharacterInput,
+  id: string,
+  locationId: string,
+  kit: StartingKit = {},
+  limits: CharacterLimits = {},
+): BuiltCharacter {
+  const errors = validateCharacter(input, limits);
   if (errors.length) throw new CharacterError(errors);
   const race = RACES[input.raceKey]!;
   const cls = CLASSES[input.classKey]!;
@@ -222,7 +249,7 @@ export function buildCharacter(input: CharacterInput, id: string, locationId: st
     locationId,
     raceKey: race.key,
     classKey: cls.key,
-    weaponProficiencies: Array.from(new Set([...cls.weapons, ...(race.weaponProficiencies ?? [])])),
+    weaponProficiencies: Array.from(new Set([...cls.weapons, ...(race.weaponProficiencies ?? []), ...(kit.weaponProficiencies?.[cls.key] ?? [])])),
     armorProficiencies: [...cls.armor],
     resources,
     languages: race.languages,
@@ -237,18 +264,14 @@ export function buildCharacter(input: CharacterInput, id: string, locationId: st
     if (e) e.qty += qty;
     else inventory.push({ itemKey: key, qty, ...(equipped ? { equipped: true } : {}) });
   };
-  for (const [key, qty, eq] of cls.equipment) add(key, qty, !!eq);
-  add("potion_of_healing", 1);
-  add("rations", 5);
-  add("torch", 3);
-  add("waterskin", 1);
-  add("bedroll", 1);
+  for (const [key, qty, eq] of kit.classEquipment?.[cls.key] ?? cls.equipment) add(key, qty, !!eq);
+  for (const [key, qty] of kit.basics ?? DEFAULT_BASICS) add(key, qty);
   creature.ac = computeAc(creature, inventory);
   const body = inventory.filter((i) => i.equipped).map((i) => ARMOR[i.itemKey]).find((a) => a && a.category !== "shield");
   if (body?.stealthDisadvantage) creature.stealthDisadvantage = true;
   if (body?.strRequirement && abilities.str < body.strRequirement) creature.speed -= 10;
 
-  return { creature, inventory, walletCp: 1500 };
+  return { creature, inventory, walletCp: kit.walletCp ?? 1500 };
 }
 
 /** Sınıf ve seviyeye göre büyü yuvalarını ve bilinen büyüleri ayarla. */

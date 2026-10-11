@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { CLASSES, RACES } from "@kader/engine";
+import { classNameIn, TEMPLATES } from "@kader/game";
 import type { Backend, CampaignData, CampaignSummary } from "../backend/types.ts";
 import { getLocalApiKey, LocalBackend, setLocalApiKey } from "../backend/local.ts";
 import type { Mode } from "../App.tsx";
@@ -146,8 +147,8 @@ export function Home(p: Props) {
             <div className="grow">
               <div style={{ fontFamily: "var(--serif)", color: "var(--gold-2)" }}>{c.title}</div>
               <div className="muted small">
-                {c.player ? `${c.player.name} · ${RACES[c.player.raceKey ?? ""]?.name ?? ""} ${CLASSES[c.player.classKey ?? ""]?.name ?? ""} · ${c.player.level}. seviye${c.player.alive ? "" : " · ☠ öldü"}` : ""}
-                {" · "}{c.turnCount} tur
+                {c.player ? `${c.player.name} · ${RACES[c.player.raceKey ?? ""]?.name ?? ""} ${classNameIn(c.templateKey, c.player.classKey ?? undefined, CLASSES[c.player.classKey ?? ""]?.name ?? "")} · ${c.player.level}. seviye${c.player.alive ? "" : " · ☠ öldü"}` : ""}
+                {" · "}{c.turnCount} tur{c.templateKey && TEMPLATES[c.templateKey] ? ` · ${TEMPLATES[c.templateKey]!.bible.title}` : ""}
               </div>
             </div>
             <button className="btn primary" disabled={busy === c.id} onClick={() => open(c.id)}>{busy === c.id ? "Açılıyor…" : "Devam et"}</button>

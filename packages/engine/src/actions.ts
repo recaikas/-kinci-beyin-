@@ -32,7 +32,7 @@ import type { Cover, ResultTier, Weapon } from "./types.ts";
 import type { Rng } from "@kader/dice";
 import { DEFAULT_RULES, type RuleOptions } from "./rules.ts";
 import { describeEffects } from "./facts.ts";
-import { accusative, dative, genitive, locative } from "./tr.ts";
+import { accusative, dative, genitive, locative, placeDative } from "./tr.ts";
 
 export const DIFFICULTIES = ["very_easy", "easy", "medium", "hard", "very_hard", "nearly_impossible"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
@@ -312,9 +312,11 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
       if (t.locationId !== me.locationId) throw new StateError(`${t.name} burada değil`);
       if (t.looted) throw new StateError(`${t.name} zaten arandı`);
       const facts: string[] = [];
-      for (const e of [...(w.state.inventories[t.id] ?? [])]) {
-        w.removeItem(t.id, e.itemKey, e.qty);
-        w.addItem(me.id, e.itemKey, e.qty);
+      // Önce kopyala: removeItem kayıt nesnesini yerinde azaltır.
+      for (const { itemKey, qty } of (w.state.inventories[t.id] ?? []).map((e) => ({ ...e }))) {
+        if (qty <= 0) continue;
+        w.removeItem(t.id, itemKey, qty);
+        w.addItem(me.id, itemKey, qty);
       }
       const cash = w.walletCp(t.id);
       if (cash > 0) {
@@ -412,7 +414,7 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
         facts.push(`İnisiyatif sırası: ${enc.order.map((o) => `${name(w, o.id)} (${o.initiative})`).join(", ")}`);
         return { tier: "partial", headline: `${name(w, a.actorId)} yolda pusuya düştü`, facts, details: { to: a.toLocationId, ambush: ambush.ids } };
       }
-      return { tier: "success", headline: `${name(w, a.actorId)} ${place?.name ?? "yeni konuma"} vardı`, facts, details: { to: a.toLocationId } };
+      return { tier: "success", headline: `${name(w, a.actorId)} ${place ? placeDative(place.name) : "yeni konuma"} vardı`, facts, details: { to: a.toLocationId } };
     }
 
     case "buy":
