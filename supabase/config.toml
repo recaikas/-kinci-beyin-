@@ -1,0 +1,13 @@
+# Supabase CLI yerel geliştirme yapılandırması (supabase start / db reset / functions serve)
+project_id = "kader-zari"
+
+[db]
+major_version = 16
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[functions.turn]
+verify_jwt = true
+import_map = "./functions/turn/deno.json"
