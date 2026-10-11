@@ -102,15 +102,25 @@ export function validateNarration(
   };
 }
 
-/** AI tamamen başarısız olursa oyunun akması için şablon anlatı. */
-export function templateNarration(outcome: Outcome): Narration {
+const OPENERS: Record<Outcome["tier"], string[]> = {
+  critical_success: ["Zar sanki kaderin kendisi tarafından atıldı.", "Her şey kusursuz biçimde yerine oturuyor.", "Bu an destanlara yazılacak."],
+  success: ["Hamlen işe yarıyor.", "Planın tıkır tıkır işliyor.", "Doğru anı yakaladın."],
+  partial: ["İstediğini alıyorsun, ama bir bedeli var.", "Neredeyse... ama tam değil.", "Başarıyorsun, fakat iz bırakmadan değil."],
+  failure: ["Olmuyor.", "Talih bu sefer yüzüne gülmüyor.", "Hesapladığın gibi gitmiyor."],
+  critical_failure: ["Her şey ters gidiyor.", "Kader acımasızca gülümsüyor.", "Bunun bedelini ödeyeceksin."],
+};
+
+/** AI yokken ya da tamamen başarısız olursa oyunun akması için şablon anlatı. */
+export function templateNarration(outcome: Outcome, seed = 0): Narration {
+  const openers = OPENERS[outcome.tier];
+  const opener = openers[Math.abs(seed) % openers.length]!;
   const body = outcome.facts.length ? `\n\n${outcome.facts.map((f) => `• ${f}`).join("\n")}` : "";
   return {
-    narration: `${outcome.headline}.${body}`,
+    narration: `${opener} ${outcome.headline}.${body}`,
     npc_dialogue: [],
     suggested_hooks: [],
     new_fact_candidates: [],
-    mood: outcome.tier === "critical_failure" || outcome.tier === "failure" ? "tense" : "calm",
+    mood: outcome.tier === "critical_failure" || outcome.tier === "failure" ? "tense" : outcome.tier === "critical_success" ? "triumphant" : "calm",
   };
 }
 

@@ -4,14 +4,15 @@
  * hedef kimliği ve (yetenek kontrollerinde) sınırlı bir zorluk etiketi seçer.
  */
 import * as z from "zod/v4";
-import { ABILITIES, DIFFICULTIES, type GameAction, type Skill, SKILL_LIST } from "@kader/engine";
+import { ABILITIES, CLASS_ABILITIES, DIFFICULTIES, type GameAction, type Skill, SKILL_LIST } from "@kader/engine";
 import { LlmError, type StructuredCaller, type Usage } from "./caller.ts";
 import { INTENT_SYSTEM } from "./prompts.ts";
 
 export const ACTION_TYPES = [
   "skill_check", "ability_check", "attack", "cast_spell", "social", "move", "use_item",
-  "give_item", "trade", "rest", "death_save", "stabilize", "start_combat", "end_turn",
+  "give_item", "rest", "death_save", "stabilize", "start_combat", "end_turn",
   "end_combat", "dodge", "dash", "disengage", "help", "hide", "look", "talk", "wait",
+  "class_ability", "equip", "unequip", "loot", "buy", "sell", "accept_quest",
 ] as const;
 
 const n = <T extends z.ZodType>(t: T) => t.nullable();
@@ -42,13 +43,33 @@ export const IntentSchema = z.object({
     rest_kind: n(z.enum(["short", "long"])),
     sense: n(z.enum(["sight", "hearing"])),
     two_handed: n(z.boolean()),
+    thrown: n(z.boolean()),
+    smite_slot: n(z.int()),
+    class_ability: n(z.enum(CLASS_ABILITIES)),
+    ability_mode: n(z.enum(["dash", "disengage", "hide"])),
+    amount: n(z.int()),
+    quest_id: n(z.string()),
+    haggle: n(z.boolean()),
   })),
 });
 export type Intent = z.infer<typeof IntentSchema>;
 
+export type IntentAction = NonNullable<Intent["action"]>;
+
+/** Tüm alanları null olan eylem iskeleti (testler ve kural tabanlı çözümleyici için). */
+export function blankIntentAction(type: IntentAction["type"]): IntentAction {
+  return {
+    type, skill: null, ability: null, difficulty: null, target_id: null, target_ids: [], weapon_key: null,
+    spell_key: null, slot_level: null, approach: null, risk: null, bribe_gp: null, item_key: null, qty: null,
+    price_gp: null, direction: null, location_id: null, minutes: null, rest_kind: null, sense: null, two_handed: null,
+    thrown: null, smite_slot: null, class_ability: null, ability_mode: null, amount: null, quest_id: null, haggle: null,
+  };
+}
+
 export interface IntentScene {
   playerId: string;
   entityIds: string[];
+  questIds?: string[];
   exits: { id: string; minutes: number }[];
   weapons: string[];
   spells: string[];
@@ -103,7 +124,14 @@ export function toGameAction(intent: Intent, scene: IntentScene): IntentResult {
         const t = target(a.target_id);
         if (!t || t === me) return bad("Saldırı hedefi sahnede yok");
         const weaponKey = a.weapon_key && scene.weapons.includes(a.weapon_key) ? a.weapon_key : "unarmed";
-        return { kind: "action", summary, action: { type: "attack", actorId: me, targetId: t, weaponKey, ...(a.two_handed ? { twoHanded: true } : {}) } };
+        return {
+          kind: "action", summary, action: {
+            type: "attack", actorId: me, targetId: t, weaponKey,
+            ...(a.two_handed ? { twoHanded: true } : {}),
+            ...(a.thrown ? { thrown: true } : {}),
+            ...(a.smite_slot ? { smiteSlot: a.smite_slot } : {}),
+          },
+        };
       }
       case "cast_spell": {
         const key = need(a.spell_key, "büyü");
@@ -139,15 +167,43 @@ export function toGameAction(intent: Intent, scene: IntentScene): IntentResult {
         if (!t) return bad("Alıcı sahnede yok");
         return { kind: "action", summary, action: { type: "give_item", actorId: me, targetId: t, itemKey: need(a.item_key, "eşya"), qty: Math.max(1, a.qty ?? 1) } };
       }
-      case "trade": {
+      case "buy":
+      case "sell": {
         const t = target(a.target_id);
         if (!t) return bad("Tüccar sahnede yok");
+        const key = need(a.item_key, "eşya");
+        if (!scene.items.includes(key)) return bad(`Bilinmeyen eşya: ${key}`);
+        return { kind: "action", summary, action: { type: a.type, actorId: me, merchantId: t, itemKey: key, qty: Math.max(1, Math.min(99, a.qty ?? 1)), ...(a.haggle ? { haggle: true } : {}) } };
+      }
+      case "class_ability": {
+        const ability = need(a.class_ability, "yetenek");
+        const ids = a.target_ids.map(target).filter((x): x is string => !!x);
+        const t = target(a.target_id);
         return {
           kind: "action", summary, action: {
-            type: "trade", actorId: me, targetId: t, itemKey: need(a.item_key, "eşya"), qty: Math.max(1, a.qty ?? 1),
-            priceCp: gpToCp(need(a.price_gp, "fiyat")) ?? 0, direction: a.direction ?? "buy",
+            type: "class_ability", actorId: me, ability,
+            ...(t ? { targetId: t } : {}),
+            ...(ids.length ? { targetIds: ids } : {}),
+            ...(a.amount ? { amount: a.amount } : {}),
+            ...(a.ability_mode ? { mode: a.ability_mode } : {}),
           },
         };
+      }
+      case "equip":
+      case "unequip": {
+        const key = need(a.item_key, "eşya");
+        if (!scene.items.includes(key)) return bad(`Bilinmeyen eşya: ${key}`);
+        return { kind: "action", summary, action: { type: "equip", actorId: me, itemKey: key, equipped: a.type === "equip" } };
+      }
+      case "loot": {
+        const t = target(a.target_id);
+        if (!t) return bad("Aranacak ceset sahnede yok");
+        return { kind: "action", summary, action: { type: "loot", actorId: me, targetId: t } };
+      }
+      case "accept_quest": {
+        const qid = need(a.quest_id, "görev");
+        if (scene.questIds && !scene.questIds.includes(qid)) return bad("Böyle bir görev yok");
+        return { kind: "action", summary, action: { type: "accept_quest", actorId: me, questId: qid } };
       }
       case "rest":
         return { kind: "action", summary, action: { type: "rest", actorId: me, kind: a.rest_kind ?? "short" } };

@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FixedRng } from "@kader/dice";
 import { resolveAction, spawnMonster } from "@kader/engine";
 import { buildApplyPayload, buildGameState, type LoadedRows } from "../src/index.ts";
-import { playTurn, type StructuredCaller } from "@kader/llm";
+import { blankIntentAction, playTurn, type StructuredCaller } from "@kader/llm";
 
 const DB_URL = process.env.KZ_TEST_DATABASE_URL;
 const root = join(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -187,9 +187,7 @@ describe.skipIf(!DB_URL)("Supabase şeması (gerçek PostgreSQL)", () => {
     const guard = rows.creatures.find((c) => c.name === "Muhafız Kerem")!;
     const replies: unknown[] = [
       { kind: "action", summary: "rüşvet", clarification_question: null, action: {
-        type: "social", skill: null, ability: null, difficulty: null, target_id: guard.id, target_ids: [], weapon_key: null,
-        spell_key: null, slot_level: null, approach: "bribe", risk: "significant", bribe_gp: 10, item_key: null, qty: null,
-        price_gp: null, direction: null, location_id: null, minutes: null, rest_kind: null, sense: null, two_handed: null } },
+        ...blankIntentAction("social"), target_id: guard.id, approach: "bribe", risk: "significant", bribe_gp: 10 } },
       { narration: "Kerem sikkeleri dişliyor.", npc_dialogue: [], suggested_hooks: [], new_fact_candidates: [], mood: "tense" },
     ];
     const caller: StructuredCaller = {

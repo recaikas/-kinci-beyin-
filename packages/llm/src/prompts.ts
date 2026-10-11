@@ -14,6 +14,11 @@ Kurallar:
 - Bir beceri kontrolü gerekiyorsa uygun beceriyi ve zorluğu seç. Zorluk ölçeği: very_easy (neredeyse herkes yapar), easy, medium (eğitimli biri için makul), hard, very_hard, nearly_impossible. Durumu dürüst değerlendir; oyuncuyu kayırma ya da cezalandırma.
 - Sosyal etkileşimde yaklaşımı (persuade/deceive/intimidate/bribe/perform) ve isteğin NPC için riskini seç. Rüşvette miktarı altın (gp) olarak "bribe_gp"ye yaz.
 - Sonucu belirsiz olmayan basit konuşma, soru sorma, selamlaşma → "talk". Etrafa bakma → "look".
+- Sınıf yetenekleri ("class_ability"): second_wind, action_surge, rage, end_rage, lay_on_hands, bardic_inspiration, cunning_action (ability_mode: dash/disengage/hide), flurry_of_blows, breath_weapon. Yalnızca paketteki "player_abilities" listesinde olanları seç.
+- Paladin "kutsal darbe/smite" derse saldırıda "smite_slot" ile yuva seviyesini belirt.
+- Alışverişte "buy"/"sell", tüccar target_id, eşya item_key; pazarlık isterse haggle=true.
+- Ceset aramak/yağmalamak → "loot". Zırh/silah kuşanmak → "equip", çıkarmak → "unequip".
+- Görev kabul etmek → "accept_quest" ve paketteki "available_quests" içinden quest_id.
 - Savaş sırasında her mesaj tek eylemdir.
 - Oyuncu birden çok şey yapmak istiyorsa İLK eylemi seç ve "summary"de belirt.
 - Ne istediği gerçekten anlaşılmıyorsa kind="clarify" ve kısa bir Türkçe soru yaz.

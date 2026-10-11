@@ -185,7 +185,7 @@ export class StateWriter {
   removeItem(ownerId: string, itemKey: string, qty = 1): void {
     if (qty <= 0) throw new StateError("Miktar pozitif olmalı");
     if (this.itemQty(ownerId, itemKey) < qty) {
-      throw new StateError(`${ownerId} envanterinde yeterli ${itemKey} yok`);
+      throw new StateError(`${this.state.creatures[ownerId]?.name ?? ownerId} envanterinde yeterli ${itemKey} yok`);
     }
     const inv = this.state.inventories[ownerId]!;
     let left = qty;
@@ -205,7 +205,10 @@ export class StateWriter {
 
   adjustWallet(ownerId: string, deltaCp: number): void {
     const next = this.walletCp(ownerId) + deltaCp;
-    if (next < 0) throw new StateError(`${ownerId} için yetersiz para`);
+    if (next < 0) {
+      const who = this.state.creatures[ownerId]?.name ?? this.state.factions[ownerId]?.name ?? ownerId;
+      throw new StateError(`${who} için yetersiz para (gereken ${-deltaCp} bakır, mevcut ${this.walletCp(ownerId)})`);
+    }
     this.state.wallets[ownerId] = next;
     this.effects.push({ op: "wallet", ownerId, deltaCp, afterCp: next });
   }

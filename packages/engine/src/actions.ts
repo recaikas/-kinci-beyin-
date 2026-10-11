@@ -273,6 +273,11 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
           facts.push(...applyOnHit(ctx, w, weapon, a.actorId, a.targetId));
         }
       }
+      // Bir NPC'ye saldırmak onu (ve ilişkiyi) düşman yapar.
+      const victim = w.creature(a.targetId);
+      if (attacker.kind === "pc" && victim.kind === "npc" && w.relationship(attacker.id, victim.id) > -50) {
+        w.adjustRelationship(attacker.id, victim.id, -100);
+      }
       const tier: ResultTier = !anyHit ? (first?.roll.natural === 1 ? "critical_failure" : "failure") : anyCrit ? "critical_success" : "success";
       return {
         tier,
@@ -558,6 +563,13 @@ function run(ctx: EngineContext, w: StateWriter, a: GameAction, cat: Catalog, ne
     case "start_combat": {
       if (inCombat(w)) throw new StateError("Zaten savaş var");
       const ids = Array.from(new Set([a.actorId, ...a.participantIds]));
+      // Bir PC savaşı başlatıyorsa hedef NPC'ler ona düşman olur.
+      if (w.creature(a.actorId).kind === "pc") {
+        for (const id of a.participantIds) {
+          const t = w.state.creatures[id];
+          if (t && t.kind === "npc" && w.relationship(a.actorId, id) > -50) w.adjustRelationship(a.actorId, id, -100);
+        }
+      }
       const enc = startEncounter(ctx, w, ids, newId());
       const order = enc.order.map((o) => `${name(w, o.id)} (${o.initiative})`).join(", ");
       return { tier: "success", headline: "Savaş başladı", facts: [`İnisiyatif sırası: ${order}`, `İlk sıra: ${name(w, currentTurnId(enc))}`], details: { order: enc.order } };

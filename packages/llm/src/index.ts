@@ -5,3 +5,4 @@ export * from "./narrator.ts";
 export * from "./summarizer.ts";
 export * from "./prompts.ts";
 export * from "./turn.ts";
+export * from "./rule-intent.ts";

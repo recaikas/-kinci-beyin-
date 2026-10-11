@@ -5,7 +5,7 @@ import { spawnMonster, type Creature, type GameState } from "@kader/engine";
 import {
   type Intent, type Narration, playTurn, type StructuredCaller, type StructuredRequest,
   type StructuredResponse, toGameAction, type TurnPacketInput, validateNarration, LlmError, narratorPacket,
-  healthBand, gameClock,
+  healthBand, gameClock, blankIntentAction,
 } from "../src/index.ts";
 
 /** Sırayla hazır yanıt döndüren sahte çağırıcı; gelen istekleri kaydeder. */
@@ -48,12 +48,7 @@ const world = { title: "Test", premise: "Orta çağ fantastik", tone: "karanlık
 
 const intent = (action: Partial<NonNullable<Intent["action"]>> | null, kind: Intent["kind"] = "action"): Intent => ({
   kind, summary: "özet", clarification_question: kind === "clarify" ? "Kime?" : null,
-  action: action && {
-    type: "talk", skill: null, ability: null, difficulty: null, target_id: null, target_ids: [], weapon_key: null,
-    spell_key: null, slot_level: null, approach: null, risk: null, bribe_gp: null, item_key: null, qty: null,
-    price_gp: null, direction: null, location_id: null, minutes: null, rest_kind: null, sense: null, two_handed: null,
-    ...action,
-  },
+  action: action && { ...blankIntentAction("talk"), ...action },
 });
 
 const narration = (o: Partial<Narration> = {}): Narration => ({
@@ -126,19 +121,36 @@ describe("playTurn", () => {
     expect(caller.requests[1]!.user).toContain("immutable_facts");
   });
 
-  it("anlatıcı sayı uydurursa bir kez yeniden dener", async () => {
+  it("anlatıcı sayı uydurursa bir kez yeniden dener (kısa komut LLM niyetini atlar)", async () => {
     const caller = new FakeCaller([
-      intent({ type: "look" }),
       narration({ narration: "Yerde 999 altın parlıyor!" }),
       narration({ narration: "Kapının gölgeleri uzuyor." }),
     ]);
     const r = await playTurn({ caller, world, context: ctx(), input: { text: "etrafa bakıyorum" }, exits: [], rng: new FixedRng([]) });
     expect(r.status === "resolved" && r.narrationSource).toBe("model_retry");
-    expect(caller.requests[2]!.user).toContain("999");
+    expect(caller.requests[0]!.label).toBe("narrate");
+    expect(caller.requests[1]!.user).toContain("999");
+  });
+
+  it("uzun, karmaşık metin LLM niyet çözümleyicisine gider", async () => {
+    const caller = new FakeCaller([intent({ type: "look" }), narration()]);
+    const r = await playTurn({ caller, world, context: ctx(), input: { text: "kapının çevresindeki taşlara, meşalelere ve nöbetçinin yüzüne dikkatle bakıyorum" }, exits: [], rng: new FixedRng([]) });
+    expect(r.status).toBe("resolved");
+    expect(caller.requests[0]!.label).toBe("intent");
+  });
+
+  it("AI'sız mod: kural tabanlı niyet ve şablon anlatı", async () => {
+    const r = await playTurn({ caller: null, world, context: ctx(), input: { text: "Kerem'e 20 altın rüşvet veriyorum" }, exits: [], rng: new FixedRng([14]) });
+    expect(r.status).toBe("resolved");
+    if (r.status !== "resolved") return;
+    expect(r.narrationSource).toBe("template");
+    expect(r.resolution.state.wallets.arda).toBe(3000);
+    const unknown = await playTurn({ caller: null, world, context: ctx(), input: { text: "qwerty zzz" }, exits: [], rng: new FixedRng([]) });
+    expect(unknown.status).toBe("clarify");
   });
 
   it("AI tamamen çökerse şablon anlatıyla oyun akar", async () => {
-    const caller = new FakeCaller([intent({ type: "look" }), new LlmError("x", "api"), new LlmError("x", "api")]);
+    const caller = new FakeCaller([new LlmError("x", "api"), new LlmError("x", "api")]);
     const r = await playTurn({ caller, world, context: ctx(), input: { text: "bak" }, exits: [], rng: new FixedRng([]) });
     expect(r.status === "resolved" && r.narrationSource).toBe("template");
   });
@@ -171,24 +183,16 @@ describe("paket", () => {
 });
 
 describe("playTurn savaş", () => {
-  it("oyuncu saldırısından sonra NPC sırası aynı tura birleşir", async () => {
+  it("savaş dışında saldırı savaşı başlatır; NPC sırası aynı tura birleşir", async () => {
     const goblin = spawnMonster("goblin", "gob", { name: "Goblin", locationId: "kapi" });
-    let c = ctx({ creatures: { arda: { ...hero, hp: 11 }, gob: goblin }, inventories: { arda: [{ itemKey: "scimitar", qty: 1 }] } });
-    const caller = new FakeCaller([
-      intent({ type: "start_combat", target_ids: ["gob"] }), narration({ npc_dialogue: [] }),
-      intent({ type: "attack", target_id: "gob", weapon_key: "scimitar" }), narration({ npc_dialogue: [] }),
-    ]);
-    // inisiyatif: arda 20 (+1 eşitlik zarı), goblin 1 (+1)
-    const s1 = await playTurn({ caller, world, context: c, input: { text: "saldırıyorum!" }, exits: [], rng: new FixedRng([20, 1, 1, 1]) });
-    expect(s1.status).toBe("resolved");
-    if (s1.status !== "resolved") return;
-    c = { ...c, state: s1.resolution.state };
-    // arda ıskalar (2), goblin vurur (15) 1d6+2 (3+2=5)
-    const s2 = await playTurn({ caller, world, context: c, input: { text: "palayla vur" }, exits: [], rng: new FixedRng([2, 15, 3]) });
-    if (s2.status !== "resolved") throw new Error(s2.status);
-    expect(s2.resolution.state.creatures.arda!.hp).toBe(6);
-    expect(s2.resolution.rolls.map((r) => r.reason)).toEqual(["saldırı: Pala", "saldırı: Pala", "hasar: Pala"]);
-    expect(s2.resolution.outcome.facts.some((f) => f.startsWith("[Sonra]"))).toBe(true);
-    expect(caller.requests[3]!.user).toContain("[Sonra]");
+    const c = ctx({ creatures: { arda: { ...hero, hp: 11 }, gob: goblin }, inventories: { arda: [{ itemKey: "scimitar", qty: 1 }] } });
+    // inisiyatif: arda 20 (+eşitlik), goblin 1 (+eşitlik); arda ıskalar (2); goblin vurur (15) 1d6+2=3+2
+    const r = await playTurn({ caller: null, world, context: c, input: { text: "goblini saldırıyorum!" }, exits: [], rng: new FixedRng([20, 1, 1, 1, 2, 15, 3]) });
+    if (r.status !== "resolved") throw new Error(r.status);
+    expect(r.resolution.state.encounter?.active).toBe(true);
+    expect(r.resolution.state.creatures.arda!.hp).toBe(6);
+    expect(r.resolution.rolls.map((x) => x.reason)).toEqual(["inisiyatif", "inisiyatif", "saldırı: Pala", "saldırı: Pala", "hasar: Pala"]);
+    expect(r.resolution.outcome.facts.some((f) => f.startsWith("[Önce]"))).toBe(true);
+    expect(r.resolution.outcome.facts.some((f) => f.startsWith("[Sonra]"))).toBe(true);
   });
 });

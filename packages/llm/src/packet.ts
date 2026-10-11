@@ -103,23 +103,29 @@ export function gameClock(minutes: number): string {
 }
 
 /** Niyet çözümleyiciye giden paket (anlatıcıdan daha küçük). */
-export function intentPacket(input: TurnPacketInput, playerText: string, catalog: {
-  weapons: string[];
-  spells: string[];
-  items: string[];
+export function intentPacket(input: TurnPacketInput, playerText: string, scene: {
   exits: { id: string; name: string; minutes: number }[];
   inCombat: boolean;
+  inventory: { key: string; name: string; equipped?: boolean; qty: number }[];
+  spells: { key: string; name: string; level: number }[];
+  abilities: string[];
+  merchants: { id: string; name: string; stock: string[] }[];
+  quests: { id: string; title: string; status: string }[];
+  corpses: { id: string; name: string }[];
 }): string {
   return JSON.stringify({
     player_id: input.playerId,
     location: input.location.name,
-    in_combat: catalog.inCombat,
+    in_combat: scene.inCombat,
     entities: sceneEntities(input).map((e) => ({ id: e.id, name: e.name, kind: e.kind, health: e.health, attitude: e.attitudeToPlayer })),
-    player_inventory: (input.state.inventories[input.playerId] ?? []).map((i) => `${i.itemKey}×${i.qty}`),
-    player_spells: input.state.creatures[input.playerId]?.spellcasting?.known ?? [],
-    known_weapons: catalog.weapons,
-    known_items: catalog.items,
-    exits: catalog.exits,
+    corpses: scene.corpses,
+    player_inventory: scene.inventory.map((i) => ({ key: i.key, name: i.name, qty: i.qty, ...(i.equipped ? { equipped: true } : {}) })),
+    player_spells: scene.spells,
+    player_abilities: scene.abilities,
+    merchants: scene.merchants,
+    available_quests: scene.quests.filter((q) => q.status === "available"),
+    open_quests: scene.quests.filter((q) => q.status === "open").map((q) => q.title),
+    exits: scene.exits,
     recent: input.recentTurns.slice(-3).map((t) => t.headline),
     player_text: playerText,
   });
