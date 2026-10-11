@@ -27,11 +27,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: seed.sql güncel mi
-        run: npm run gen:seed && git diff --exit-code supabase/seed.sql
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - name: Edge Function tip kontrolü
-        working-directory: supabase/functions/turn
-        run: deno check index.ts && deno lint index.ts
+      - name: Edge Function paketleri güncel mi
+        run: npm run bundle:functions && git diff --exit-code supabase/functions/dist
+      - name: Web derlemesi
+        run: npm run build
+      - name: Playwright (yerel mod, uçtan uca)
+        run: npx playwright install --with-deps chromium && npm run e2e
+        env:
+          PW_CHROMIUM: ""
