@@ -1,5 +1,15 @@
 # Değişiklik günlüğü
 
+## 1.1.0 — 2026-10-12
+
+- **Anahtarsız Haiku:** Oyun claude.ai'de açıldığında Claude Haiku 5.5 oyuncunun kendi Claude hesabıyla
+  anlatır; API anahtarı ya da sunucu gerekmez. Anlatı yazıldıkça ekrana akar.
+- **Tarih akışı:** Dünya kendi başına ilerler; görevlerdeki başarıların tarihî olayların dalını seçer
+  (Rodos 1570: sefer ilanı, Venedik istihbaratı, erzak yolu, donanmanın çıkışı, Kıbrıs çıkarması).
+- **Hikâye odaklı arayüz:** Daha uzun ve döneme sadık anlatı, dokunulabilir hamle önerileri, Dünya sekmesi,
+  telefona uygun düzen.
+- **Cihazlar arası kayıt:** Kampanyalar Claude hesabına bağlı; telefonda başladığın oyuna bilgisayardan devam edersin.
+
 ## 1.0.0 — 2026-10-11
 
 İlk tam sürüm.
