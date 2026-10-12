@@ -10,6 +10,7 @@ import {
   type CanonFact, type Persona, playTurn, type PlayTurnResult, type RecentTurn, type StructuredCaller,
   summarizeTurns, type TurnPacketInput, type WorldBible, fold,
 } from "@kader/llm";
+import { advanceChronicle, type ChronicleEntry } from "./chronicle.ts";
 import { FANTASY_SETTING, instantiateWorld, type WorldSetting, type WorldTemplate } from "./template.ts";
 import { AKDENIZ } from "./templates/akdeniz.ts";
 import { KARACAM } from "./templates/karacam.ts";
@@ -46,6 +47,8 @@ export interface JournalEntry {
   mood: string;
   source: "model" | "model_retry" | "template";
   hooks: { type: string; text: string }[];
+  /** Bu turda gerçekleşen tarih olayları. */
+  chronicle?: ChronicleEntry[];
 }
 
 export interface Campaign {
@@ -93,7 +96,8 @@ export function createCampaign(input: NewCampaignInput, newId: () => string, now
     input: "",
     headline: "Yolculuk başlıyor",
     tier: "success",
-    narration: `${t.bible.premise}\n\n${roleLine}${w.state.world!.places[t.start.locationId]!.name}: ${w.state.world!.places[t.start.locationId]!.description}`,
+    narration: t.start.intro
+      ?? `${t.bible.premise}\n\n${roleLine}${w.state.world!.places[t.start.locationId]!.name}: ${w.state.world!.places[t.start.locationId]!.description}`,
     dialogue: [],
     rolls: [],
     facts: [],
@@ -172,6 +176,7 @@ export function buildContext(c: Campaign): TurnPacketInput {
     campaignSummary: c.campaignSummary,
     openQuests: Object.values(c.state.world?.quests ?? {}).filter((q) => q.status === "open").map((q) => q.title),
     memories: c.memories ?? recallMemories(c, here.filter((x) => x.id !== c.playerId).map((x) => x.name), 6),
+    worldEvents: c.journal.flatMap((e) => e.chronicle ?? []).slice(-4).map((x) => `${x.title}: ${x.text}`),
   };
 }
 
@@ -233,7 +238,15 @@ export async function playCampaignTurn(
     const exists = facts.some((x) => x.subject === f.subject_id && fold(x.predicate) === fold(f.predicate));
     if (!exists) facts.push({ subject: f.subject_id, predicate: f.predicate, value: f.value, locked: false });
   }
-  let next: Campaign = { ...c, state: r.state, turnCount: n, journal: [...c.journal, entry], facts };
+  // Dünya kendi başına ilerler: bu turda saati gelen tarih olayları (oyuncunun başarılarına göre dallanır).
+  let state = r.state;
+  const tmpl = TEMPLATES[c.templateKey];
+  if (tmpl?.chronicle?.length) {
+    const ch = advanceChronicle(tmpl, r.state, c.playerId, c.state.gameTime);
+    state = ch.state;
+    if (ch.entries.length) entry.chronicle = ch.entries;
+  }
+  let next: Campaign = { ...c, state, turnCount: n, journal: [...c.journal, entry], facts };
 
   if (o.caller && n % SUMMARY_EVERY === 0) {
     try {

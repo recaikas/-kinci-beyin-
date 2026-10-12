@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SeededRng } from "@kader/dice";
-import { CLASSES, type CharacterInput, ITEMS, MONSTERS, WEAPONS } from "@kader/engine";
-import { buildView, type Campaign, createCampaign, playCampaignTurn, TEMPLATES } from "../src/index.ts";
+import { CLASSES, type CharacterInput, ITEMS, MONSTERS, relKey, WEAPONS } from "@kader/engine";
+import { advanceChronicle, buildContext, buildView, type Campaign, createCampaign, playCampaignTurn, TEMPLATES } from "../src/index.ts";
 
 let n = 0;
 const newId = () => `00000000-0000-4000-9000-${String(++n).padStart(12, "0")}`;
@@ -57,6 +57,17 @@ describe("şablon bütünlüğü", () => {
       const kit = t.setting?.kit;
       for (const list of Object.values(kit?.classEquipment ?? {})) list.forEach(([k]) => item(k));
       kit?.basics?.forEach(([k]) => item(k));
+      const questIds = new Set(t.quests.map((q) => q.id));
+      const factionKeys = new Set(t.factions.map((f) => f.key));
+      for (const e of t.chronicle ?? []) {
+        expect(e.variants.length, e.id).toBeGreaterThan(0);
+        for (const v of e.variants) {
+          [...(v.when?.questDone ?? []), ...(v.when?.questNotDone ?? [])].forEach((q) => expect(questIds.has(q), q).toBe(true));
+          v.factions?.forEach((f) => expect(factionKeys.has(f.key), f.key).toBe(true));
+          v.relations?.forEach(([a, b]) => expect(factionKeys.has(a) && factionKeys.has(b), `${a}-${b}`).toBe(true));
+          v.npcRelations?.forEach(([k]) => expect(npcKeys.has(k), k).toBe(true));
+        }
+      }
     });
   }
 });
@@ -75,7 +86,7 @@ describe("Rodos 1570 — Kadırga Kâtibi (büyüsüz tarihî dünya)", () => {
     expect(keys).not.toContain("potion_of_healing");
     expect(keys).not.toContain("torch");
     expect(v.quests.find((q) => q.id === "q_defter")!.status).toBe("open");
-    expect(c.journal[0]!.narration).toContain("Gemi Kâtibi");
+    expect(c.journal[0]!.narration).toContain("Yeşil Yılan kadırgasının yeni kâtibisin");
     expect(c.bible.rules[0]).toContain("BÜYÜ YOKTUR");
   });
 
@@ -190,5 +201,57 @@ describe("Rodos 1570 — Kadırga Kâtibi (büyüsüz tarihî dünya)", () => {
     await loot("Venedikli Marco Davanzo");
     expect(inv()).toEqual(expect.arrayContaining(["cipher_letter", "pilot_chart"]));
     expect(buildView(c).sheet.isAlive).toBe(true);
+  });
+});
+
+describe("tarih akışı (Rodos 1570)", () => {
+  const donanma = (c: Campaign) => Object.values(c.state.factions).find((f) => f.name.startsWith("Osmanlı Donanması"))!;
+  const venedik = (c: Campaign) => Object.values(c.state.factions).find((f) => f.name === "Venedik Cumhuriyeti")!;
+
+  it("olay saati gelen turda tam bir kez gerçekleşir, günlüğe ve anlatı bağlamına girer", async () => {
+    let c = katip();
+    expect(buildView(c).upcoming?.teaser).toContain("duyuru");
+    c.state.gameTime = 17 * 60 - 1;
+    const before = donanma(c).stability;
+    let r = await say(c, "ambara in");
+    expect(r.result.status).toBe("resolved");
+    expect(r.entry!.chronicle?.map((x) => x.id)).toEqual(["sefer_ilani"]);
+    c = r.campaign;
+    expect(donanma(c).stability).toBe(before + 5);
+    expect(buildView(c).chronicle[0]!.title).toBe("Sefer ilan edildi");
+    expect(buildContext(c).worldEvents?.[0]).toContain("Sefer ilan edildi");
+    // Sonraki tur aynı olayı tekrar ateşlemez.
+    r = await say(c, "güverteye çık");
+    expect(r.entry!.chronicle).toBeUndefined();
+    expect(donanma(r.campaign).stability).toBe(before + 5);
+  });
+
+  it("casus yakalanmadıysa sır sızar; yakalandıysa Venedik kör kalır", async () => {
+    const at = 2 * 1440 + 8 * 60 - 1;
+    let a = katip();
+    a.state.gameTime = at;
+    const milA = venedik(a).military;
+    a = (await say(a, "ambara in")).campaign;
+    expect(a.journal.at(-1)!.chronicle?.[0]!.title).toBe("Seferin sırrı sızdı");
+    expect(venedik(a).military).toBe(milA + 300);
+
+    let b = katip();
+    b.state.gameTime = at;
+    b.state.world!.quests.q_casus!.status = "completed";
+    const intel = venedik(b).intelligence;
+    b = (await say(b, "ambara in")).campaign;
+    expect(b.journal.at(-1)!.chronicle?.[0]!.title).toBe("Casus şebekesi çöktü");
+    expect(venedik(b).intelligence).toBe(intel - 25);
+    const ferhat = Object.values(b.state.creatures).find((x) => x.name === "Dizdar Ferhat Ağa")!;
+    expect(b.state.relationships[relKey(b.playerId, ferhat.id)]).toBe(20);
+  });
+
+  it("uzun bir zaman atlaması birden çok olayı sırayla işler", () => {
+    const c = katip();
+    const t = TEMPLATES.akdeniz1570!;
+    const later = { ...c.state, gameTime: 7 * 1440 };
+    const { entries } = advanceChronicle(t, later, c.playerId, c.state.gameTime);
+    expect(entries.map((e) => e.id)).toEqual(["sefer_ilani", "venedik_haberi", "erzak_yolu", "donanma_denizde", "kibris_cikarma"]);
+    expect(entries.at(-1)!.title).toBe("Kanlı çıkarma");
   });
 });

@@ -300,6 +300,20 @@ export function FactionsPanel({ view, act, busy }: { view: GameView; act: Act; b
   return (
     <>
       <div className="card">
+        <h3>Tarihin akışı</h3>
+        <div className="muted small">Dünya senden bağımsız ilerler; ama başardıkların olayların hangi yönden gelişeceğini belirler.</div>
+        {view.upcoming && (
+          <div className="notice small" style={{ marginTop: 8 }}>⏳ <b>{view.upcoming.clock}</b> civarı: {view.upcoming.teaser}</div>
+        )}
+        {view.chronicle.length === 0 && <div className="muted small" style={{ marginTop: 8 }}>Henüz kayda değer bir olay yaşanmadı.</div>}
+        {view.chronicle.map((c, i) => (
+          <div key={i} className="chronicle small" style={{ marginTop: 8 }}>
+            <div className="chronicle-title">📜 {c.title} <span className="muted">· {c.clock}</span></div>
+            <p>{c.text}</p>
+          </div>
+        ))}
+      </div>
+      <div className="card">
         <h3>Bölgenin güçleri</h3>
         <div className="muted small">Fraksiyonların ekonomisi, ordusu ve istikrarı motor tarafından hesaplanır. Zamanı ilerletince dünya da ilerler.</div>
         <div className="row" style={{ marginTop: 8 }}>

@@ -53,7 +53,18 @@ export const AKDENIZ: WorldTemplate = {
     ],
     language: "tr",
   },
-  start: { locationId: "kadirga", gameTime: 7 * 60, playerItems: [{ key: "ledger", qty: 1 }, { key: "divit", qty: 1 }] },
+  start: {
+    locationId: "kadirga",
+    gameTime: 7 * 60,
+    playerItems: [{ key: "ledger", qty: 1 }, { key: "divit", qty: 1 }],
+    intro:
+      "1570 baharı. Rodos limanına şafak, katran kokusu ve martı çığlıklarıyla doğuyor. Donanma-yı Hümayun Kıbrıs seferi için toplanıyor; "
+      + "her yanda kalafatçılar, levent tayfası, gümrük kâtipleri ve fısıltıyla dolaşan Venedikli casus söylentileri.\n\n"
+      + "Sen Yeşil Yılan kadırgasının yeni kâtibisin. Önceki kâtip Süleyman bir hafta önce limanda boğulmuş bulundu. Bıraktığı defter koltuğunun altında; "
+      + "son sayfalardaki titrek rakamlar tutmuyor: ambardan yüz kantar peksimet kayıp. Sefer emri her an gelebilir ve kayıp erzakın hesabını divan senden soracak.\n\n"
+      + "Güvertedesin. Kürek sıralarında forsalar uyukluyor, kıçtaki kaptan köşkünden Hızır Reis'in boğuk sesi geliyor. "
+      + "Ayağının altında, ambarın karanlığında bir yerde, defterin sırrı bekliyor.",
+  },
   places: [
     { id: "kadirga", name: "Yeşil Yılan Kadırgası (Güverte)", danger: 0, encounters: [], safeRest: true,
       description: "Elli iki küreğiyle limanın en hızlı kadırgalarından. Güvertede halat yığınları ve kalafat kokusu; kıçta kaptan köşkü, başta topçu yuvası, kürek sıralarında uyuklayan forsalar." },
@@ -195,5 +206,47 @@ export const AKDENIZ: WorldTemplate = {
     { subjectKey: "marco", predicate: "gizlice hizmet ettiği makam", value: "Venedik Onlar Konseyi", locked: true },
     { subjectKey: "lorenzo", predicate: "gemisinin adı", value: "Santa Caterina", locked: true },
     { subjectKey: "kostas", predicate: "meyhanesinin şarabı", value: "reçineli Rodos şarabı", locked: true },
+  ],
+  chronicle: [
+    { id: "sefer_ilani", atMinute: 17 * 60, teaser: "Kaleden bugün önemli bir duyuru bekleniyor.",
+      variants: [{ title: "Sefer ilan edildi",
+        text: "Kale kapısında tellallar bağırıyor: Donanma-yı Hümayun dört gün içinde denize açılacak, hedef gizli tutuluyor. Liman bir anda kaynamaya başladı; kalafatçılar gece de çalışacak, meyhaneler erken kapanacak. Her kadırganın defteri divana sunulacak.",
+        factions: [{ key: "donanma", stability: 5 }] }] },
+    { id: "venedik_haberi", atMinute: 2 * 1440 + 8 * 60, teaser: "Venedik'in kulakları her yerde; casus yakalanmazsa seferin sırrı sızacak.",
+      variants: [
+        { when: { questDone: ["q_casus"] }, title: "Casus şebekesi çöktü",
+          text: "Dizdar Ferhat Ağa'nın adamları şifreli mektubun izinden gidip iki kayıkçıyı ve bir sarrafın kâtibini sorguya çekti. Venedik'e giden haber yolu kesildi; Kıbrıs'taki Venedik komutanları hâlâ donanmanın Malta'ya gideceğini sanıyor.",
+          factions: [{ key: "venedik", intelligence: -25 }, { key: "donanma", stability: 10 }], npcRelations: [["ferhat", 20]] },
+        { title: "Seferin sırrı sızdı",
+          text: "Gece yarısı, fenerlerini söndürmüş bir Venedik kalyonu limandan sessizce süzüldü. Sabah çarşıda fısıltı dolaşıyor: seferin hedefi Kıbrıs'tır ve Venedik bunu artık biliyor. Lefkoşa'ya takviye gideceği konuşuluyor.",
+          factions: [{ key: "venedik", military: 300 }, { key: "donanma", stability: -5 }] },
+      ] },
+    { id: "erzak_yolu", atMinute: 3 * 1440 + 8 * 60, teaser: "İskenderiye'den gelen erzak gemileri Sömbeki açıklarından geçecek.",
+      variants: [
+        { when: { questDone: ["q_korsan"] }, title: "Erzak yolu açık",
+          text: "Sömbeki'deki korsan yuvasının dağıtıldığı haberi bütün limana yayıldı. İskenderiye'den gelen üç erzak gemisi sorunsuz demirledi; ambarlar peksimet ve mercimekle doldu, kürekçilerin yüzü güldü.",
+          factions: [{ key: "donanma", treasury: 5000, stability: 5 }, { key: "malta", military: -150 }], npcRelations: [["turhan", 15]] },
+        { title: "Erzak gemileri yandı",
+          text: "Malta korsanları Sömbeki açıklarında iki erzak gemisini yakıp mürettebatını esir aldı. Donanmada peksimet karneye bağlandı; kürek sıralarında homurtular yükseliyor.",
+          factions: [{ key: "donanma", treasury: -5000, stability: -10 }, { key: "malta", treasury: 3000 }] },
+      ] },
+    { id: "donanma_denizde", atMinute: 4 * 1440 + 6 * 60, teaser: "Donanma denize açılmak üzere; her kadırganın defteri divanda sayılacak.",
+      variants: [
+        { when: { questDone: ["q_defter"] }, title: "Donanma denize açıldı",
+          text: "Şafakla birlikte yüzlerce kürek suya indi ve Donanma-yı Hümayun Kıbrıs yoluna çıktı. Divan kâtipleri Yeşil Yılan'ın defterini kuruşu kuruşuna tuttu; Kaptan Hızır Reis kâtibinin adını Kaptan Paşa'ya giden raporda övgüyle andı. Yeşil Yılan, Rodos'tan cepheye erzak taşıyacak kadırgaların başına geçti.",
+          factions: [{ key: "donanma", stability: 5 }], npcRelations: [["hizir", 25]] },
+        { title: "Eksik defterle sefer",
+          text: "Şafakla birlikte Donanma-yı Hümayun Kıbrıs yoluna çıktı. Divan kâtibi Yeşil Yılan'ın kapanmamış hesabını sordu; ambardaki açık deftere 'kâtibin ihmali' diye işlendi. Kaptan Hızır Reis yüzünü ekşitti.",
+          npcRelations: [["hizir", -15]] },
+      ] },
+    { id: "kibris_cikarma", atMinute: 6 * 1440 + 10 * 60, teaser: "Donanma Kıbrıs kıyılarına yaklaşıyor; Venedik'in hazırlıklı olup olmadığını herkes merak ediyor.",
+      variants: [
+        { when: { questDone: ["q_casus"] }, title: "Tuzla'ya baskın çıkarma",
+          text: "Rodos'a ilk gemiyle gelen haber: donanma Tuzla kıyısına neredeyse hiç direnişle karşılaşmadan çıkarma yaptı. Venedik takviyeleri yetişemedi; Lefkoşa'ya giden yol açık. Tarih, kitaplarda yazandan daha hızlı akıyor.",
+          factions: [{ key: "venedik", stability: -15, military: -400 }, { key: "donanma", stability: 10 }] },
+        { title: "Kanlı çıkarma",
+          text: "Rodos'a ilk gemiyle gelen haber: Venedik önceden uyarılmıştı. Tuzla kıyısında toplar ve Stradioti süvarileri bekliyordu; çıkarma tutundu ama bedeli ağır oldu. Lefkoşa kuşatması uzun sürecek.",
+          factions: [{ key: "donanma", military: -300, stability: -5 }] },
+      ] },
   ],
 };

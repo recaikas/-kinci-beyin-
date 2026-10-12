@@ -134,7 +134,7 @@ test("yerel mod: tarihî dünya — Rodos 1570, gemi kâtibi (büyüsüz)", asyn
 
   await expect(page.locator(".topbar")).toContainText("Yeşil Yılan Kadırgası");
   await expect(page.locator(".topbar")).toContainText("Akdeniz, 1570");
-  await expect(page.locator(".entry").first()).toContainText("Gemi Kâtibi");
+  await expect(page.locator(".entry").first()).toContainText("yeni kâtibisin");
   await expect(page.getByRole("tab", { name: "Büyü" })).toHaveCount(0);
   await page.getByLabel("Eylem").fill("ambara in");
   await page.getByLabel("Eylem").press("Enter");

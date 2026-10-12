@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LocalBackend } from "./backend/local.ts";
 import { OnlineBackend, supabase } from "./backend/online.ts";
+import { inClaude, sampleCaller } from "./backend/claude.ts";
 import type { Backend, CampaignData } from "./backend/types.ts";
 import { Home } from "./screens/Home.tsx";
 import { Auth } from "./screens/Auth.tsx";
@@ -16,6 +17,8 @@ type Screen =
   | { name: "game"; initial: CampaignData };
 
 function readMode(): Mode {
+  // claude.ai içinde her şey Claude hesabıyla çalışır; Supabase'e ağ erişimi yok.
+  if (inClaude()) return "local";
   try {
     return (localStorage.getItem("kz:mode") as Mode) || "local";
   } catch {
@@ -27,10 +30,15 @@ export function App() {
   const [mode, setModeState] = useState<Mode>(readMode);
   const [session, setSession] = useState<Session | null>(null);
   const [screen, setScreen] = useState<Screen>({ name: "home" });
-  const online = !!supabase();
+  const online = !!supabase() && !inClaude();
+
+  // Haiku bağlantısını erkenden hazırla (izin ilk çağrıda istenir).
+  useEffect(() => {
+    void sampleCaller();
+  }, []);
 
   useEffect(() => {
-    const sb = supabase();
+    const sb = online ? supabase() : null;
     if (!sb) return;
     sb.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = sb.auth.onAuthStateChange((_e, s) => setSession(s));

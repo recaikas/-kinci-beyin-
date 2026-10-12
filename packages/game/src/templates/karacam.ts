@@ -153,4 +153,24 @@ export const KARACAM: WorldTemplate = {
     { subjectKey: "kizilbalta", predicate: "sembolü", value: "kana bulanmış bir balta", locked: true },
     { subjectKey: "hasan", predicate: "hanın adı", value: "Kızıl Geyik", locked: true },
   ],
+  chronicle: [
+    { id: "goblin_akini", atMinute: 1440 + 12 * 60, teaser: "Kızılbalta klanının davulları her gece biraz daha yakından duyuluyor.",
+      variants: [
+        { when: { questDone: ["q_goblin"] }, title: "Ormanda sessizlik",
+          text: "Şefleri düşen Kızılbalta klanı dağıldı; davullar sustu. Oduncular yıllardır ilk kez ormanın derinlerine baltalarıyla şarkı söyleyerek giriyor.",
+          factions: [{ key: "kizilbalta", military: -150, stability: -20 }, { key: "karacam", stability: 10 }] },
+        { title: "Goblin akını",
+          text: "Gece goblinler değirmeni yaktı; iki keçi ve bir çoban çocuğu kayıp. Sabah pazarda kimse sesini yükseltmiyor, Muhtar Davut'un elleri titriyor.",
+          factions: [{ key: "karacam", stability: -10, population: -20 }, { key: "kizilbalta", treasury: 300 }] },
+      ] },
+    { id: "lonca_karari", atMinute: 3 * 1440 + 8 * 60, teaser: "Kuzey Tüccar Loncası, kayıp kervan yüzünden Karaçam'a kesilecek cezayı tartışıyor.",
+      variants: [
+        { when: { questDone: ["q_kervan"] }, title: "Lonca minnettar",
+          text: "Kervan ganimeti geri gelince lonca, Karaçam'ın borcunun bir kısmını sildi ve kasabaya iki sandık tuz gönderdi. Tüccar Selin'in loncadaki sözü artık daha ağır.",
+          factions: [{ key: "karacam", treasury: 2000 }], relations: [["karacam", "lonca", 20]], npcRelations: [["selin", 15]] },
+        { title: "Lonca kasabayı sıkıştırıyor",
+          text: "Lonca, kayıp kervanın bedelini Karaçam'dan istedi; muhtarlığın gümüş şamdanları rehin olarak alındı. Pazarda fiyatlar bir gecede arttı.",
+          factions: [{ key: "karacam", treasury: -1000, stability: -5 }], relations: [["karacam", "lonca", -10]] },
+      ] },
+  ],
 };

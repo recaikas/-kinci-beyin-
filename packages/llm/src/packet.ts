@@ -48,6 +48,8 @@ export interface TurnPacketInput {
   openQuests: string[];
   /** Vektör aramasıyla bulunan, şu anki durumla ilgili eski anlatı parçaları. */
   memories?: string[];
+  /** Son tarih olayları (dünya oyuncudan bağımsız ilerler). */
+  worldEvents?: string[];
 }
 
 export type HealthBand = "sağlam" | "hafif yaralı" | "ağır yaralı" | "baygın" | "ölü";
@@ -143,6 +145,7 @@ export function narratorPacket(input: TurnPacketInput, playerText: string, outco
     chapter_summary: input.chapterSummary,
     canon_facts: input.facts.map((f) => `${f.subject} · ${f.predicate}: ${f.value}${f.locked ? " [KİLİTLİ]" : ""}`),
     open_quests: input.openQuests,
+    world_events: input.worldEvents ?? [],
     related_memories: input.memories ?? [],
     scene_entities: sceneEntities(input),
     recent_turns: input.recentTurns.slice(-6).map((t) => ({ n: t.n, player: t.playerInput, what_happened: t.narration })),

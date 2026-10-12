@@ -4,6 +4,7 @@ import { CLASSES, RACES } from "@kader/engine";
 import { classNameIn, TEMPLATES } from "@kader/game";
 import type { Backend, CampaignData, CampaignSummary } from "../backend/types.ts";
 import { getLocalApiKey, LocalBackend, setLocalApiKey } from "../backend/local.ts";
+import { inClaude, sampleCaller } from "../backend/claude.ts";
 import type { Mode } from "../App.tsx";
 
 interface Props {
@@ -25,6 +26,11 @@ export function Home(p: Props) {
   const [apiKey, setApiKey] = useState(getLocalApiKey());
   const [saved, setSaved] = useState(false);
   const canList = p.mode === "local" || !!p.session;
+  const claude = inClaude();
+  const [claudeReady, setClaudeReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (claude) void sampleCaller().then((c) => setClaudeReady(!!c));
+  }, [claude]);
 
   useEffect(() => {
     setList(null);
@@ -66,12 +72,23 @@ export function Home(p: Props) {
       <div className="hero">
         <h1>Kader Zarı</h1>
         <p>
-          Zarlar kuralları, veritabanı hafızayı, yapay zekâ hikâyeyi yönetir. D&amp;D 5e (SRD 5.1) mekanikleriyle,
-          Claude Haiku 5.5 anlatıcılı Türkçe rol yapma oyunu.
+          Zarlar kuralları, kayıt hafızayı, Claude Haiku 5.5 hikâyeyi yönetir. İster büyülü bir sınır kasabasında,
+          ister 1570 Rodos'unda bir kadırga kâtibi olarak: yaz, zar at, tarihi değiştir.
         </p>
       </div>
 
-      <div className="modes">
+      {claude && (
+        <div className="card claude-status" style={{ marginBottom: 14 }}>
+          <span className={`dot ${claudeReady === false ? "off" : ""}`} />
+          <div className="grow small">
+            {claudeReady === false
+              ? "Claude'a bağlanılamadı; kural tabanlı anlatıcıyla oynanır."
+              : <>Anlatıcı <b>Claude Haiku 5.5</b>, Claude hesabınla çalışır; API anahtarı gerekmez. Kampanyaların hesabına kaydedilir; telefondan, tabletten ya da bilgisayardan kaldığın yerden devam edersin. İlk turda Claude izin isteyebilir.</>}
+          </div>
+        </div>
+      )}
+
+      {!claude && <div className="modes">
         <button className={`card mode ${p.mode === "local" ? "selected" : ""}`} onClick={() => p.setMode("local")}>
           <h3>Bu cihazda oyna</h3>
           <div className="muted small">
@@ -89,7 +106,7 @@ export function Home(p: Props) {
             Hesabınla giriş yap; tüm hikâye Supabase'de tutulur, her cihazdan devam edersin. Anlatıcı sunucudaki Haiku 5.5.
           </div>
         </button>
-      </div>
+      </div>}
 
       {p.mode === "online" && (
         <div className="card row" style={{ marginBottom: 14 }}>
@@ -107,7 +124,7 @@ export function Home(p: Props) {
         </div>
       )}
 
-      {p.mode === "local" && (
+      {p.mode === "local" && !claude && (
         <div className="card" style={{ marginBottom: 14 }}>
           <h3>Anlatıcı (isteğe bağlı)</h3>
           <div className="row">

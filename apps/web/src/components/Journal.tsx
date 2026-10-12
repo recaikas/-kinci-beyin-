@@ -15,11 +15,22 @@ const TIER_TR: Record<string, string> = {
   critical_failure: "Kritik başarısızlık",
 };
 
-export function Journal({ entries, messages, busy }: { entries: JournalEntry[]; messages: SystemMessage[]; busy: boolean }) {
+interface Props {
+  entries: JournalEntry[];
+  messages: SystemMessage[];
+  busy: boolean;
+  /** Gönderilmekte olan oyuncu girdisi ve anlatıcının o ana kadar yazdığı metin. */
+  pending?: { input: string; narration: string } | null;
+  /** Öneriye dokununca o metni hamle olarak gönder. */
+  onSuggest?: (text: string) => void;
+}
+
+export function Journal({ entries, messages, busy, pending, onSuggest }: Props) {
   const end = useRef<HTMLDivElement>(null);
+  const last = entries[entries.length - 1];
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
-  }, [entries.length, messages.length, busy]);
+  }, [entries.length, messages.length, busy, pending?.narration.length]);
 
   return (
     <div className="journal" aria-live="polite">
@@ -41,7 +52,13 @@ export function Journal({ entries, messages, busy }: { entries: JournalEntry[]; 
             </div>
           )}
           {e.hooks.length > 0 && (
-            <div className="meta">{e.hooks.map((h, i) => <span key={i} className="chip gold">💡 {h.text}</span>)}</div>
+            <div className="suggest">
+              {e.hooks.map((h, i) => (
+                e === last && onSuggest && !busy
+                  ? <button key={i} className="btn small suggest-btn" onClick={() => onSuggest(h.text)}>➜ {h.text}</button>
+                  : <span key={i} className="chip">💡 {h.text}</span>
+              ))}
+            </div>
           )}
           {e.n > 0 && (e.facts.length > 0 || e.rolls.length > 0) && (
             <details>
@@ -52,6 +69,12 @@ export function Journal({ entries, messages, busy }: { entries: JournalEntry[]; 
               </ul>
             </details>
           )}
+          {e.chronicle?.map((x) => (
+            <aside key={x.id} className="chronicle">
+              <div className="chronicle-title">📜 {x.title}</div>
+              <p>{x.text}</p>
+            </aside>
+          ))}
         </article>
       ))}
       {messages.map((m) => (
@@ -59,7 +82,15 @@ export function Journal({ entries, messages, busy }: { entries: JournalEntry[]; 
           {m.kind === "clarify" ? "❓ " : m.kind === "rejected" ? "⛔ " : "ℹ️ "}{m.text}
         </div>
       ))}
-      {busy && <div className="system-msg row muted"><div className="spinner" /> Zarlar atılıyor, anlatıcı yazıyor…</div>}
+      {busy && pending && (
+        <article className="entry card pending">
+          {pending.input && <div className="you">› {pending.input}</div>}
+          {pending.narration
+            ? <div className="narr">{pending.narration.split(/\n{2,}/).map((p, i) => <p key={i}>{p}</p>)}<span className="caret" /></div>
+            : <div className="row muted"><div className="spinner" /> Zarlar atılıyor, anlatıcı düşünüyor…</div>}
+        </article>
+      )}
+      {busy && !pending && <div className="system-msg row muted"><div className="spinner" /> Zarlar atılıyor, anlatıcı yazıyor…</div>}
       <div ref={end} />
     </div>
   );

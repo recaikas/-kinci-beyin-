@@ -8,7 +8,8 @@ import {
   skillModifier, SPELLS, XP_THRESHOLDS, formatCp,
 } from "@kader/engine";
 import { healthBand } from "@kader/llm";
-import { type Campaign, classNameIn, currentExits, currentLocation, settingOf } from "./campaign.ts";
+import { type Campaign, classNameIn, currentExits, currentLocation, settingOf, TEMPLATES } from "./campaign.ts";
+import { nextChronicle } from "./chronicle.ts";
 
 export interface SheetView {
   id: string;
@@ -70,6 +71,9 @@ export interface GameView {
   campaignId: string;
   title: string;
   world: { key: string; era: "fantasy" | "historical"; period: string; magic: boolean };
+  /** Gerçekleşmiş tarih olayları (yeniden eskiye) ve sıradaki olayın ipucu. */
+  chronicle: { title: string; text: string; clock: string }[];
+  upcoming: { teaser: string; clock: string } | null;
   turn: number;
   clock: string;
   location: { id: string; name: string; description: string; danger: number; safeRest: boolean };
@@ -190,6 +194,11 @@ export function buildView(c: Campaign): GameView {
     campaignId: c.id,
     title: c.title,
     world: { key: c.templateKey, era: setting.era, period: setting.period ?? "", magic: setting.magic },
+    chronicle: c.journal.flatMap((e) => e.chronicle ?? []).reverse().map((x) => ({ title: x.title, text: x.text, clock: clock(x.gameTime) })),
+    upcoming: (() => {
+      const n = nextChronicle(TEMPLATES[c.templateKey], s.gameTime);
+      return n ? { teaser: n.teaser, clock: clock(n.atMinute) } : null;
+    })(),
     turn: c.turnCount,
     clock: clock(s.gameTime),
     location: { id: loc.id, name: loc.name, description: loc.description, danger: loc.danger, safeRest: !!loc.safeRest },

@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { partialJsonString } from "@kader/llm";
+import { onStream } from "../backend/claude.ts";
 import type { GameAction } from "@kader/engine";
 import type { GameView, JournalEntry } from "@kader/game";
 import type { Backend, CampaignData } from "../backend/types.ts";
@@ -9,7 +11,7 @@ import { ShopModal } from "../components/Shop.tsx";
 import { FactionsPanel, InventoryPanel, MapPanel, QuestsPanel, SheetPanel, SpellsPanel } from "../components/Panels.tsx";
 
 type Tab = "map" | "sheet" | "inventory" | "spells" | "quests" | "factions";
-const TABS: [Tab, string][] = [["map", "Çevre"], ["sheet", "Karakter"], ["inventory", "Envanter"], ["spells", "Büyü"], ["quests", "Görevler"], ["factions", "Güçler"]];
+const TABS: [Tab, string][] = [["map", "Çevre"], ["sheet", "Karakter"], ["inventory", "Envanter"], ["spells", "Büyü"], ["quests", "Görevler"], ["factions", "Dünya"]];
 
 let msgSeq = 0;
 
@@ -21,7 +23,9 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
   const [text, setText] = useState("");
   const [tab, setTab] = useState<Tab>("map");
   const [shopId, setShopId] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  // Telefonda yan panel kapalı başlar: ekranı hikâye kaplar.
+  const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && window.innerWidth < 900);
+  const [pending, setPending] = useState<{ input: string; narration: string } | null>(null);
   const [lastEntry, setLastEntry] = useState<JournalEntry | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -33,10 +37,18 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
   const dying = view.sheet.isAlive && view.sheet.hp === 0 && !view.sheet.deathSaves.stable;
   const dead = !view.sheet.isAlive;
 
+  // Anlatıcı yazdıkça metni göster (Claude hesabıyla bağlıyken).
+  useEffect(() => onStream((label, raw) => {
+    if (!label.startsWith("narrate")) return;
+    const narration = partialJsonString(raw, "narration");
+    if (narration) setPending((p) => (p ? { ...p, narration } : p));
+  }), []);
+
   const send = async (input: { text: string } | { action: GameAction; text: string }) => {
     if (busy) return;
     setBusy(true);
     setMessages([]);
+    setPending({ input: input.text, narration: "" });
     try {
       const r = await backend.playTurn(initial.id, input);
       if (r.status === "resolved") {
@@ -55,7 +67,8 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
       setMessages([{ id: ++msgSeq, kind: "error", text: (e as Error).message }]);
     } finally {
       setBusy(false);
-      inputRef.current?.focus();
+      setPending(null);
+      if (window.innerWidth >= 900) inputRef.current?.focus();
     }
   };
 
@@ -116,9 +129,9 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
         <button className="btn small" onClick={onExit} aria-label="Ana sayfa">←</button>
         <div className="title grow">{view.title}</div>
         <span className="chip">{view.clock}</span>
-        <span className="chip gold" title="Konum">📍 {view.location.name}</span>
-        {view.world?.period && <span className="chip" title="Dünya">{view.world.period}</span>}
-        <span className="chip" title="Anlatıcı">{backend.aiLabel()}</span>
+        <span className="chip gold opt" title="Konum">📍 {view.location.name}</span>
+        {view.world?.period && <span className="chip opt" title="Dünya">{view.world.period}</span>}
+        <span className="chip opt" title="Anlatıcı">{backend.aiLabel()}</span>
         {backend instanceof LocalBackend && <button className="btn small" onClick={exportSave} title="Kaydı indir">💾</button>}
       </div>
 
@@ -139,7 +152,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
             </div>
           </div>
         )}
-        <Journal entries={journal} messages={messages} busy={busy} />
+        <Journal entries={journal} messages={messages} busy={busy} pending={pending} onSuggest={(t) => send({ text: t })} />
         <div className="composer">
           {dead ? (
             <div className="error">Karakterin öldü. Hikâyesi burada sona eriyor — ana sayfadan yeni bir kahramanla başlayabilirsin.</div>
@@ -175,7 +188,7 @@ export function Game({ backend, initial, onExit }: { backend: Backend; initial: 
           {tabs.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} className={`tab ${tab === k ? "on" : ""}`}
               onClick={() => { if (tab === k) setCollapsed((c) => !c); else { setTab(k); setCollapsed(false); } }}>
-              {label}{k === "quests" && view.quests.some((q) => q.status === "available") ? " •" : ""}
+              {label}{(k === "quests" && view.quests.some((q) => q.status === "available")) || (k === "factions" && journal.at(-1)?.chronicle?.length) ? " •" : ""}
             </button>
           ))}
         </div>

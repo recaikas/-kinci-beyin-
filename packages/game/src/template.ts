@@ -6,6 +6,7 @@ import {
   type PlaceInfo, type Quest, relKey, type ShopInfo, spawnMonster, type WorldState,
 } from "@kader/engine";
 import type { CanonFact, Persona, WorldBible } from "@kader/llm";
+import type { ChronicleEvent } from "./chronicle.ts";
 
 export interface NpcPersona {
   personality: string;
@@ -66,7 +67,13 @@ export interface WorldTemplate {
   key: string;
   setting?: WorldSetting;
   bible: WorldBible;
-  start: { locationId: string; gameTime: number; playerItems: { key: string; qty: number }[] };
+  start: {
+    locationId: string;
+    gameTime: number;
+    playerItems: { key: string; qty: number }[];
+    /** İkinci şahısla yazılmış açılış sahnesi (yoksa öncül + rol + mekândan kurulur). */
+    intro?: string;
+  };
   places: PlaceInfo[];
   exits: WorldState["exits"];
   npcs: NpcTemplate[];
@@ -75,6 +82,8 @@ export interface WorldTemplate {
   factionRelations: [string, string, number][];
   playerFaction?: string;
   facts: { subjectKey: string; predicate: string; value: string; locked: boolean }[];
+  /** Zamanlı tarih olayları; oyuncunun başarıları dalı seçer. */
+  chronicle?: ChronicleEvent[];
 }
 
 export interface InstantiatedWorld {
