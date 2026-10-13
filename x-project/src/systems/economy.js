@@ -1,7 +1,7 @@
 // Ekonomi: maaş, kira, kredi, iflas, ofis/istasyon yatırımı, motor lisansı, kaos ölçeri.
 import { clamp, lerpTable } from '../kernel.js';
 import { inflation, eraMult, salaryFor, tableYear, engineScore } from '../models.js';
-import { seats } from './staff.js';
+import { seats, slots } from './staff.js';
 
 export const office = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
 
@@ -69,7 +69,7 @@ export function moveOffice(ctx) {
   ledger.post('ofis', -cost, next.name);
   state.office.tier = next.tier;
   state.rentMult = 1;
-  ctx.news(`🏠 Yeni mekân: ${next.name}! (${next.seats} koltuk)`, 'good');
+  ctx.news(`🏠 Yeni mekân: ${next.name}! ${next.slots} oda alanı, oda başına ${next.roomSeats} koltuk. Ofis sekmesinden oda kur.`, 'good');
   ctx.bus.fire('facilityUpgraded', next);
   for (const p of state.staff) p.morale = clamp(p.morale + 10, 0, 100);
   return { ok: true };
@@ -83,7 +83,7 @@ export function buyFloor(ctx) {
   if (state.cash < cost) return { ok: false, msg: `Yeni kat ${cost.toLocaleString('tr-TR')} $.` };
   ledger.post('ofis', -cost, 'Yeni kat');
   state.office.floors++;
-  ctx.news(`🏗️ Kampüse yeni kat eklendi. Toplam ${seats(ctx)} koltuk.`, 'good');
+  ctx.news(`🏗️ Kampüse yeni kat eklendi. Toplam ${slots(ctx)} oda alanı.`, 'good');
   return { ok: true };
 }
 

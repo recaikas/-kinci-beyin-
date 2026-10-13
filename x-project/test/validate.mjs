@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con } from '../src/game.js';
 import * as M from '../src/models.js';
 import { runBot } from './bot.mjs';
 
@@ -111,6 +111,63 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const leg = runBot({ seed: 7, difficulty: 'efsanevi', years: 20 });
   console.log('   Efsane:', leg);
   check('Efsanevi, Orta’dan zor', leg.cash < med.cash, '', 'Duman');
+}
+
+// 12) Kairosoft kariyer kuralları (V): ileri kariyer için aynı kişinin ön koşulları seviye 5 olmalı
+{
+  const g = newGame({ seed: 3, difficulty: 'kolay' });
+  const ctx = g.ctx, p = g.state.staff[0];
+  p.careers = { kodcu: 5, yazar: 4 }; p.career = 'kodcu';
+  check('Yazar sv.4 iken Yönetmen kapalı', !Staff.careerOptions(ctx, p).some((c) => c.id === 'yonetmen'), '', 'Veri tekrarı');
+  p.careers.yazar = 5;
+  check('Kodcu 5 + Yazar 5 → Yönetmen açık', Staff.careerOptions(ctx, p).some((c) => c.id === 'yonetmen'), '', 'Veri tekrarı');
+  g.state.research.rp = 1000; g.state.cash = 1e6;
+  const before = p.salary;
+  g.changeCareer(p.id, 'yonetmen');
+  check('Kariyer değişti', p.career === 'yonetmen' && p.careers.yonetmen === 0);
+  g.levelUp(p.id);
+  check('Seviye atladı', p.careers.yonetmen === 1);
+  check('Maaş seviye başına ×1,2 (kurucu hariç)', PACK.careerRules.salaryPerLevel === 1.2 && p.salary === before, '', 'Veri tekrarı');
+}
+
+// 13) Dış kaynak fiyat–kalite eğrisi (P): ücret ~240×, puan ~11–12×
+{
+  const ctx = ctxAt(1990);
+  const lo = Prod.outsourceRow(ctx, 0), hi = Prod.outsourceRow(ctx, 4);
+  const r = hi.points / lo.points;
+  check('Dış kaynak getirisi azalan (×240 ücret → ×10–13 puan)', r > 10 && r < 13, r.toFixed(1), 'Kaba tutarlılık');
+}
+
+// 14) Odalar: koltuklar odalardan gelir, uzman oda kendi disiplinine puan verir
+{
+  const g = newGame({ seed: 5, difficulty: 'kolay' });
+  const st = g.state;
+  check('Garaj: 1 oda, 1 koltuk', st.rooms.length === 1 && Staff.seats(g.ctx) === 1);
+  st.cash = 1e7; st.office.tier = 3; st.research.done.oda_uzman = 1;
+  check('Grafik stüdyosu kurulur', g.buildRoom('grafik').ok && Staff.seats(g.ctx) === 8);
+  g.startProject({ name: 'T', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
+  const artist = Staff.makePerson(g.ctx, { career: 'tasarimci', level: 0, skill: 50 });
+  artist.room = st.rooms[1].id; st.staff.push(artist);
+  const gfx0 = st.project.points.gfx; Prod.weeklyProject(g.ctx);
+  check('Grafik stüdyosu faz 1’de bile grafik üretir', st.project.points.gfx > gfx0);
+}
+
+// 15) Özel konsol: engeller, yapım ve çıkış
+{
+  const g = newGame({ seed: 9, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  st.week = Math.round((1995 - 1976) * 48 * st.lengthMult);
+  check('Konsol engelleri listelenir', Con.consoleBlockers(ctx).length === 3);
+  st.cash = 1e9; st.office.tier = 3; st.research.done.donanim_lab = 1;
+  g.buildRoom('donanim');
+  const eng = Staff.makePerson(ctx, { career: 'donanimci', level: 3, skill: 80 }); eng.room = st.rooms[1].id; st.staff.push(eng);
+  const res = g.startConsole({ name: 'Piksel Kutu', type: 'konsol', cpu: 'b32', media: 'cd' });
+  check('Konsol yapımı başlar', res.ok, res.msg || '');
+  for (let i = 0; i < 400 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
+  const k = st.consoles[0];
+  check('Konsol piyasaya çıkar', !!k.launched, `${k.phase}/${PACK.console.phases.length}`);
+  for (let i = 0; i < 20; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
+  check('Konsol satar ve platform olur', k.sold > 0 && M.activePlatforms(ctx).some((p) => p.id === k.id), k.sold.toLocaleString());
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

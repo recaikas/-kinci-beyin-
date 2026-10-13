@@ -1,6 +1,7 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp } from '../kernel.js';
-import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor } from '../models.js';
+import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById } from '../models.js';
+import { roomOf } from './staff.js';
 
 export function publishersAvailable(ctx) {
   const y = tableYear(ctx);
@@ -56,7 +57,7 @@ export function release(ctx, { publisherId, price }) {
   ip.value = clamp(ip.value + Math.max(ipr.minGain, gain) + (ip.games === 0 ? 0.2 : 0), 0, ipr.max);
   ip.lastRelease = state.week; ip.games++;
   // Deneyim
-  for (const p of state.staff) if (p.assign === 'proje') { p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120)); p.games++; }
+  for (const p of state.staff) if (['gelistirme', 'grafik', 'ses', 'qa'].includes(roomOf(ctx, p)?.type)) { p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120)); p.games++; }
   const eng = state.engines.find((e) => e.id === pj.engineId);
   if (eng) for (const fid of eng.features) state.usedFeatures[fid] = true;
 
@@ -104,7 +105,7 @@ export function weeklySales(ctx) {
     const mult = weekMult(ctx, g);
     let units = 0, rev = 0;
     for (const id of g.platforms) {
-      const p = pack.platforms.find((x) => x.id === id);
+      const p = platformById(ctx, id);
       const cap = s.capShare * platformBase(ctx, p) * 1e6;
       let u = Math.round(g.peak[id] * curve * mult);
       u = Math.max(0, Math.min(u, cap - g.sold[id]));

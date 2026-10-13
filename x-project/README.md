@@ -8,7 +8,7 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 68 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 81 kalibrasyon ve tutarlılık kontrolü
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -34,6 +34,10 @@ Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.ran
 - Kadro: beceri, moral, stres, tükenmişlik, istifa, rakibe transfer, 12 kişilik özellik, eğitim, zam
 - Ofis kademeleri (garaj → ArGe kampüsü + katlar), iş istasyonu kademeleri ve platform kapısı
 - Sözleşme işleri, kredi ve iflas, rakip stüdyolar ve satın alma, fuar, Yılın Oyunu ve Yılın En Kötü Oyunu
+- **Odalar (MGT2)**: geliştirme, grafik ve ses stüdyosu, kalite güvence, araştırma, mola, donanım laboratuvarı. Koltuklar odalardan gelir; geliştirme odası oyun yokken sözleşme yapar
+- **Kariyerler (Game Dev Story)**: 8 kariyer × 5 seviye, RP ile seviye, ön koşullu ileri kariyerler (Yönetmen, Yapımcı, Donanım Mühendisi, Hacker), seviye başına maaş ×1,2
+- **Dış kaynak**: 20 dış çalışan, ücret arttıkça getirisi azalan kalite eğrisi
+- **Kendi konsolun**: tip, işlemci ve medya seç; iki aşamada üret, piyasaya çıkar, donanım ve lisans geliri topla. Yeni konsol eskisini emekli eder
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…
@@ -42,8 +46,8 @@ Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.ran
 
 | Zorluk | Sonuç |
 |---|---|
-| Kolay | 60–80 M $, 15–40 kişi |
-| Orta | Bir tohumda ~11 M $, diğerinde borçta ama ayakta |
+| Kolay | 64–82 M $, 28–34 kişi |
+| Orta | 21–26 M $ |
 | Zor / Efsanevi | Bot garajdan çıkamadan batıyor |
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.

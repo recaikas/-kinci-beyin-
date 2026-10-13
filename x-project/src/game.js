@@ -8,14 +8,15 @@ import * as Prod from './systems/production.js';
 import * as Market from './systems/market.js';
 import * as Eco from './systems/economy.js';
 import * as Ev from './systems/events.js';
+import * as Con from './systems/console.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
   return {
-    version: 1, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
+    version: 2, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
     companyName, founderName, founderSpec, cash: 0, startCash: diff.startCash,
     ledger: { byYear: {}, total: {}, recent: [] },
-    office: { tier: 1, floors: 0 }, stationTier: 0, stationDown: 0, rentMult: 1,
+    office: { tier: 1, floors: 0 }, rooms: [], consoles: [], consoleJob: null, stationTier: 0, stationDown: 0, rentMult: 1,
     staff: [], applicants: [], nextId: 1,
     research: { done: {}, current: null, rp: 0 }, engines: [], engineJob: null, usedFeatures: {},
     project: null, contract: null, contractOffers: [], games: [], ips: [], charts: [], awards: [],
@@ -48,7 +49,9 @@ export function makeGame(state, pack = PACK) {
 
     init() {
       ledger.post('sermaye', state.startCash, 'Başlangıç sermayesi');
-      const founder = Staff.makePerson(ctx, { skill: pack.production.founderSkill, spec: state.founderSpec, founder: true, name: state.founderName });
+      state.rooms.push({ id: state.nextId++, type: 'gelistirme', mode: 'otomatik' });
+      const founder = Staff.makePerson(ctx, { skill: pack.production.founderSkill, career: pack.careerRules.founderCareer[state.founderSpec], level: 1, founder: true, name: state.founderName });
+      founder.room = state.rooms[0].id;
       state.staff.push(founder);
       Staff.genApplicants(ctx);
       Prod.genContracts(ctx);
@@ -70,6 +73,7 @@ export function makeGame(state, pack = PACK) {
       Prod.weeklyContract(ctx);
       // araştırma
       Prod.weeklyResearch(ctx);
+      Con.weeklyConsole(ctx);
       // satış
       Market.weeklySales(ctx);
       Market.weeklyTrend(ctx);
@@ -79,6 +83,7 @@ export function makeGame(state, pack = PACK) {
         Eco.monthlyEconomy(ctx);
         Market.monthlyMmo(ctx);
         Market.monthlySubsidiaries(ctx);
+        Con.monthlyConsole(ctx);
         Staff.genApplicants(ctx);
         if (!state.contract || state.contractOffers.length === 0) Prod.genContracts(ctx);
         bus.fire('monthProceeded', state.week);
@@ -107,7 +112,8 @@ export function makeGame(state, pack = PACK) {
       if (state.office.tier < size.office) return { ok: false, msg: `Bu boyut için en az "${pack.offices[size.office - 1].name}" gerekli.` };
       if (!o.platforms?.length) return { ok: false, msg: 'En az bir platform seç.' };
       const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
-      const locked = o.platforms.map((id) => pack.platforms.find((p) => p.id === id)).filter((p) => p.tech > maxTech);
+      const locked = o.platforms.map((id) => M.platformById(ctx, id)).filter((p) => !p || (!p.own && p.tech > maxTech));
+      if (locked.some((p) => !p)) return { ok: false, msg: 'Bu platform artık piyasada değil.' };
       if (locked.length) return { ok: false, msg: `${locked[0].name} için daha iyi iş istasyonu lazım.` };
       const cost = Prod.projectCost(ctx, o);
       if (state.cash - cost < -Eco.creditLimit(ctx)) return { ok: false, msg: `Geliştirme maliyeti ${cost.toLocaleString('tr-TR')} $; bütçe yetmiyor.` };
@@ -145,8 +151,15 @@ export function makeGame(state, pack = PACK) {
     fire: (id) => Staff.fire(ctx, id),
     train: (id, tid) => Staff.train(ctx, id, tid),
     raise: (id) => Staff.raise(ctx, id, pack.economy.raiseOnDemand),
-    assign(id, role) { const p = state.staff.find((x) => x.id === id); if (p) p.assign = role; },
-    assignAll(role) { for (const p of state.staff) p.assign = role; },
+    // --- Odalar ve kariyer
+    buildRoom: (type) => Staff.buildRoom(ctx, type),
+    demolishRoom: (id) => Staff.demolishRoom(ctx, id),
+    setRoomMode(id, mode) { const r = state.rooms.find((x) => x.id === id); if (r && pack.rooms.modes[mode]) r.mode = mode; },
+    moveStaff: (id, roomId) => Staff.moveStaff(ctx, id, roomId),
+    levelUp: (id) => Staff.levelUp(ctx, id),
+    changeCareer: (id, cid) => Staff.changeCareer(ctx, id, cid),
+    outsource: (i) => Prod.outsource(ctx, i),
+    startConsole: (d) => Con.startConsole(ctx, d),
 
     // --- Sözleşme, araştırma, motor
     acceptContract: (id) => Prod.acceptContract(ctx, id),
@@ -175,4 +188,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff };
+export { M, Prod, Eco, Market, Staff, Con };

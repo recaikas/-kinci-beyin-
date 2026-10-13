@@ -122,7 +122,7 @@ export function weeklyEvents(ctx) {
   // Rastgele olaylar
   if (state.week < state.nextEventWeek) return;
   const c = pack.chaos;
-  state.nextEventWeek = state.week + Math.max(3, Math.round((c.eventBase + c.eventRand * rng.next()) / (1 + state.kaos / c.eventKaosDiv)));
+  state.nextEventWeek = state.week + Math.max(c.eventMinGap, Math.round((c.eventBase + c.eventRand * rng.next()) / (1 + state.kaos / c.eventKaosDiv)));
   const pool = pack.events.filter((e) => cond(ctx, e.when) && (!e.maxTriggers || (state.eventCounts[e.id] || 0) < e.maxTriggers) && state.lastEvents.indexOf(e.id) < 0);
   if (!pool.length) return;
   const ev = rng.pick(pool);

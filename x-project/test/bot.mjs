@@ -4,6 +4,7 @@ import * as M from '../src/models.js';
 import { researchAvailable, researchInfo } from '../src/systems/production.js';
 import { stationUpgradeCost } from '../src/systems/economy.js';
 import { publishersAvailable } from '../src/systems/market.js';
+import * as Staff from '../src/systems/staff.js';
 
 export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = false } = {}) {
   const g = newGame({ seed, difficulty, length: 30 });
@@ -54,24 +55,33 @@ export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = fa
     // kadro & ofis
     if (state.week % 4 === 1) {
       const wages = state.staff.reduce((s, p) => s + p.salary, 0) || 1000;
-      const seats = pack.offices.find((o) => o.tier === state.office.tier).seats + state.office.floors * (pack.offices[3].floorSeats || 0);
+      const seats = Staff.seats(ctx);
       if (state.staff.length < seats && state.cash > wages * 18) {
         const best = [...state.applicants].sort((a, b) => b.skill / b.salary - a.skill / a.salary)[0];
         if (best) g.hire(best.id);
       }
-      const next = pack.offices.find((o) => o.tier === state.office.tier + 1);
-      if (!next && state.staff.length >= seats && state.cash > 1500000 * M.inflation(ctx) ** 0.5 * 2) g.moveOffice();
-      if (next && state.staff.length >= seats && state.cash > next.cost * M.inflation(ctx) ** 0.5 * 1.15 + wages * 6) g.moveOffice();
+      // Dolu odalar varsa yeni oda kur (sıra: geliştirme, QA, grafik, ses, geliştirme, araştırma, ...)
+      if (state.staff.length >= seats && state.rooms.length < Staff.slots(ctx) && state.cash > wages * 12) {
+        const want = ['gelistirme', 'qa', 'grafik', 'ses', 'gelistirme', 'arastirma', 'gelistirme', 'mola'];
+        const counts = {};
+        const next = want.find((t) => { counts[t] = (counts[t] || 0) + 1; const have = state.rooms.filter((r) => r.type === t).length; const rt = pack.rooms.types.find((x) => x.id === t); return have < counts[t] && (!rt.research || state.research.done[rt.research]); }) || 'gelistirme';
+        g.buildRoom(next);
+      }
+      const nextOffice = pack.offices.find((o) => o.tier === state.office.tier + 1);
+      const full = state.staff.length >= seats && state.rooms.length >= Staff.slots(ctx);
+      if (!nextOffice && full && state.cash > 1500000 * M.inflation(ctx) ** 0.5 * 2) g.moveOffice();
+      if (nextOffice && full && state.cash > nextOffice.cost * M.inflation(ctx) ** 0.5 * 1.15 + wages * 6) g.moveOffice();
       const sc = stationUpgradeCost(ctx);
       if (sc && M.expectedStationTier(ctx) > state.stationTier && state.cash > sc * 3) g.upgradeStations();
-      for (const p of state.staff) p.assign = p.stress > 75 ? 'dinlen' : 'proje';
-      if (!state.contract && state.cash < wages * 6 && state.contractOffers.length) {
-        g.acceptContract(state.contractOffers[0].id);
-        const helpers = state.staff.filter((p) => !p.founder).slice(0, Math.ceil(state.staff.length / 3));
-        for (const p of helpers) p.assign = 'sozlesme';
-        if (!helpers.length) state.staff[0].assign = 'sozlesme';
+      if (!state.contract && state.cash < wages * 6 && state.contractOffers.length) g.acceptContract(state.contractOffers[0].id);
+      const dev = state.rooms.filter((r) => r.type === 'gelistirme');
+      for (const r of dev) r.mode = 'otomatik';
+      if (state.contract) dev[dev.length > 1 ? dev.length - 1 : 0].mode = 'sozlesme';
+      // Artan RP ile kariyer seviyesi
+      if (state.research.rp > 120) {
+        const p = [...state.staff].sort((a, b) => (a.careers[a.career] || 0) - (b.careers[b.career] || 0))[0];
+        if (p) g.levelUp(p.id);
       }
-      if (state.contract && !state.staff.some((p) => p.assign === 'sozlesme')) state.staff[0].assign = 'sozlesme';
     }
     if (verbose && state.week % 48 === 0) console.log(Math.floor(M.tableYear(ctx)), Math.round(state.cash), state.staff.length, state.games.slice(-3).map((x) => x.score).join('/'), JSON.stringify(state.ledger.byYear[state.week / 48 - 1] || {}));
     g.tick();

@@ -36,13 +36,18 @@ export function eraMult(ctx, key) {
   for (const mod of ctx.state.marketMods) if (mod[key] !== undefined) m *= mod[key];
   return m;
 }
+// --- Kariyer (Kairosoft katmanı)
+export const careerOf = (ctx, p) => ctx.pack.careers.find((c) => c.id === p.career);
+export const careerLevel = (p) => (p.careers && p.careers[p.career]) || 0;
+
 export function personWeekly(ctx, p, n) {
   const pr = ctx.pack.production;
+  const lvl = 1 + ctx.pack.careerRules.outPerLevel * careerLevel(p);
   const morale = pr.moraleFloor + (1 - pr.moraleFloor) * (p.morale / 100);
   const crunch = ctx.state.crunch ? pr.crunchOut : 1;
   let prod = eraMult(ctx, 'prodMult');
   if (prod < 1 && ctx.state.research.done.uzaktan) prod = 1 - (1 - prod) * 0.3;
-  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod;
+  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl;
 }
 
 // --- Production yardımcıları
@@ -65,7 +70,7 @@ export function fitFactor(ctx, project) {
   const gi = ctx.pack.genres.findIndex((x) => x.id === project.genre);
   const ai = ctx.pack.audiences.findIndex((x) => x.id === project.audience);
   const t = ctx.pack.topics.find((x) => x[0] === project.topic);
-  const plats = project.platforms.map((id) => ctx.pack.platforms.find((p) => p.id === id));
+  const plats = project.platforms.map((id) => platformById(ctx, id));
   const avg = (f) => plats.reduce((s, p) => s + f(p), 0) / plats.length;
   const tg = t[2][gi] / 10, ta = t[3][ai] / 10;
   const pg = avg((p) => p.genre[gi] / 10), pa = avg((p) => p.aud[ai] / 10);
@@ -145,14 +150,26 @@ export function S(ctx, n) {
   const s = ctx.pack.sales;
   return n >= s.sCut ? Math.exp(s.sA * (n - s.sCenter)) : Math.exp(s.sLow) * Math.exp(s.sLowK * (n - s.sCut));
 }
+// Oyuncunun kendi konsolları da platform gibi davranır (kurulu taban state'te).
+export function ownPlatforms(ctx) {
+  const c = ctx.pack.console;
+  return (ctx.state.consoles || []).filter((k) => k.launched).map((k) => {
+    const type = c.types.find((t) => t.id === k.type);
+    return { id: k.id, name: k.name, from: k.launched, to: k.retired || 2200, tech: k.tech, genre: type.genre, aud: type.aud, licence: 0, devCost: c.ownDevCost, own: true };
+  });
+}
+export const allPlatforms = (ctx) => ctx.pack.platforms.concat(ownPlatforms(ctx));
+export const platformById = (ctx, id) => allPlatforms(ctx).find((p) => p.id === id);
+
 export function platformBase(ctx, p, y = tableYear(ctx)) {
   if (y < p.from || y >= p.to) return 0;
+  if (p.own) return ctx.state.consoles.find((k) => k.id === p.id).base;
   if (p.key) return lerpTable(p.key, y);
   const frac = clamp((y - p.from) / ((p.to - p.from) * ctx.pack.platformGrowth.peakAt), 0, 1);
   return p.start + (p.units - p.start) * frac;
 }
 export function activePlatforms(ctx, y = tableYear(ctx)) {
-  return ctx.pack.platforms.filter((p) => y >= p.from && y < p.to);
+  return allPlatforms(ctx).filter((p) => y >= p.from && y < p.to);
 }
 export function studioStars(ctx) {
   return clamp(ctx.state.prestige + Math.log10(1 + ctx.state.fans / 10000), 0, 5);
@@ -179,7 +196,7 @@ export function peakWeekly(ctx, game) {
   const ai = ctx.pack.audiences.findIndex((x) => x.id === game.audience);
   const out = {};
   for (const id of game.platforms) {
-    const p = ctx.pack.platforms.find((x) => x.id === id);
+    const p = platformById(ctx, id);
     const share = platformBase(ctx, p) / total;
     const fit = (p.genre[gi] / 10) * (p.aud[ai] / 10);
     const price = Math.pow((p.priceRef || s.priceRef) / gamePrice(ctx, game, p), s.priceExp);

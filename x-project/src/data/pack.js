@@ -214,13 +214,93 @@ export const PACK = {
   ],
   publisherAdvance: { _tag: 'P', base: 8000 },
 
+  // Ofis kademeleri (V: 4 kademe). Koltuklar artık odalardan gelir (MGT2 oda motoru): slot × oda başına koltuk.
   offices: [
-    // seats: V (kademe sayısı) / L · cost & rent: P (garajdan çıkış ~1M ve kampüs ~5M L)
-    { tier: 1, name: 'Garaj', seats: 1, cost: 0, rent: 300 },
-    { tier: 2, name: 'Küçük ofis', seats: 4, cost: 120000, rent: 800 },
-    { tier: 3, name: 'Büyük ofis', seats: 10, cost: 900000, rent: 2500 },
-    { tier: 4, name: 'ArGe kampüsü', seats: 16, cost: 5000000, rent: 8000, floorCost: 1500000, floorSeats: 12, maxFloors: 8, floorRent: 3000 },
+    { tier: 1, name: 'Garaj', slots: 1, roomSeats: 1, cost: 0, rent: 300 },
+    { tier: 2, name: 'Küçük ofis', slots: 2, roomSeats: 3, cost: 120000, rent: 800 },
+    { tier: 3, name: 'Büyük ofis', slots: 4, roomSeats: 4, cost: 900000, rent: 2500 },
+    { tier: 4, name: 'ArGe kampüsü', slots: 6, roomSeats: 6, cost: 5000000, rent: 8000, floorCost: 1500000, floorSlots: 2, maxFloors: 8, floorRent: 3000 },
   ],
+
+  // Odalar (MGT2, L/P). Geliştirme odası kendi oyunu yokken sözleşme yapar (MGT, L).
+  rooms: {
+    _tag: 'L/P',
+    types: [
+      { id: 'gelistirme', name: 'Geliştirme odası', cost: 15000, floor: '#5b4a73', desc: 'Oyunu ve sözleşmeleri yapar. Kaydırıcılar burada işler.' },
+      { id: 'grafik', name: 'Grafik stüdyosu', cost: 40000, research: 'oda_uzman', disc: 'gfx', floor: '#3f5f73', desc: 'Tüm proje boyunca yalnızca grafik puanı üretir, hızlı.' },
+      { id: 'ses', name: 'Ses stüdyosu', cost: 40000, research: 'oda_uzman', disc: 'ses', floor: '#5a3f73', desc: 'Tüm proje boyunca yalnızca ses puanı üretir, hızlı.' },
+      { id: 'qa', name: 'Kalite güvence', cost: 30000, research: 'oda_qa', floor: '#3f7360', desc: 'Geliştirme sırasında hata ayıklar, oynanışı cilalar.' },
+      { id: 'arastirma', name: 'Araştırma odası', cost: 30000, floor: '#73653f', desc: 'Araştırma puanı üretir.' },
+      { id: 'mola', name: 'Mola odası', cost: 15000, floor: '#734a5a', desc: 'Buradakiler hızla dinlenir; varlığı herkesin stresini azaltır.' },
+      { id: 'donanim', name: 'Donanım laboratuvarı', cost: 500000, research: 'donanim_lab', office: 3, floor: '#4a4a5a', desc: 'Kendi konsolunu yapar. Donanım mühendisi gerekir.' },
+    ],
+    modes: { otomatik: 'Oyun, yoksa sözleşme', oyun: 'Yalnızca oyun', sozlesme: 'Yalnızca sözleşme' },
+    expertMult: 2.4, // P (şartname: uzman odada çarpan 2,4)
+    qaBugK: 0.9, qaPolish: 0.2,
+    restRoomStress: -0.6, restRoomMorale: 0.05,
+    demolishRefund: 0.25,
+  },
+
+  // Kariyerler (Game Dev Story, V yapısı; çarpanlar P). + = 1,0 · ++ = 1,2 · +++ = 1,4
+  careers: [
+    { id: 'kodcu', name: 'Kodcu', tier: 1, disc: 'tek', aff: { oyn: 1.0, gfx: 1.0, ses: 1.0, tek: 1.2 }, debug: 1.2, hw: 0.5, req: [] },
+    { id: 'yazar', name: 'Yazar', tier: 1, disc: 'oyn', aff: { oyn: 1.2, gfx: 1.0, ses: 1.0, tek: 1.0 }, debug: 1.0, hw: 0.5, req: [] },
+    { id: 'tasarimci', name: 'Tasarımcı', tier: 1, disc: 'gfx', aff: { oyn: 1.2, gfx: 1.2, ses: 1.0, tek: 1.0 }, debug: 1.0, hw: 0.5, req: [] },
+    { id: 'sesmuh', name: 'Ses Mühendisi', tier: 1, disc: 'ses', aff: { oyn: 1.2, gfx: 1.0, ses: 1.2, tek: 1.0 }, debug: 1.0, hw: 0.5, req: [] },
+    { id: 'yonetmen', name: 'Yönetmen', tier: 2, disc: 'oyn', aff: { oyn: 1.4, gfx: 1.0, ses: 1.0, tek: 1.2 }, debug: 1.4, hw: 0.5, req: ['kodcu', 'yazar'] },
+    { id: 'yapimci', name: 'Yapımcı', tier: 2, disc: 'gfx', aff: { oyn: 1.4, gfx: 1.4, ses: 1.4, tek: 1.0 }, debug: 1.0, hw: 0.5, req: ['tasarimci', 'sesmuh'] },
+    { id: 'donanimci', name: 'Donanım Mühendisi', tier: 3, disc: 'tek', aff: { oyn: 1.4, gfx: 1.0, ses: 1.0, tek: 1.2 }, debug: 1.4, hw: 1.6, req: ['yonetmen', 'yapimci'] },
+    { id: 'hacker', name: 'Hacker', tier: 4, disc: 'tek', aff: { oyn: 1.4, gfx: 1.4, ses: 1.4, tek: 1.4 }, debug: 1.4, hw: 0.3, req: ['donanimci'] },
+  ],
+  careerRules: {
+    _tag: 'V/P',
+    maxLevel: 5, salaryPerLevel: 1.2, // V
+    rpPerLevel: [8, 16, 28, 45, 70], tierRpMult: [1, 1, 2, 3, 4], // P
+    outPerLevel: 0.05, // P
+    changeCost: 20000, // P (Kariyer Değiştirme Kılavuzu)
+    founderCareer: { oyn: 'yazar', gfx: 'tasarimci', ses: 'sesmuh', tek: 'kodcu' },
+    hireMaxLevel: 2,
+  },
+
+  // Dış çalışanlar (GDS outsourcing; fiyatlar V ×0,5 ölçek, kalite eğrisi P: q = (ücret/10K)^0,45)
+  outsource: {
+    _tag: 'V/P',
+    feeScale: 500, qualityExp: 0.45, pointsPerQuality: 0.1, bugShare: 0.05,
+    rows: [
+      ['Kalemşor Kemal', 10, 'oyn', 1], ['Senarist Sevgi', 100, 'oyn', 1], ['Romancı Rıza', 350, 'oyn', 2], ['Ödüllü Ödül', 1000, 'oyn', 3], ['Hollywood Hüsnü', 2400, 'oyn', 4],
+      ['Fırça Fikret', 10, 'gfx', 1], ['Piksel Pınar', 95, 'gfx', 1], ['Sprite Selim', 320, 'gfx', 2], ['Konsept Kader', 950, 'gfx', 3], ['Usta Ustaoğlu', 2050, 'gfx', 4],
+      ['Bip Bülent', 10, 'ses', 1], ['Synth Sinan', 90, 'ses', 1], ['Orkestra Oya', 300, 'ses', 2], ['Bestekâr Bora', 1100, 'ses', 3], ['Maestro Melis', 2800, 'ses', 4],
+      ['Stajyer Sarp', 10, 'tek', 1], ['Freelance Ferda', 100, 'tek', 1], ['Assembly Asım', 350, 'tek', 2], ['Çekirdek Cemre', 1000, 'tek', 3], ['Efsane Ertan', 2500, 'tek', 4],
+    ],
+  },
+
+  // Özel konsol (GDS, V parça ve bedelleri ×0,3 ölçek; yıllar, teknoloji ve satış P)
+  console: {
+    _tag: 'V/P',
+    costScale: 0.3,
+    types: [
+      { id: 'konsol', name: 'Ev konsolu', cost: 6000000, genre: [10, 9, 10, 9, 8, 8], aud: [9, 10, 10] },
+      { id: 'tasinabilir', name: 'Taşınabilir', cost: 4000000, genre: [8, 8, 9, 8, 7, 10], aud: [10, 10, 8] },
+    ],
+    cpus: [
+      { id: 'b16', name: '16-bit çip', cost: 1000000, tech: 3, year: 1980 },
+      { id: 'b32', name: '32-bit çip', cost: 10000000, tech: 5, year: 1993 },
+      { id: 'b64', name: '64-bit çip', cost: 50000000, tech: 6, year: 1996 },
+      { id: 'patates', name: 'Patates çip', cost: 90000000, tech: 7, year: 2005, hwEng: 4 },
+    ],
+    media: [
+      { id: 'kartus', name: 'Kartuş', cost: 3000000, tech: 2, year: 1977 },
+      { id: 'cd', name: 'CD-ROM', cost: 5000000, tech: 4, year: 1992 },
+      { id: 'dvd', name: 'DVD-ROM', cost: 15000000, tech: 6, year: 1999 },
+      { id: 'bd', name: 'BD-ROM', cost: 35000000, tech: 7, year: 2006 },
+      { id: 'delikli', name: 'Delikli kart', cost: 93999900, tech: 7, year: 1976, hwEng: 6 },
+    ],
+    expectedTech: [[1977, 1], [1985, 2], [1990, 3], [1994, 4], [2000, 5], [2005, 6], [2013, 7]],
+    pointsK: 1.2, phases: ['Prototip', 'Seri üretim'],
+    fanLossWeeks: 12, fanLossPct: 0.03,
+    B: 60000, decay: 0.985, qualityK: 0.25, qualityMin: 0.4, qualityMax: 1.6, ownGameBoost: 0.05,
+    marginPerUnit: 15, licencePerMillion: 20000, ownDevCost: 5000, stopBelow: 200,
+  },
 
   workstations: {
     _tag: 'P',
@@ -283,6 +363,9 @@ export const PACK = {
     { id: 'boyut_buyuk', name: 'Büyük oyun', rp: 120, cost: 120000, weeks: 10, year: 1985, requires: 'boyut_orta' },
     { id: 'boyut_aaa', name: 'AAA oyun', rp: 300, cost: 600000, weeks: 16, year: 1995, requires: 'boyut_buyuk' },
     { id: 'boyut_mmo', name: 'MMO', rp: 500, cost: 1000000, weeks: 20, year: 1998, requires: 'boyut_aaa' }, // L (500 RP)
+    { id: 'oda_qa', name: 'Kalite güvence odası', rp: 30, cost: 20000, weeks: 4, year: 1979 },
+    { id: 'oda_uzman', name: 'Uzman odalar (grafik, ses)', rp: 50, cost: 40000, weeks: 6, year: 1980 },
+    { id: 'donanim_lab', name: 'Donanım laboratuvarı', rp: 800, cost: 5000000, weeks: 20, year: 1988 }, // L (GDT rehberi: 800 RP, 5M)
     { id: 'uzaktan', name: 'Uzaktan çalışma altyapısı', rp: 50, cost: 30000, weeks: 4, year: 2019 },
     // Motor özellikleri: v seviyesi → RP/süre/maliyet/motor puanı researchV'den gelir.
     { id: 'f_metin', name: 'Motor: Metin arayüzü', v: 1, year: 1976, engine: true },
@@ -356,7 +439,7 @@ export const PACK = {
     _tag: 'P',
     eventScaleBase: 0.2, eventScalePerStaff: 0.12, eventScaleMin: 0.3, eventScaleMax: 5,
     base: 5, perStaff: 0.55, perYear: 0.55, crunch: 15, debt: 12, stressK: 0.18, heatDecay: 1.2, max: 100,
-    eventBase: 36, eventRand: 48, eventKaosDiv: 28, // V (36+48r) / P (kaosla sıklaşma)
+    eventBase: 36, eventRand: 48, eventKaosDiv: 45, eventMinGap: 8, // V (36+48r) / P (kaosla sıklaşma)
     visualThresholds: [30, 55, 80],
   },
 
