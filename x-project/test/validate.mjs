@@ -1,0 +1,117 @@
+// Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
+// "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
+import { PACK } from '../src/data/pack.js';
+import { createState, makeGame } from '../src/game.js';
+import * as M from '../src/models.js';
+import { runBot } from './bot.mjs';
+
+let pass = 0, fail = 0;
+const check = (name, ok, info = '', kind = 'Tutarlılık') => {
+  ok ? pass++ : fail++;
+  console.log(`${ok ? '✔' : '✘'} [${kind}] ${name}${info ? ' — ' + info : ''}`);
+};
+const ctxAt = (year, difficulty = 'kolay', prestige = 0) => {
+  const st = createState({ difficulty, length: 30 });
+  st.week = Math.round((year - 1976) * 48);
+  st.prestige = prestige;
+  return makeGame(st).ctx;
+};
+
+// 1) Hedef tablosu (V)
+const c76 = ctxAt(1976), c85 = ctxAt(1985), c94 = ctxAt(1994);
+check('H(1976)=40', Math.abs(M.H(c76) - 40) < 0.5, M.H(c76).toFixed(1), 'Veri tekrarı');
+check('H(1985)=363', Math.abs(M.H(c85) - 363) < 2, M.H(c85).toFixed(1), 'Veri tekrarı');
+check('H(1994)=1334', Math.abs(M.H(c94) - 1334) < 3, M.H(c94).toFixed(1), 'Veri tekrarı');
+check('τ teknik 1976 = 1,125', M.tau(c76, 'tek') === 1.125, '', 'Veri tekrarı');
+
+// 2) Disiplin ağırlıkları toplamı 1
+for (const g of PACK.genres) {
+  const s = Object.values(g.disc).reduce((a, b) => a + b, 0);
+  check(`${g.name} ağırlık toplamı 1`, Math.abs(s - 1) < 0.002, s.toFixed(3));
+  check(`${g.name} 9 görev`, g.mission.length === 9 && g.hint.length === 9);
+}
+
+// 3) Not: hedefin %100'ü ~98, %50'si ~49 (MGT2 yapısı)
+const proj = (ctx, frac) => {
+  const g = PACK.genres.find((x) => x.id === 'aksiyon');
+  const p = { genre: 'aksiyon', sub: 'macera', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'orta', engineId: null, bugs: 0, points: {}, alloc: [] };
+  // ideal hizalama: payA = w_d
+  const share = { oyn: 0, gfx: 0, ses: 0, tek: 0 };
+  PACK.missions.forEach((m) => (share[m.disc] += 1));
+  p.alloc = PACK.missions.map((m) => (g.disc[m.disc] / share[m.disc]) * 100);
+  for (const d of ['oyn', 'gfx', 'ses', 'tek']) p.points[d] = M.target(ctx, d, 'orta') * frac;
+  return p;
+};
+const fitCtx = ctxAt(1985, 'zor');
+const pFull = proj(fitCtx, 1), pHalf = proj(fitCtx, 0.5);
+const F = M.fitFactor(fitCtx, pFull);
+const rFull = M.review(fitCtx, pFull).score / F, rHalf = M.review(fitCtx, pHalf).score / F;
+check('Hedefin %100ü → ~98', rFull >= 97 && rFull <= 100.5, rFull.toFixed(1), 'MGT2 yapısı');
+check('Hedefin %50si → ~49', Math.abs(rHalf - 49) < 1.5, rHalf.toFixed(1), 'MGT2 yapısı');
+
+// 4) Prestij eşiği: P=3 aynı puanı 99'dan ~72'ye indirir
+const cP3 = ctxAt(1985, 'zor', 3);
+const r3 = M.review(cP3, pFull).score / F;
+check('P=3 → ~72', Math.abs(r3 - 72) < 2.5, r3.toFixed(1), 'Tasarım davranışı (P)');
+
+// 5) 22 kişi Ocak 1976 Efsanevi, 1 aylık proje → hedefin %98'i
+{
+  const ctx = ctxAt(1976, 'efsanevi');
+  const n = 22;
+  const per = M.personWeekly(ctx, { skill: 35, morale: 100, trait: null }, n);
+  const total = per * n * 4;
+  const need = ['oyn', 'gfx', 'ses'].reduce((s, d) => s + M.target(ctx, d, 'orta'), 0) + M.target(ctx, 'tek', 'orta');
+  check('22 kişi Oca 1976 Efsanevi hedefi yakalar', Math.abs(total - need) / need < 0.05, `${total.toFixed(0)} / ${need.toFixed(0)}`, 'Kalibrasyon');
+}
+
+// 6) Satış ölçeği (yeniden kalibrasyon, P): 1992 yerleşik hit ≈ 40 bin/hafta, 1977 garaj iyi oyun ≈ 300/hafta
+{
+  const ctx = ctxAt(1992, 'orta');
+  ctx.state.fans = 100000; ctx.state.prestige = 2;
+  const g = { score: 90, price: 35, hype: 50, ipValue: 1, publisherPower: 90, size: 'orta', genre: 'aksiyon', audience: 'genc' };
+  g.platforms = M.activePlatforms(ctx).map((p) => p.id);
+  const all = Object.values(M.peakWeekly(ctx, g)).reduce((a, b) => a + b, 0);
+  check('1992 yerleşik hit 20–60 bin/hafta', all > 20000 && all < 60000, all.toFixed(0), 'Kalibrasyon');
+  const one = M.peakWeekly(ctx, { ...g, platforms: ['snes'] }).snes;
+  check('Tek platform daha az satar', one < all, one.toFixed(0));
+  const c77 = ctxAt(1977, 'orta');
+  const early = M.peakWeekly(c77, { score: 75, price: 20, hype: 10, ipValue: 0, publisherPower: 55, size: 'kucuk', genre: 'aksiyon', audience: 'genc', platforms: ['pc', 'ataro'] });
+  const e = Object.values(early).reduce((a, b) => a + b, 0);
+  check('1977 garaj iyi oyun 100–800/hafta', e > 100 && e < 800, e.toFixed(0), 'Kalibrasyon');
+}
+
+// 7) Fiyat tatlı noktası: 35 $ referansında gelir/fiyat dengesi
+{
+  const ctx = ctxAt(1992, 'kolay');
+  const rev = (price) => { const g = { score: 80, price, hype: 30, ipValue: 1, publisherPower: 80, platforms: ['pc'], size: 'orta', genre: 'rpg', audience: 'yetiskin' }; return M.peakWeekly(ctx, g).pc * price; };
+  check('Düşük fiyat daha çok adet ama esneklik 1,5', rev(20) > rev(50), `${rev(20).toFixed(0)} > ${rev(50).toFixed(0)}`, 'Kaba tutarlılık');
+}
+
+// 8) Hafta eğrisi
+{
+  const ctx = ctxAt(1990);
+  check('Hafta eğrisi 0,6 / 0,85 / 1 / 0,85', [0, 1, 2, 3].map((n) => M.weekCurve(ctx, n)).join() === '0.6,0.85,1,0.85', '', 'Veri tekrarı');
+}
+
+// 9) Olay paketinin bütünlüğü
+for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.choices) && e.choices.length > 0);
+
+// 10) Deterministik RNG: aynı tohum + aynı eylemler = aynı sonuç
+{
+  const a = runBot({ seed: 42, difficulty: 'orta', years: 6 }), b = runBot({ seed: 42, difficulty: 'orta', years: 6 });
+  check('Tohumlu RNG tekrarlanabilir', a.cash === b.cash && a.games === b.games, `${a.cash} = ${b.cash}`);
+}
+
+// 11) Duman testi: basit bot
+{
+  const med = runBot({ seed: 7, difficulty: 'orta', years: 20 });
+  console.log('   Orta  :', med);
+  check('Orta: 20 yılda batmaz', !med.over || med.over === 'son', med.over || '', 'Duman');
+  check('Orta: aşırı zengin değil (< 50 M)', med.cash < 50e6, (med.cash / 1e6).toFixed(1) + ' M', 'Duman');
+  const leg = runBot({ seed: 7, difficulty: 'efsanevi', years: 20 });
+  console.log('   Efsane:', leg);
+  check('Efsanevi, Orta’dan zor', leg.cash < med.cash, '', 'Duman');
+}
+
+console.log(`\n${pass} geçti, ${fail} kaldı.`);
+process.exit(fail ? 1 : 0);

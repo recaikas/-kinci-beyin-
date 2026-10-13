@@ -1,0 +1,1 @@
+{"type":"module","name":"x-project","private":true,"scripts":{"test":"node test/validate.mjs","start":"node tools/serve.mjs"}}
