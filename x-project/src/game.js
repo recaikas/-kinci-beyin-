@@ -21,7 +21,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
     office: { tier: 1, floors: 0 }, rooms: [], consoles: [], consoleJob: null, stationTier: 0, stationDown: 0, rentMult: 1,
     staff: [], applicants: [], nextId: 1,
     research: { done: {}, current: null, rp: 0 }, engines: [], engineJob: null, usedFeatures: {},
-    projects: [], knowledge: {}, cashHist: [], salesHist: [], contract: null, contractOffers: [], games: [], ips: [], charts: [], awards: [],
+    projects: [], knowledge: {}, cashHist: [], salesHist: [], rivalGames: [], top: [], contract: null, contractOffers: [], games: [], ips: [], charts: [], awards: [],
     fans: 0, prestige: 0, reputation: 0, kaos: 0, heat: 0, crunch: false,
     marketMods: [], gameMods: [], erasFired: {}, trend: null, rivals: [],
     loans: [], debtWeeks: 0, flags: {},
@@ -40,6 +40,8 @@ function migrate(state) {
   state.knowledge ||= {};
   state.cashHist ||= [];
   state.salesHist ||= [];
+  state.rivalGames ||= [];
+  state.top ||= [];
   state.version = 3;
 }
 
@@ -94,6 +96,7 @@ export function makeGame(state, pack = PACK) {
       Market.weeklySales(ctx);
       Market.weeklyTrend(ctx);
       Market.weeklyRivals(ctx);
+      Market.weeklyCharts(ctx);
       // ekonomi
       if (newMonth) {
         Eco.monthlyEconomy(ctx);

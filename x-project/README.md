@@ -45,6 +45,7 @@ Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi
 - **Çoklu proje (MGT)**: her geliştirme odası kendi oyununu yapar; bir oda "Destek" moduyla başka projeye katılabilir. Uzman odalar ve QA projelere bölünür
 - **Oyun raporu ve bilgi (GDT)**: her yayından sonra konu×tür, konu×kitle, platform×tür uyumu ve zaman dağılımı dersleri; sihirbazda rozet olarak görünür
 - **Yayın sonrası**: güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket
+- **Satış listesi (MGT)**: rakip oyunlar da satar; her hafta en çok satan 10 oyun, sıra değişimi ▲▼, en iyi sıra. Sahnede satıştaki oyunların kartları, üst çubukta en çok satan oyun
 - **Grafikler**: stüdyonun haftalık geliri, oyun başına haftalık satış, aylık kasa, yıllık kâr/zarar
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
@@ -55,7 +56,7 @@ Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi
 | Zorluk | Sonuç |
 |---|---|
 | Kolay | 73–94 M $, 30 kişi |
-| Orta | 11–18 M $, 34 kişi |
+| Orta | 12–26 M $, 20 yılda 4–8 Yılın Oyunu |
 | Zor / Efsanevi | Bot garajdan çıkamadan batıyor |
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.

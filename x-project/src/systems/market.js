@@ -1,6 +1,6 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp } from '../kernel.js';
-import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById } from '../models.js';
+import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty } from '../models.js';
 import { roomOf } from './staff.js';
 import { learn } from './knowledge.js';
 
@@ -90,7 +90,8 @@ function weekMult(ctx, game) {
   const month = Math.floor((state.week % 48) / 4) + 1;
   if (month === s.christmasMonth) m *= s.christmasMult;
   if (state.trend && (state.trend.genre === game.genre || state.trend.topic === game.topic)) m *= s.trendMult;
-  const recentRival = state.charts.some((c) => !c.mine && c.genre === game.genre && state.week - c.week < 8);
+  // Rekabet: son 4 haftada aynı türde senden iyi not almış bir rakip çıktıysa satış biraz düşer.
+  const recentRival = state.charts.some((c) => !c.mine && c.genre === game.genre && state.week - c.week < 4 && c.score >= game.score);
   if (recentRival) m *= s.rivalSameGenreMult;
   const newer = state.games.find((g) => g !== game && g.ipId === game.ipId && g.releasedWeek > game.releasedWeek && g.active);
   if (newer) m *= s.sequelOverlapMult;
@@ -122,6 +123,7 @@ export function weeklySales(ctx) {
       rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * inflation(ctx) ** 0.5);
     }
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
+    (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
     (g.hist ||= []).push(units); if (g.hist.length > 104) g.hist.shift();
     if (g.mmo) g.subs += units * pack.mmo.subPerUnit;
     if (rev) { ledger.post('satis', Math.round(rev), g.name); total += rev; }
@@ -165,6 +167,13 @@ export function initRivals(ctx) {
     const name = names.splice(rng.int(0, names.length - 1), 1)[0];
     return { id: state.nextId++, name, rep: rng.int(...r.repRange), nextRelease: rng.int(...r.releaseWeeks), acquired: false, games: 0, lastScore: 0 };
   });
+  // Pazar boş başlamasın: her rakibin rafta zaten bir oyunu var (rastgele haftada).
+  for (const rv of state.rivals) {
+    const score = Math.round(clamp(rng.normal(rv.rep + 5, r.scoreSpread), 20, 95));
+    const s = pack.sales, power = rv.rep / 100;
+    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
+    state.rivalGames.push({ id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: rng.pick(pack.genres).id, weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true });
+  }
 }
 export function rivalPrice(ctx, rv) {
   const r = ctx.pack.rivals;
@@ -189,14 +198,46 @@ export function weeklyRivals(ctx) {
   for (const rv of state.rivals) {
     if (--rv.nextRelease > 0) continue;
     rv.nextRelease = rng.int(...r.releaseWeeks);
-    const score = Math.round(clamp(rng.normal(rv.rep + 10, r.scoreSpread), 15, 99));
+    const score = Math.round(clamp(rng.normal(rv.rep + r.scoreBias, r.scoreSpread), 15, 99));
     rv.rep = clamp(rv.rep + (score - 70) / 12, 5, 99);
     rv.games++; rv.lastScore = score;
     const genre = rng.pick(pack.genres).id;
     const name = `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}${rng.chance(0.3) ? ' ' + rng.int(2, 5) : ''}`;
     state.charts.unshift({ name, studio: rv.name + (rv.acquired ? ' (sizin)' : ''), score, week: state.week, mine: rv.acquired, genre });
+    // Satış listesi için rakip oyunun haftalık satış zirvesi (stüdyo gücü + not + pazar büyüklüğü)
+    const s = pack.sales, power = rv.rep / 100;
+    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
+    state.rivalGames.push({ id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true });
   }
   if (state.charts.length > 40) state.charts.length = 40;
+  // Rakip oyunların bu haftaki satışı
+  const mult = eraMult(ctx, 'salesMult');
+  for (const g of state.rivalGames) {
+    if (!g.active) continue;
+    const c = weekCurve(ctx, g.weeks, false);
+    if (c < pack.sales.stopAt) { g.active = false; g.lastWeek = 0; continue; }
+    g.lastWeek = Math.round(g.peak * c * mult); g.units += g.lastWeek; g.weeks++;
+  }
+  state.rivalGames = state.rivalGames.filter((g) => g.active || state.week - g.weeks < 200).slice(-80);
+}
+
+// MGT tarzı haftalık satış listesi: oyuncunun ve rakiplerin satıştaki oyunları bu haftaki satışa göre sıralanır.
+export function weeklyCharts(ctx) {
+  const { state, pack } = ctx;
+  const entries = [
+    ...state.games.filter((g) => g.active && g.weeks > 0).map((g) => ({ ref: g, studio: state.companyName, mine: true })),
+    ...state.rivalGames.filter((g) => g.active && g.weeks > 0).map((g) => ({ ref: g, studio: g.studio, mine: false })),
+  ].sort((a, b) => b.ref.lastWeek - a.ref.lastWeek);
+  for (const g of state.games) if (!g.active) g.rank = null;
+  entries.forEach((e, i) => {
+    const g = e.ref;
+    g.prevRank = g.rank ?? null; g.rank = i + 1;
+    g.bestRank = Math.min(g.bestRank ?? 999, g.rank);
+    if (e.mine) { (g.rankHist ||= []).push(g.rank); if (g.rankHist.length > pack.rivals.rankHistMax) g.rankHist.shift(); }
+    if (e.mine && g.weeks === 1) ctx.news(`📊 "${g.name}" satış listesine #${g.rank}'den girdi!`, g.rank <= 3 ? 'good' : 'info');
+    if (e.mine && g.rank === 1 && g.prevRank && g.prevRank > 1) ctx.news(`👑 "${g.name}" listenin zirvesinde!`, 'good');
+  });
+  state.top = entries.slice(0, pack.rivals.topN).map((e) => ({ id: e.ref.id, name: e.ref.name, studio: e.studio, units: e.ref.lastWeek, mine: e.mine, rank: e.ref.rank, prev: e.ref.prevRank }));
 }
 export function monthlySubsidiaries(ctx) {
   const { state, pack, ledger } = ctx;

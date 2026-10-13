@@ -17,7 +17,9 @@ const SPEEDS = [1, 2, 4, 8];
 const kaosLabel = (k) => (k < 30 ? 'Sakin' : k < 55 ? 'Gergin' : k < 80 ? 'Kaotik' : 'Cehennem');
 const store = (fn) => { try { return fn(window.localStorage); } catch { return null; } };
 const MENU = [['gelistir', 'Geliştir'], ['personel', 'Personel'], ['ofis', 'Ofis'], ['arge', 'Ar-Ge'], ['pazar', 'Pazar'], ['finans', 'Finans'], ['gunluk', 'Günlük']];
-const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Son çıkanlar'], ['rakip', 'Rakipler']] };
+const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']] };
+// Liste sırası değişimi: ▲ yükseldi, ▼ düştü, YENİ ilk hafta.
+const move = (g) => (g.prev == null ? '<i class="new">YENİ</i>' : g.rank < g.prev ? `<i class="up">▲${g.prev - g.rank}</i>` : g.rank > g.prev ? `<i class="down">▼${g.rank - g.prev}</i>` : '<i>–</i>');
 
 export function boot(root, hotData = {}) {
   const app = {
@@ -26,7 +28,7 @@ export function boot(root, hotData = {}) {
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
-  const el = { stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
+  const el = { market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
   const draw = makeRenderer(el.canvas);
   const G = () => app.game;
   const ctx = () => app.game.ctx;
@@ -88,6 +90,7 @@ export function boot(root, hotData = {}) {
   }
   function render() {
     renderHud();
+    renderMarket();
     renderMenu();
     if (app.win) {
       const a = document.activeElement;
@@ -124,10 +127,12 @@ export function boot(root, hotData = {}) {
     set('speed', `${app.speed}×`);
     // proje sayacı (GDT): yapı yalnızca proje değişince kurulur
     const pj = s.projects[0], slot = f('proj');
-    const key = pj ? `p${pj.id}:${s.projects.length}` : 'none';
+    const best = !pj && s.games.filter((g) => g.active && g.rank).sort((a, b) => a.rank - b.rank)[0];
+    const key = pj ? `p${pj.id}:${s.projects.length}` : best ? `s${best.id}:${best.rank}:${best.lastWeek}` : 'none';
     if (slot.dataset.key !== key) {
       slot.dataset.key = key;
       slot.innerHTML = pj ? `<button class="proj" data-open="gelistir"><span class="pname"></span>${s.projects.length > 1 ? `<em class="more">+${s.projects.length - 1} proje</em>` : ''}<span class="counters">${['oyn', 'gfx', 'ses', 'tek'].map((d) => `<b class="num c-${d}" title="${discName(d)}" data-d="${d}"></b>`).join('')}<b class="num c-bug" title="Hata" data-d="bug"></b></span><span class="bar prog"><i></i></span></button>`
+        : best ? `<button class="proj sale" data-open="gelistir"><span class="pname">Satışta: ${esc(best.name)}</span><span class="rk">#${best.rank} ${move({ rank: best.rank, prev: best.prevRank })}</span><small class="muted">${fmt(best.lastWeek)} kopya bu hafta · toplam ${fmt(best.units)} · yeni oyun başlat</small></button>`
         : '<button class="proj idle" data-open="gelistir"><span>Proje yok</span><small>Yeni oyun başlat</small></button>';
     }
     if (pj) {
@@ -136,6 +141,26 @@ export function boot(root, hotData = {}) {
       slot.querySelector('.bar i').style.width = `${pj.status === 'dev' ? pct((pj.week / pj.totalWeeks) * 100) : 100}%`;
     }
   }
+
+  // --- MGT tarzı satış kartları: satıştaki en iyi 3 oyun, sıra, haftalık satış, son 12 haftanın çubukları
+  function renderMarket() {
+    const s = G()?.state;
+    if (!s) return setHTML(el.market, '');
+    const live = s.games.filter((g) => g.active && g.weeks > 0).sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 3);
+    setHTML(el.market, live.map((g) => {
+      const h = (g.hist || []).slice(-12), max = Math.max(1, ...h), w = 100 / Math.max(12, h.length);
+      const bars = h.map((v, i) => `<rect x="${i * w + 0.5}" y="${18 - (v / max) * 17}" width="${w - 1}" height="${Math.max(1, (v / max) * 17)}"/>`).join('');
+      return `<button class="mcard" data-mgame="${g.id}" title="${esc(g.name)}"><span class="rk ${g.rank <= 3 ? 'top' : ''}">#${g.rank || '–'}</span><span class="nm">${esc(g.name)}</span>
+        <span class="wk">${fmt(g.lastWeek)}/hf ${move({ rank: g.rank, prev: g.prevRank })}</span><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true">${bars}</svg></button>`;
+    }).join(''));
+  }
+  // Kartlar her hafta yenilenir; tıklama kaybolmasın diye pointerdown ile açılır.
+  el.market.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('[data-mgame]');
+    if (!b || !G()) return;
+    e.preventDefault();
+    app.sub.pazar = 'oyunlar'; app.selGame = +b.dataset.mgame; openWin('pazar');
+  });
 
   // --- alt menü: düğmeler bir kez kurulur; rozet ve seçili durum yerinde güncellenir.
   const icons = Object.fromEntries(MENU.map(([id]) => [id, menuIcon(id)]));
@@ -416,7 +441,7 @@ export function boot(root, hotData = {}) {
   }
 
   // ---------- GRAFİKLER: tek seri, ortak bir y ekseni, üzerine gelince çizgi + değer (kayıtlı veri app.charts'ta)
-  function chart(id, values, { labels = [], fmtv = fmt, color = 'var(--sky)', kind = 'line', h = 150 } = {}) {
+  function chart(id, values, { labels = [], fmtv = fmt, color = 'var(--sky)', kind = 'line', h = 150, barCls = '' } = {}) {
     if (!values.length) return '<p class="muted small">Henüz veri yok.</p>';
     app.charts[id] = { values, labels, fmtv };
     const W = 600, H = h, pl = 54, pr = 10, pt = 10, pb = 22;
@@ -427,7 +452,7 @@ export function boot(root, hotData = {}) {
     let marks = '';
     if (kind === 'bar') {
       const bw = Math.max(4, Math.min(28, (W - pl - pr) / values.length - 4));
-      marks = values.map((v, i) => { const x0 = pl + ((i + 0.5) * (W - pl - pr)) / values.length - bw / 2; const top = Math.min(y(v), y(0)), hh = Math.max(1, Math.abs(y(v) - y(0))); return `<rect x="${x0}" y="${top}" width="${bw}" height="${hh}" rx="2" class="${v < 0 ? 'neg' : 'pos'}"/>`; }).join('');
+      marks = values.map((v, i) => { const x0 = pl + ((i + 0.5) * (W - pl - pr)) / values.length - bw / 2; const top = Math.min(y(v), y(0)), hh = Math.max(1, Math.abs(y(v) - y(0))); return `<rect x="${x0}" y="${top}" width="${bw}" height="${hh}" rx="2" class="${barCls || (v < 0 ? 'neg' : 'pos')}"/>`; }).join('');
     } else {
       const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
       marks = `<polygon points="${pl},${y(Math.max(0, min))} ${pts} ${x(values.length - 1)},${y(Math.max(0, min))}" fill="${color}" opacity="0.14"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>
@@ -479,14 +504,24 @@ export function boot(root, hotData = {}) {
     return `<div class="foot"><button class="ghost" data-act="back-game">← Oyunlar</button><span></span></div>
       <div class="proj-head"><div><h2>${esc(gm.name)}</h2><p class="muted small">${PACK.genres.find((x) => x.id === gm.genre).name} · ${gm.year} · ${gm.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ')} · ${gm.price} $</p></div>
         <div class="forecast"><small>Not</small><b class="num">${gm.score}</b></div></div>
-      <div class="kv"><span>Kopya</span><b class="num">${fmt(gm.units)}</b><span>Gelir</span><b class="num">${money(gm.revenue)}</b><span>Rafta</span><b>${gm.weeks} hafta${gm.active ? '' : ' (bitti)'}</b><span>Güncelleme</span><b>${gm.patches || 0}/${P.patchMax}</b></div>
+      <div class="stats4">
+        <div><small>Bu hafta</small><b class="num">${gm.active ? fmt(gm.lastWeek) : '—'}</b></div>
+        <div><small>Liste sırası</small><b class="num">${gm.active && gm.rank ? `#${gm.rank}` : '—'}</b>${gm.active && gm.rank ? move({ rank: gm.rank, prev: gm.prevRank }) : ''}<small>en iyi #${gm.bestRank && gm.bestRank < 999 ? gm.bestRank : '–'}</small></div>
+        <div><small>Toplam kopya</small><b class="num">${fmt(gm.units)}</b></div>
+        <div><small>Toplam gelir</small><b class="num">${money(gm.revenue)}</b></div>
+      </div>
+      <p class="muted small">Rafta ${gm.weeks} hafta${gm.active ? '' : ' (bitti)'} · güncelleme ${gm.patches || 0}/${P.patchMax} · ${gm.publisherId ? `yayıncı: ${esc(PACK.publishers.find((x) => x.id === gm.publisherId)?.name || '')}, pay %${Math.round((gm.royalty || 0) * 100)}` : 'kendi yayının'}</p>
       ${gm.critics?.[0]?.quote ? `<section class="box"><h3>Eleştirmenler</h3><ul class="quotes">${gm.critics.map((k) => `<li><b class="num">${String(k.score).replace('.', ',')}</b><span>${esc(k.name)}: “${esc(k.quote)}”</span></li>`).join('')}</ul>${gm.review?.genreNote ? `<p class="muted small">“${esc(gm.review.genreNote)}”</p>` : ''}</section>` : ''}
-      <section class="box"><h3>Haftalık satış (kopya)</h3>${chart('game' + gm.id, gm.hist || [], { labels: wk })}</section>
+      <section class="box"><h3>Haftalık satış (kopya)</h3>${chart('game' + gm.id, gm.hist || [], { labels: wk, kind: 'bar', barCls: 'sky' })}</section>
+      <section class="box"><h3>Haftalık gelir</h3>${chart('rev' + gm.id, gm.revHist || [], { labels: wk.slice(-(gm.revHist || []).length), fmtv: money, color: 'var(--mint)' })}</section>
+      <section class="box"><h3>Platformlara göre</h3><div class="split-bars">${Object.entries(gm.sold || {}).sort((a, b) => b[1] - a[1]).map(([pid, u]) => `<div><span>${esc(M.platformById(c, pid)?.name || pid)}</span>${bar(gm.units ? (u / gm.units) * 100 : 0, 'prog')}<b class="num">${fmt(u)}</b></div>`).join('')}</div></section>
       <section class="box"><h3>Yayın sonrası</h3>${actions}${port}${exp}</section>`;
   }
   function winMarket(sub) {
     const s = G().state, c = ctx();
-    if (sub === 'liste') return `<ol class="charts">${s.charts.slice(0, 15).map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)}</small></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ol>`;
+    if (sub === 'liste') return `<p class="muted small">Bu haftanın en çok satan ${PACK.rivals.topN} oyunu (senin ve rakiplerin). Senin oyunların vurgulu.</p>
+      <ol class="toplist">${(s.top || []).map((t) => `<li class="${t.mine ? 'mine' : ''}"><span class="r">${t.rank}</span>${move(t)}<span>${esc(t.name)}<small>${esc(t.studio)}</small></span><b class="num">${fmt(t.units)}</b></li>`).join('') || '<li class="muted">Henüz satışta oyun yok.</li>'}</ol>`;
+    if (sub === 'cikanlar') return `<ol class="charts">${s.charts.slice(0, 15).map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)}</small></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ol>`;
     if (sub === 'rakip') return s.rivals.map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('');
     const gm = app.selGame && s.games.find((x) => x.id === app.selGame);
     if (gm) return gameDetail(gm);
@@ -494,11 +529,11 @@ export function boot(root, hotData = {}) {
     const mods = s.marketMods.map((m) => { const e = PACK.eras.find((x) => x.id === m.id); return `<span class="pill ${m.salesMult < 1 ? 'warn' : ''}">${esc(e.title)} · satış ×${m.salesMult}</span>`; }).join('');
     const hist = s.salesHist.slice(-104);
     const labels = hist.map((h) => `Y${Math.floor(h.w / 48) + 1} A${Math.floor((h.w % 48) / 4) + 1}`);
-    const games = [...s.games].reverse().map((x) => `<tr class="${x.active ? '' : 'dim'} click" data-game="${x.id}"><td>${esc(x.name)}${x.expansion ? ' <small>ek</small>' : x.portOf ? ' <small>port</small>' : ''}</td><td class="num">${x.score}</td><td>${spark((x.hist || []).slice(-26))}</td><td class="num">${fmt(x.units)}</td><td class="num">${money(x.revenue)}</td></tr>`).join('');
+    const games = [...s.games].reverse().map((x) => `<tr class="${x.active ? '' : 'dim'} click" data-game="${x.id}"><td>${esc(x.name)}${x.expansion ? ' <small>ek</small>' : x.portOf ? ' <small>port</small>' : ''}</td><td class="num">${x.score}</td><td class="num">${x.active && x.rank ? '#' + x.rank : '—'}</td><td>${spark((x.hist || []).slice(-26))}</td><td class="num">${x.active ? fmt(x.lastWeek) : '—'}</td><td class="num">${fmt(x.units)}</td><td class="num">${money(x.revenue)}</td></tr>`).join('');
     return `<div class="btns"><span class="pill">Trend: ${esc(tr)}</span>${mods}</div>
       <section class="box"><h3>Stüdyonun haftalık geliri (son 2 yıl)</h3>${chart('sales', hist.map((h) => h.r), { labels, fmtv: money, color: 'var(--mint)' })}</section>
       <p class="muted small">Ayrıntı, güncelleme, port ve ek paket için bir oyuna dokun.</p>
-      <div class="scroll"><table><thead><tr><th>Oyun</th><th>Not</th><th>Son 6 ay</th><th>Kopya</th><th>Gelir</th></tr></thead><tbody>${games || '<tr><td colspan="5" class="muted">Henüz oyun yok.</td></tr>'}</tbody></table></div>`;
+      <div class="scroll"><table><thead><tr><th>Oyun</th><th>Not</th><th>Sıra</th><th>Son 6 ay</th><th>Bu hf</th><th>Kopya</th><th>Gelir</th></tr></thead><tbody>${games || '<tr><td colspan="7" class="muted">Henüz oyun yok.</td></tr>'}</tbody></table></div>`;
   }
 
   // ---------- FİNANS

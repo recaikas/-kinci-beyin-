@@ -97,5 +97,6 @@ export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = fa
     staff: state.staff.length, fans: state.fans, prestige: state.prestige, kaos: Math.round(state.kaos), office: state.office.tier,
   };
   if (verbose) console.log(r, state.ledger.total);
+  r.state = state;
   return r;
 }

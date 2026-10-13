@@ -467,8 +467,10 @@ export const PACK = {
   rivals: {
     _tag: 'P',
     names: ['Kodzilla Games', 'Pikselhane', 'Bit Kafe Stüdyo', 'Ejderha Yazılım', 'Mavi Kutu Interactive', 'Gece Kuşu Oyun', 'Kuantum Patates', 'Sarı Ördek Labs'],
-    count: 6, repRange: [30, 70], releaseWeeks: [20, 60], scoreSpread: 14,
+    count: 8, repRange: [30, 70], releaseWeeks: [14, 40], scoreSpread: 12, scoreBias: 4,
     acquireMin: 2000000, acquireYears: 8, monthlyCostShare: 0.004, profitPerRep: 12000,
+    // Rakip oyun satışı (MGT satış listesi için, P): stüdyo gücü ve nota göre zirve, oyuncuyla aynı hafta eğrisi
+    salesPeakK: 0.7, sizePick: [0.55, 1.0, 1.7], topN: 10, rankHistMax: 104,
     gameNamesA: ['Süper', 'Mega', 'Karanlık', 'Neon', 'Ölümsüz', 'Küçük', 'Kayıp', 'Çılgın', 'Son', 'Gizli'],
     gameNamesB: ['Macera', 'Savaşçı', 'Krallık', 'Galaksi', 'Rüya', 'Ejderha', 'Robot', 'Şehir', 'Labirent', 'Efsane'],
   },
