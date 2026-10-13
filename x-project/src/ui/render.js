@@ -18,9 +18,10 @@ const ICON = {
   ses: ['..xxx', '..x.x', '..x..', 'xxx..', 'xxx..'], qa: ['x.x.x', '.xxx.', 'xxxxx', '.xxx.', 'x.x.x'],
   arastirma: ['.xxx.', '..x..', '.xxx.', 'xxxxx', 'xxxxx'], mola: ['.....', 'x...x', 'xxxxx', 'xxxxx', 'x...x'],
   donanim: ['x.x.x', 'xxxxx', 'xx.xx', 'xxxxx', 'x.x.x'],
+  sun: ['.xxx.', 'xxxxx', '..x..', '..x..', '.xx..'], bolt: ['..xx.', '.xx..', 'xxxx.', '..xx.', '.xx..'],
   pazarlama: ['....x', '..xxx', 'xxxxx', '..xxx', '....x'], musteri: ['.xxx.', 'x...x', 'x...x', 'xx.xx', '.....'],
 };
-const ICON_COLOR = { heart: '#ff6fa8', drop: '#5fb8ff', skull: '#5a4a6a', cloud: '#7a7a8f', fire: '#ff8a3d', zzz: '#8f86c9', book: '#d9a03f', plus: '#ff5a5a' };
+const ICON_COLOR = { heart: '#ff6fa8', drop: '#5fb8ff', skull: '#5a4a6a', cloud: '#7a7a8f', fire: '#ff8a3d', zzz: '#8f86c9', book: '#d9a03f', plus: '#ff5a5a', sun: '#ffb02e', bolt: '#e0a000' };
 
 const mix = (a, b, t) => {
   const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -70,6 +71,8 @@ export function makeRenderer(canvas) {
     if (p.status === 'tukenmis') e = 'skull';
     else if (p.status === 'hasta') e = 'plus';
     else if (p.status === 'egitim') e = 'book';
+    else if (p.status === 'tatil') e = 'sun';
+    else if (state.rel && frame % 120 < 40 && state.staff.some((x) => x !== p && x.room === p.room && (state.rel[p.id < x.id ? `${p.id}|${x.id}` : `${x.id}|${p.id}`] || 0) <= -45)) e = 'bolt';
     else if (state.crunch && !resting && frame % 60 < 30) e = 'fire';
     else if (p.stress > 80) e = 'drop';
     else if (p.morale < 30) e = 'cloud';
@@ -130,9 +133,24 @@ export function makeRenderer(canvas) {
   }
   function plant(x, y) { shadow(x + 4, y + 13, 5, 2); px(x + 1, y + 8, 6, 5, '#b8683e'); px(x + 1, y + 8, 6, 1, '#d0804e'); px(x + 2, y + 2, 4, 6, '#4fa860'); px(x, y + 4, 3, 3, '#5fbf70'); px(x + 5, y + 3, 3, 4, '#3f9050'); }
 
+  // Ofis tasarımı (bina başına): zemin rengi ve dekor
+  const designFor = (state, pack, bid) => pack.designs.find((d) => d.id === (state.designs?.[bid] || 'standart')) || pack.designs[0];
+  function designDecor(d, rx, ry, rw, rh, frame) {
+    if (d.id === 'plastik') { px(rx + rw * 0.3, ry + 1, 1, 6, '#3a3030'); px(rx + rw * 0.3 + 1, ry + 6, 1, 4, '#3a3030'); if (frame % 90 < 6) { g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(rx, ry, rw, rh); } }
+    if (d.id === 'ergonomik') { px(rx + rw / 2 - 8, ry + 2, 16, 8, '#e8f6ff'); px(rx + rw / 2 - 6, ry + 7, 2, 2, '#4fa860'); px(rx + rw / 2 - 3, ry + 5, 2, 4, '#4fa860'); px(rx + rw / 2, ry + 4, 2, 5, '#4fa860'); px(rx + rw / 2 + 3, ry + 3, 2, 6, '#4fa860'); }
+    if (d.id === 'konfor') { plant(rx + rw - 12, ry + rh - 15); px(rx + rw / 2 - 5, ry + rh - 7, 10, 5, '#ffb3c9'); px(rx + rw / 2 - 4, ry + rh - 8, 8, 2, '#ffd0de'); px(rx + 4, ry + 3, 8, 6, '#ffe39a'); px(rx + 5, ry + 4, 6, 4, '#8fd3f2'); }
+    if (d.id === 'luks') {
+      const glow = frame % 40 < 20 ? '#ff8fc7' : '#ffc85a';
+      px(rx + rw / 2 - 10, ry + 2, 20, 1, glow); px(rx + rw / 2 - 10, ry + 8, 20, 1, glow); px(rx + rw / 2 - 10, ry + 2, 1, 7, glow); px(rx + rw / 2 + 9, ry + 2, 1, 7, glow);
+      g.fillStyle = 'rgba(255,200,90,0.10)'; g.fillRect(rx + 6, ry + rh - 10, rw - 12, 7);
+      px(rx + rw - 10, ry + rh - 16, 6, 12, '#d9c7a0'); px(rx + rw - 9, ry + rh - 18, 4, 3, '#ff8fc7');
+    }
+  }
   function room(rx, ry, rw, rh, r, members, cap, frame, state, pack, busy, night) {
     hits.push({ kind: 'room', id: r.id, x: rx, y: ry, w: rw, h: rh });
-    const t = pack.rooms.types.find((x) => x.id === r.type);
+    const t0 = pack.rooms.types.find((x) => x.id === r.type);
+    const des = designFor(state, pack, (pack.buildings.find((b) => b.types.includes(r.type)) || pack.buildings[0]).id);
+    const t = des.floor ? { ...t0, floor: mix(t0.floor, des.floor, 0.55) } : t0;
     const wallH = 13;
     // arka duvar (derinlik)
     px(rx, ry, rw, wallH, shade(t.floor, 1.35));
@@ -168,6 +186,7 @@ export function makeRenderer(canvas) {
       }
     }
     if (rw > 60 && r.type !== 'mola') plant(rx + 2, ry + rh - 15);
+    designDecor(des, rx, ry, rw, rh, frame);
     // bölme duvarları: kalın, üst yüz açık, yan yüz koyu
     px(rx - 2, ry - 2, rw + 4, 2, '#3a2f4c');
     px(rx - 2, ry, 2, rh, '#2a2238'); px(rx + rw, ry, 2, rh, '#2a2238');
@@ -233,7 +252,8 @@ export function makeRenderer(canvas) {
     const [t1, t2, t3] = pack.chaos.visualThresholds;
     const night = nightness(frame);
     seed = 7 + tier * 13 + (state.office.floors || 0) + state.rooms.length;
-    const [wall, wallDark, wallLight] = tier > 1 && BWALL[bld.id] ? BWALL[bld.id] : WALL[tier];
+    const bdes = designFor(state, pack, bld.id);
+    const [wall, wallDark, wallLight] = bdes.wall ? [mix(bdes.wall, '#ffffff', 0.35), bdes.wall, mix(bdes.wall, '#ffffff', 0.6)] : tier > 1 && BWALL[bld.id] ? BWALL[bld.id] : WALL[tier];
     const wallH = Math.round(H * (tier === 1 ? 0.3 : 0.17));
 
     // arka duvar
@@ -260,7 +280,7 @@ export function makeRenderer(canvas) {
     px(W - 22, 6, 12, 12, '#fff7fb'); px(W - 21, 7, 10, 10, '#f5f0e6'); px(W - 16, 9, 1, 4, '#2a2030'); px(W - 16, 12, 3, 1, '#2a2030');
     if (kaos > t2) { const cx = Math.round(W * 0.45); px(cx, 2, 1, 6, '#2a2030'); px(cx + 1, 7, 1, 5, '#2a2030'); px(cx - 1, 11, 1, 6, '#2a2030'); }
     // zemin
-    const [f1, f2] = FLOOR[tier];
+    const [f1, f2] = bdes.floor ? [mix(FLOOR[tier][0], bdes.floor, 0.6), mix(FLOOR[tier][1], bdes.floor, 0.6)] : FLOOR[tier];
     for (let y = wallH; y < H; y += 8) for (let x = (y / 8) % 2 ? -12 : 0; x < W; x += 24) px(x, y, 24, 8, ((x / 24 + y / 8) | 0) % 3 ? f1 : f2);
     g.fillStyle = 'rgba(10,6,20,0.25)'; g.fillRect(0, wallH, W, 4);
 

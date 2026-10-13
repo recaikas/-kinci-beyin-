@@ -8,7 +8,7 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 101 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 138 kalibrasyon ve tutarlılık kontrolü
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -36,7 +36,7 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 
 ## İçerik
 
-- 6 tür, 38 konu, 20 platform (1976–2032), 8 yayıncı, 5 oyun boyutu (MMO dahil)
+- 6 tür, 38 konu, 40 platform (1976–2035, bilgisayar, konsol, el konsolu, mobil), tarihten gelen yayıncılar, 5 oyun boyutu (MMO dahil)
 - 9 görevli 3 fazlı geliştirme, kaydırıcı hizası, uyum katsayısı, hata ayıklama
 - Araştırma ağacı ve GDT v tablosuyla motor yapımı, motor lisanslama
 - Kadro: beceri, moral, stres, tükenmişlik, istifa, rakibe transfer, 12 kişilik özellik, eğitim, zam
@@ -55,14 +55,24 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 - **Oyuncu raporu (GDT)**: satıştan 4 hafta sonra; oyuncuların hangi görevi sevip sevmediği, kitle, fiyat, hata, motor ve beklenti yorumu. Görev önemleri faz pencerelerinde rozet olur
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
+- **Tarihsel oyun dünyası (1976–2025)**: 50+ parodi şirket (Ataro, Pandando, Segga, Soni, MikroYumuşak, Kapkom, Konamii…) yıllara göre kurulur, güçlenir, zayıflar, birleşir ya da piyasadan çekilir. Her yılın 10 popüler oyunu (Süper Tesisatçı Kardeşler, Zelma Efsanesi, Hızlı Kirpi…) yıl içine dağılıp satış listesine girer; her ay bir tarihî olay haber olur. "50 yıl · tam tarih" modu 1976'dan 2025'e kadar oynanır. Tüm adlar telife takılmamak için parodi
+- **Yayıncılar tarihten**: güçleri o yılki şirket gücünden gelir (Ataro 1980'lerde dev, sonra yok olur); pay ve hayran şartı güce göre
+- **Oyun dünyası penceresi**: yılın oyunları ve olayları, şirket sıralaması, platform pazar payları, olay arşivi
+- **MGT yan satış paneli**: sahnenin sağ kenarında satıştaki her oyunun sırası, maliyeti (lisans + maaş payı + reklam + dış kaynak + güncelleme), geliri, kârı ve haftalık kâr eğrisi; geliştirilen projelerin şimdiye kadarki maliyeti
+- **MGT personel**: 8 yetenek (tasarım, programlama, grafik, ses, test, pazarlama, araştırma, donanım), iki huy, 23 huy (Hızlı öğrenir, Tatil hastası, Doğal lider, Yalnız kurt, Kıskanç…). İşe uygun yetenek verimi belirler
+- **Tatil**: izin hakkı birikir, yorulan izin ister; Serbest / Planlı / Yasak politikası. Planlıda aynı odadan iki kişi aynı anda gidemez, çakışan istek reddedilir ve ikisi arasında gerginlik olur
+- **Çalışan ilişkileri**: aynı odada çalışanlar dost ya da düşman olur (kavga, kahve ısmarlama…). Ortalama ilişki verimi ±%10, morali ±8 etkiler; düşmanlık stres biriktirir
+- **Ofis tasarımı**: her binaya 5 dekor (Standart, Ucuz plastik, Ergonomik verim, Konfor köşesi, Lüks tasarım); hız, moral, stres, kira ve prestij etkisi, sahnede görünür
+- **Şirket değeri ve halka arz**: değerleme, %10/25/40 hisse satışı, hisse fiyatı, çeyreklik büyüme hedefi, yönetim kurulu baskısı ve olağanüstü kurul kararları, temettü, geri alım. Baskı %100'e ulaşırsa görevden alınırsın
+- **Ödüller**: Yılın Oyunu artık tarihî hitlerle yarışır; olamazsan "türünün en iyisi" ödülü
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…
 
 ## Denge (basit bot, 20 yıl)
 
 | Zorluk | Sonuç |
 |---|---|
-| Kolay | 73–94 M $, 30 kişi |
-| Orta | 12–26 M $, 20 yılda 4–8 Yılın Oyunu |
+| Kolay | 55–75 M $ |
+| Orta | 3 tohumdan 2'si ayakta, 15–40 M $; Yılın Oyunu + tür ödülleri |
 | Zor / Efsanevi | Bot garajdan çıkamadan batıyor |
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.

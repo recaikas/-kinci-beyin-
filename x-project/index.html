@@ -63,9 +63,9 @@ p { margin: 0; }
 
 #stage { position: relative; min-height: 0; overflow: hidden; background: #0d0915; }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-#notes { position: absolute; top: 10px; right: 12px; display: grid; gap: 6px; width: min(340px, calc(100% - 24px)); z-index: 3; pointer-events: none; }
+#notes { position: absolute; top: 46px; left: 12px; display: grid; gap: 6px; width: min(340px, calc(100% - 24px)); z-index: 3; pointer-events: none; }
 .note { background: var(--panel); border: 2px solid var(--line); border-left-width: 6px; padding: 7px 10px; box-shadow: 3px 3px 0 var(--shadow); font-size: var(--s-1); animation: slide 0.2s steps(3); transition: opacity 0.4s; }
-.note.good { border-left-color: var(--mint); } .note.bad { border-left-color: var(--blood); } .note.warn { border-left-color: var(--amber); }
+.note.tarih { border-left-color: var(--sky); } .note.good { border-left-color: var(--mint); } .note.bad { border-left-color: var(--blood); } .note.warn { border-left-color: var(--amber); }
 .note.out { opacity: 0; }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
 
@@ -178,17 +178,38 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .plist-r .good { color: var(--mint); } .plist-r .bad { color: #ffb3bd; } .plist-r .quote { color: var(--ink-2); font-style: italic; list-style: none; margin-left: -18px; }
 .slider .kn { margin-left: 4px; }
 
-/* MGT tarzı satış kartları (sahne üstü) */
-#market { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 3; max-width: calc(100% - 20px); flex-wrap: wrap; }
-.mcard { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; gap: 1px 8px; align-items: center; width: 190px; padding: 6px 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow); }
+/* MGT tarzı yan satış paneli (sahnenin sağ kenarı): oyun başına maliyet, gelir, kâr ve kâr eğrisi */
+#market { position: absolute; right: 8px; top: 8px; bottom: 8px; width: 232px; display: flex; flex-direction: column; gap: 6px; z-index: 3; pointer-events: none; }
+#market > * { pointer-events: auto; }
+#market.closed { bottom: auto; width: auto; }
+.phead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; background: color-mix(in srgb, var(--panel) 94%, transparent); font-size: var(--s-1); }
+.phead i { font-style: normal; color: var(--ink-2); }
+.plist-m { display: grid; gap: 6px; overflow-y: auto; min-height: 0; padding-right: 2px; align-content: start; scrollbar-width: thin; }
+.mcard { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 0 6px; align-items: center; padding: 6px 8px; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow); }
+.mcard.dev { cursor: default; border-style: dashed; }
 .mcard:hover, .mcard:focus-visible { border-color: var(--candy); }
-.mcard .rk { grid-row: 1 / 3; font-family: var(--font-num); font-size: 1.7rem; line-height: 1; color: var(--amber); min-width: 34px; text-align: center; }
+.mcard .rk { font-family: var(--font-num); font-size: 1.45rem; line-height: 1; color: var(--amber); min-width: 30px; }
 .mcard .rk.top { color: var(--candy); }
 .mcard .nm { font-size: var(--s-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mcard .wk { font-family: var(--font-num); font-size: 1rem; color: var(--ink-2); }
-.mcard .wk i { font-style: normal; margin-left: 4px; }
-.mcard svg { grid-column: 1 / -1; width: 100%; height: 18px; display: block; }
-.mcard svg rect { fill: var(--sky); }
+.mcard .wk { font-family: var(--font-num); font-size: 0.95rem; color: var(--ink-2); white-space: nowrap; }
+.mcard .wk i { font-style: normal; margin-left: 3px; }
+.mcard .row { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 6px; font-size: var(--s-1); line-height: 1.25; }
+.mcard .row small { color: var(--ink-2); }
+.mcard svg { grid-column: 1 / -1; width: 100%; height: 22px; display: block; margin-top: 3px; }
+.mcard svg .zero { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.mcard svg polyline { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.mcard svg .pos { stroke: var(--mint); } .mcard svg .neg { stroke: var(--blood); }
+.pos { color: var(--mint); }
+.skills { display: grid; grid-template-columns: 100px 1fr 30px; gap: 2px 6px; align-items: center; font-size: var(--s-1); margin: 6px 0; }
+.skills b { text-align: right; }
+.bar.sk i { background: var(--sky); }
+.traits { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.rels { margin: 2px 0; } .rels span { margin-right: 8px; }
+.tiles.dz .tile { display: grid; gap: 2px; text-align: left; }
+.tiles.dz .sw { display: block; width: 100%; height: 10px; border-top: 4px solid; }
+h3.sub { margin: 10px 0 4px; font-size: var(--s-1); color: var(--ink-2); }
+.news li.tarih span::before { content: '📰 '; }
+.board .bar { margin: 3px 0; }
 .up { color: var(--mint); } .down { color: var(--blood); } .new { color: var(--amber); }
 .proj.sale { border-style: solid; border-color: var(--sky); }
 .proj.sale .rk { font-family: var(--font-num); color: var(--amber); }
@@ -207,7 +228,7 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .split-bars div { display: grid; grid-template-columns: 130px 1fr 80px; gap: 8px; align-items: center; font-size: var(--s-1); }
 .split-bars b { text-align: right; }
 .chart rect.sky { fill: var(--sky); }
-@media (max-width: 900px) { #market { left: 6px; bottom: 6px; } .mcard { width: 150px; } .mcard:nth-child(n+3) { display: none; } }
+@media (max-width: 900px) { #market { right: 4px; top: 46px; bottom: 6px; width: 190px; } #market.closed { bottom: auto; } }
 
 /* projeler, bilgi rozetleri, rapor, grafikler */
 .plist { display: grid; gap: 8px; }

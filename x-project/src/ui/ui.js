@@ -1,7 +1,7 @@
 // Arayüz (GDT/Kairosoft esinli): tam ekran sahne, üstte HUD ve proje sayacı, altta ikonlu menü,
 // menüden açılan pencereler (açıkken oyun durur), adım adım yeni oyun sihirbazı, faz başında dağılım
 // penceresi, yayında eleştirmen ekranı. Oyun mantığı game.js'te; burası yalnızca çağırır ve gösterir.
-import { newGame, loadGame, M, Prod, Eco, Market, Staff, Con, Post, Know } from '../game.js';
+import { newGame, loadGame, M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { makeRenderer, menuIcon } from './render.js';
 import { money } from '../kernel.js';
@@ -12,14 +12,14 @@ const fmt = (n) => Math.round(n).toLocaleString('tr-TR');
 const pct = (v) => Math.max(0, Math.min(100, v));
 const bar = (v, cls = '') => `<span class="bar ${cls}"><i style="width:${pct(v)}%"></i></span>`;
 const discName = (id) => PACK.disciplines.find((d) => d.id === id).name;
-const STATUS = { hasta: 'Hasta', tukenmis: 'Tükenmiş', egitim: 'Eğitimde' };
+const STATUS = { hasta: 'Hasta', tukenmis: 'Tükenmiş', egitim: 'Eğitimde', tatil: 'Tatilde' };
 const SPEEDS = [1, 2, 4, 8];
 const kaosLabel = (k) => (k < 30 ? 'Sakin' : k < 55 ? 'Gergin' : k < 80 ? 'Kaotik' : 'Cehennem');
 const store = (fn) => { try { return fn(window.localStorage); } catch { return null; } };
 const MENU = [['bilgisayar', 'Bilgisayar'], ['gunluk', 'Günlük']];
-const WIN_NAMES = { bilgisayar: 'Bilgisayar', oda: 'Oda', insaat: 'Oda kur', reklam: 'Reklam ver', gelistir: 'Geliştir', personel: 'Personel', ofis: 'Ofis ve binalar', arge: 'Ar-Ge', pazar: 'Pazar', finans: 'Finans', gunluk: 'Günlük' };
-const ICON_OF = { oda: 'ofis', insaat: 'ofis', reklam: 'pazar' };
-const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']] };
+const WIN_NAMES = { dunya: 'Oyun dünyası', bilgisayar: 'Bilgisayar', oda: 'Oda', insaat: 'Oda kur', reklam: 'Reklam ver', gelistir: 'Geliştir', personel: 'Personel', ofis: 'Ofis ve binalar', arge: 'Ar-Ge', pazar: 'Pazar', finans: 'Finans', gunluk: 'Günlük' };
+const ICON_OF = { oda: 'ofis', insaat: 'ofis', reklam: 'pazar', dunya: 'pazar' };
+const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']], finans: [['genel', 'Genel'], ['sirket', 'Şirket ve borsa']], dunya: [['yil', 'Bu yıl'], ['sirketler', 'Şirketler'], ['platformlar', 'Platformlar'], ['tarih', 'Tarih']] };
 // Liste sırası değişimi: ▲ yükseldi, ▼ düştü, YENİ ilk hafta.
 const move = (g) => (g.prev == null ? '<i class="new">YENİ</i>' : g.rank < g.prev ? `<i class="up">▲${g.prev - g.rank}</i>` : g.rank > g.prev ? `<i class="down">▼${g.rank - g.prev}</i>` : '<i>–</i>');
 
@@ -145,18 +145,44 @@ export function boot(root, hotData = {}) {
     }
   }
 
-  // --- MGT tarzı satış kartları: satıştaki en iyi 3 oyun, sıra, haftalık satış, son 12 haftanın çubukları
+  // --- MGT tarzı yan satış paneli: satıştaki her oyun için maliyet, gelir, kâr, sıra ve kâr eğrisi; geliştirilen projelerin maliyeti
+  const signed = (v) => `${v >= 0 ? '+' : '−'}${money(Math.abs(v))}`;
+  function profitSpark(vals) {
+    if (!vals || vals.length < 2) return '';
+    const max = Math.max(1, ...vals), min = Math.min(0, ...vals), y = (v) => 1 + ((max - v) * 20) / (max - min || 1);
+    const pts = vals.map((v, i) => `${((i * 100) / (vals.length - 1)).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    return `<svg viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><line x1="0" x2="100" y1="${y(0)}" y2="${y(0)}" class="zero"/><polyline points="${pts}" class="${vals[vals.length - 1] >= 0 ? 'pos' : 'neg'}"/></svg>`;
+  }
+  // Panel tercihi hatırlanır; telefonda varsayılan kapalı (sahneyi kapatmasın).
+  const panelOpen = () => app.panel ?? ((store((st) => st.getItem('xp-panel')) ?? (window.innerWidth >= 700 ? '1' : '0')) !== '0');
   function renderMarket() {
     const s = G()?.state;
     if (!s) return setHTML(el.market, '');
-    const live = s.games.filter((g) => g.active && g.weeks > 0).sort((a, b) => (a.rank || 99) - (b.rank || 99)).slice(0, 3);
-    setHTML(el.market, live.map((g) => {
-      const h = (g.hist || []).slice(-12), max = Math.max(1, ...h), w = 100 / Math.max(12, h.length);
-      const bars = h.map((v, i) => `<rect x="${i * w + 0.5}" y="${18 - (v / max) * 17}" width="${w - 1}" height="${Math.max(1, (v / max) * 17)}"/>`).join('');
-      return `<button class="mcard" data-mgame="${g.id}" title="${esc(g.name)}"><span class="rk ${g.rank <= 3 ? 'top' : ''}">#${g.rank || '–'}</span><span class="nm">${esc(g.name)}</span>
-        <span class="wk">${fmt(g.lastWeek)}/hf ${move({ rank: g.rank, prev: g.prevRank })}</span><svg viewBox="0 0 100 18" preserveAspectRatio="none" aria-hidden="true">${bars}</svg></button>`;
-    }).join(''));
+    const live = s.games.filter((g) => g.active).sort((a, b) => (a.rank || 999) - (b.rank || 999));
+    const open = panelOpen();
+    const total = live.reduce((a, g) => a + (g.revenue - (g.devCost || 0) - (g.postCost || 0)), 0);
+    const head = `<button class="phead" data-panel="1" aria-expanded="${open}"><span>💰 Satışta <b class="num">${live.length}</b></span>${live.length ? `<span class="num ${total < 0 ? 'neg' : 'pos'}">${signed(total)}</span>` : ''}<i>${open ? '▸' : '◂'}</i></button>`;
+    if (!open) return setHTML(el.market, head), el.market.classList.add('closed');
+    el.market.classList.remove('closed');
+    const cards = live.map((g) => {
+      const cost = (g.devCost || 0) + (g.postCost || 0), profit = g.revenue - cost;
+      return `<button class="mcard" data-mgame="${g.id}" title="${esc(g.name)}">
+        <span class="rk ${g.rank && g.rank <= 3 ? 'top' : ''}">#${g.rank || '–'}</span><span class="nm">${esc(g.name)}</span><span class="wk">${g.weeks}. hf ${move({ rank: g.rank, prev: g.prevRank })}</span>
+        <span class="row"><small>Maliyet</small><b class="num">${money(cost)}</b></span>
+        <span class="row"><small>Gelir</small><b class="num">${money(g.revenue)}</b></span>
+        <span class="row"><small>Kâr</small><b class="num ${profit < 0 ? 'neg' : 'pos'}">${signed(profit)}</b></span>
+        <span class="row"><small>Bu hafta</small><b class="num">${fmt(g.lastWeek)} kopya</b></span>${profitSpark((g.profitHist || []).slice(-40))}</button>`;
+    }).join('');
+    const dev = s.projects.map((pj) => `<div class="mcard dev"><span class="rk">⚙</span><span class="nm">${esc(pj.name)}</span><span class="wk">${pj.status === 'dev' ? `${pj.week}/${pj.totalWeeks} hf` : 'yayına hazır'}</span>
+      <span class="row"><small>Maliyet şimdiye dek</small><b class="num neg">${money(pj.cost || 0)}</b></span></div>`).join('');
+    setHTML(el.market, head + `<div class="plist-m">${cards}${dev || ''}${!cards && !dev ? '<p class="muted small">Satışta oyun yok.</p>' : ''}</div>`);
   }
+  el.market.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-panel]')) return;
+    app.panel = !panelOpen();
+    store((st) => st.setItem('xp-panel', app.panel ? '1' : '0'));
+    renderMarket();
+  });
   // Kartlar her hafta yenilenir; tıklama kaybolmasın diye pointerdown ile açılır.
   el.market.addEventListener('pointerdown', (e) => {
     const b = e.target.closest('[data-mgame]');
@@ -172,7 +198,7 @@ export function boot(root, hotData = {}) {
     if (!s) return;
     if (!el.menu.children.length) el.menu.innerHTML = MENU.map(([id, name]) => `<button data-open="${id}"><img src="${icons[id]}" alt=""><span>${name}</span><em class="badge" hidden></em></button>`).join('');
     const unread = Math.max(0, s.news.length - app.seenNews);
-    const alert = s.projects.some((p) => p.status === 'debug') || s.staff.some((p) => p.status === 'tukenmis');
+    const alert = s.projects.some((p) => p.status === 'debug') || s.staff.some((p) => p.status === 'tukenmis') || Co.company(s).pressure >= PACK.ipo.boardAt;
     const badge = { gunluk: unread ? String(Math.min(unread, 99)) : '', bilgisayar: alert ? '!' : '' };
     for (const b of el.menu.children) {
       const id = b.dataset.open, em = b.querySelector('.badge');
@@ -233,7 +259,7 @@ export function boot(root, hotData = {}) {
     const id = app.win;
     const subs = SUBS[id];
     const sub = app.sub[id] || subs?.[0][0];
-    const fn = { bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews }[id];
+    const fn = { dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews }[id];
     const title = id === 'oda' ? (() => { const r = G().state.rooms.find((x) => x.id === app.room); return r ? Staff.roomType(ctx(), r.type).name : 'Oda'; })() : WIN_NAMES[id];
     setHTML(el.winTitle, `${app.fromHub && id !== 'bilgisayar' ? '<button class="back" data-act="hub" aria-label="Bilgisayara dön">◀</button>' : ''}<img src="${icons[id] || icons.bilgisayar}" alt=""> ${esc(title)}`);
     const tabs = subs ? `<div class="seg" role="tablist">${subs.map(([k, n]) => `<button role="tab" data-sub="${k}" aria-selected="${sub === k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
@@ -259,6 +285,8 @@ export function boot(root, hotData = {}) {
         ${tile('finans', 'Finans', '', money(s.cash))}
         ${tile('ofis', 'Ofis ve binalar', '', Eco.office(c).name)}
         ${tile('arge', 'Motor ve konsol', 'motor')}
+        ${tile('dunya', 'Oyun dünyası', 'yil', `${Math.floor(M.tableYear(c))} · ${s.rivals.length} şirket`)}
+        ${tile('finans', 'Şirket ve borsa', 'sirket', Co.company(s).listed ? `hisse ${Co.company(s).price} $` : 'halka arz')}
       </div>`;
   }
   // Reklam: her proje için kampanya düğmeleri (Geliştir penceresinin pazarlama kısmının kısayolu)
@@ -464,7 +492,11 @@ export function boot(root, hotData = {}) {
         <label>Kariyer<select id="cr-${p.id}" data-act="career" data-id="${p.id}"><option value="">${opts.length ? 'Değiştir…' : 'Seçenek yok'}</option>${opts.map((o) => `<option value="${o.id}">${o.name} · ${money(PACK.careerRules.changeCost * M.inflation(c))}</option>`).join('')}</select></label>
         <div class="btns"><button data-act="level" data-id="${p.id}" ${lc == null ? 'disabled' : ''}>${lc == null ? 'Son seviye' : `Seviye atlat · ${lc} RP`}</button>
           ${p.founder ? '' : `<button data-act="raise" data-id="${p.id}">Zam %12</button><button class="ghost danger" data-act="fire" data-id="${p.id}">${app.confirm === 'fire' + p.id ? 'Emin misin?' : 'Kov'}</button>`}</div>
-        <p class="muted small">${p.trait ? `Özellik: ${esc(PACK.traits.find((t) => t.id === p.trait).name)} · ` : ''}Kariyerler: ${Object.entries(p.careers).map(([k, v]) => `${Staff.career(c, k).name} ${v}`).join(', ')}</p></div>`;
+        <p class="muted small">Kariyerler: ${Object.entries(p.careers).map(([k, v]) => `${Staff.career(c, k).name} ${v}`).join(', ')}</p>
+        ${traitPills(p)}
+        <div class="skills">${PACK.skills.keys.map(([k, n]) => `<span>${n}</span>${bar(p.skills?.[k] || 0, 'sk')}<b class="num">${p.skills?.[k] ?? '–'}</b>`).join('')}</div>
+        ${relLine(p)}
+        <div class="foot"><span class="muted small">İzin hakkı ${(p.vacDue || 0).toFixed(1)} hf${p.lastVac != null ? ` · son tatil Y${Math.floor(p.lastVac / 48) + 1}` : ''}</span><button data-act="vacation" data-id="${p.id}" ${p.status !== 'ok' ? 'disabled' : ''}>Tatile gönder</button></div></div>`;
     }
     return `<div class="person ${p.status !== 'ok' ? 'away' : ''} ${open ? 'open' : ''}">
       <button class="who" data-act="expand" data-id="${p.id}" aria-expanded="${open}">
@@ -473,11 +505,27 @@ export function boot(root, hotData = {}) {
         <span class="vit"><span class="num" title="Beceri">${Math.round(p.skill)}</span><span title="Moral">${bar(p.morale, 'm')}</span><span title="Stres">${bar(p.stress, 's')}</span></span>
       </button>${actions}</div>`;
   }
+  const traitName = (id) => PACK.traits.find((t) => t.id === id)?.name || id;
+  const traitPills = (p) => { const t = [p.trait, p.trait2].filter(Boolean); return t.length ? `<p class="traits">${t.map((id) => `<span class="pill">${esc(traitName(id))}</span>`).join('')}</p>` : ''; };
+  function relLine(p) {
+    const rels = People.relationsOf(ctx(), p);
+    if (!rels.length) return '';
+    const f = rels.filter(([, v]) => v >= PACK.relations.friendAt), e = rels.filter(([, v]) => v <= PACK.relations.enemyAt);
+    return `<p class="small rels">${f.length ? `<span class="up">♥ ${f.slice(0, 3).map(([x]) => esc(x.name.split(' ')[0])).join(', ')}</span> ` : ''}${e.length ? `<span class="down">⚡ ${e.slice(0, 3).map(([x]) => esc(x.name.split(' ')[0])).join(', ')}</span>` : ''}${!f.length && !e.length ? `<span class="muted">İlişkiler nötr</span>` : ''}</p>`;
+  }
+  function vacationBox() {
+    const s = G().state, c = ctx();
+    const away = People.onVacation(s), cap = People.vacationCap(c), cur = s.vacationPolicy || 'planli';
+    return `<section class="box"><div class="head"><h3>Tatil politikası</h3><span class="pill">${away.length}/${cap} izinde</span></div>
+      <div class="seg">${Object.entries(PACK.vacation.policies).map(([k, v]) => `<button data-act="vacpol" data-id="${k}" class="${cur === k ? 'on' : ''}" aria-pressed="${cur === k}">${v.name}</button>`).join('')}</div>
+      <p class="muted small">${esc(PACK.vacation.policies[cur].desc)} Çalışanlar yılda ${PACK.vacation.perYear} hafta izin hakkı biriktirir; yorulunca ya da hak dolunca ister. Çakışan istek reddedilir, moral düşer ve aralarında gerginlik olur.</p>
+      ${away.length ? `<p class="small">🏖️ ${away.map((p) => `${esc(p.name)} (${p.statusWeeks} hf)`).join(', ')}</p>` : ''}</section>`;
+  }
   function winStaff() {
     const s = G().state, c = ctx();
-    const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill}${p.trait ? ' · ' + esc(PACK.traits.find((t) => t.id === p.trait).name) : ''}</small></div>
+    const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill} · ${People.topSkills(c, p).map(([n, v]) => `${n} ${v}`).join(', ')}${[p.trait, p.trait2].filter(Boolean).map((t) => ' · ' + esc(traitName(t))).join('')}</small></div>
       <button data-act="hire" data-id="${p.id}" ${s.staff.length >= Staff.seats(c) ? 'disabled' : ''}>${money(p.salary)}/ay</button></div>`).join('');
-    return `<div class="legend"><span>Beceri</span><span><i class="dot m"></i>Moral</span><span><i class="dot s"></i>Stres</span><span class="muted">Ayrıntı için isme dokun</span></div>
+    return vacationBox() + `<div class="legend"><span>Beceri</span><span><i class="dot m"></i>Moral</span><span><i class="dot s"></i>Stres</span><span class="muted">Ayrıntı için isme dokun</span></div>
       <div class="people">${s.staff.map(personRow).join('')}</div>
       <details class="box" ${s.staff.length < Staff.seats(c) ? 'open' : ''}><summary><h3>İşe alım · ${s.staff.length}/${Staff.seats(c)} koltuk</h3></summary>
         <p class="muted small">Her ay yenilenir. İşe alım ücreti bir aylık maaş. ${s.staff.length >= Staff.seats(c) ? 'Koltuk yok: Ofis penceresinden oda kur.' : ''}</p>${apps || '<p class="muted">Bu ay başvuru yok.</p>'}</details>`;
@@ -508,7 +556,14 @@ export function boot(root, hotData = {}) {
     return `<section class="box"><div class="kv"><span>Mekân</span><b>${esc(off.name)}</b><span>Oda alanı</span><b class="num">${s.rooms.length}/${Staff.slots(c)}</b><span>Koltuk</span><b class="num">${s.staff.length}/${Staff.seats(c)}</b>
       <span>Bilgisayar</span><b>${st.name} <small class="muted">×${M.stationFactor(c).toFixed(2)}${s.stationTier < M.expectedStationTier(c) ? ' · geride' : ''}</small></b></div>
       <div class="btns">${moveLabel ? `<button data-act="office">${moveLabel}</button>` : ''}<button data-act="stations" ${up == null ? 'disabled' : ''}>${up == null ? 'İstasyonlar son seviye' : `İstasyon yükselt · ${money(up)}`}</button></div></section>
-      ${build}<div class="grid">${rooms}</div>`;
+      ${designBox()}${build}<div class="grid">${rooms}</div>`;
+  }
+  function designBox() {
+    const s = G().state, c = ctx();
+    const list = buildings();
+    const eff = (d) => [d.speed !== 1 ? `hız ×${d.speed}` : '', d.morale ? `moral ${d.morale > 0 ? '+' : ''}${d.morale}` : '', d.stress !== 1 ? `stres ×${d.stress}` : '', d.rentMult !== 1 ? `kira ×${d.rentMult}` : '', d.prestige ? 'prestij' : ''].filter(Boolean).join(' · ') || 'nötr';
+    return `<section class="box"><h3>Ofis tasarımı</h3><p class="muted small">Her binanın kendi dekoru var. Ucuz dekor kirayı düşürür ama üretimi yavaşlatır; konforlu dekor moral ve stresi iyileştirir.</p>
+      ${list.map((b) => { const cur = s.designs?.[b.id] || 'standart'; return `<h3 class="sub">${esc(b.name)}</h3><div class="tiles dz">${PACK.designs.map((d) => { const cost = Eco.designCost(c, b.id, d.id); return `<button class="tile ${cur === d.id ? 'on' : ''}" data-act="design" data-b="${b.id}" data-id="${d.id}" title="${esc(d.desc)}"><i class="sw" style="background:${d.floor || '#5b4a73'};border-color:${d.wall || '#8a7aa3'}"></i>${d.name}<small>${eff(d)}</small><small>${cur === d.id ? 'seçili' : cost ? money(cost) : 'bedava'}</small></button>`; }).join('')}</div>`; }).join('')}</section>`;
   }
 
   // ---------- AR-GE
@@ -634,7 +689,7 @@ export function boot(root, hotData = {}) {
     if (sub === 'liste') return `<p class="muted small">Bu haftanın en çok satan ${PACK.rivals.topN} oyunu (senin ve rakiplerin). Senin oyunların vurgulu.</p>
       <ol class="toplist">${(s.top || []).map((t) => `<li class="${t.mine ? 'mine' : ''}"><span class="r">${t.rank}</span>${move(t)}<span>${esc(t.name)}<small>${esc(t.studio)}</small></span><b class="num">${fmt(t.units)}</b></li>`).join('') || '<li class="muted">Henüz satışta oyun yok.</li>'}</ol>`;
     if (sub === 'cikanlar') return `<ol class="charts">${s.charts.slice(0, 15).map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)}</small></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ol>`;
-    if (sub === 'rakip') return s.rivals.map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('');
+    if (sub === 'rakip') return [...s.rivals].sort((a, b) => b.rep - a.rep).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : r.hw ? '<span class="pill">platform devi</span>' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('');
     const gm = app.selGame && s.games.find((x) => x.id === app.selGame);
     if (gm) return gameDetail(gm);
     const tr = s.trend ? (s.trend.genre ? PACK.genres.find((x) => x.id === s.trend.genre).name : PACK.topics.find((t) => t[0] === s.trend.topic)[1]) : '—';
@@ -649,7 +704,31 @@ export function boot(root, hotData = {}) {
   }
 
   // ---------- FİNANS
-  function winFinance() {
+  function companyView() {
+    const g = G(), s = g.state, c = ctx(), I = PACK.ipo;
+    const co = Co.company(s), v = Co.valuation(c);
+    const vh = co.valHist.slice(-120);
+    const vchart = `<section class="box"><h3>Şirket değeri (aylık)</h3>${chart('val', vh, { labels: vh.map((_, i) => (i === vh.length - 1 ? 'şimdi' : `${vh.length - 1 - i} ay önce`)), fmtv: money, color: 'var(--amber)' })}</section>`;
+    const head = `<section class="box"><div class="kv"><span>Şirket değeri</span><b class="num">${money(v)}</b><span>Son yıl faaliyet kârı</span><b class="num">${money(Co.operatingProfit(c, Math.floor(s.week / 48) - 1))}</b>
+      <span>Durum</span><b>${co.listed ? `Borsada · halka açık %${Math.round(co.pct * 100)}` : 'Özel şirket'}</b>${co.listed ? `<span>Hisse fiyatı</span><b class="num">${co.price} $</b>` : ''}</div>
+      <p class="muted small">Değer = nakit − borç + son 3 yılın ortalama kârı × ${I.profitMult} + hayran, marka (IP) ve prestij.</p></section>`;
+    if (!co.listed) {
+      const need = Co.ipoCheck(c);
+      return head + `<section class="box ${need.length ? '' : 'hl'}"><h3>Halka arz</h3>
+        <p class="small">Hisselerinin bir kısmını satıp kasaya büyük para koy. Karşılığında her çeyrek (12 hafta) satış gelirinin %${Math.round(I.growthTarget * 100)} büyümesi beklenir; tutmazsa yönetim kurulu baskısı artar, %100'de seni görevden alırlar.</p>
+        ${need.length ? `<ul class="todo">${need.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : `<div class="btns">${I.sellPcts.map((p) => `<button data-act="ipo" data-id="${p}">%${Math.round(p * 100)} sat<small>${money(v * p * I.discount)}</small></button>`).join('')}</div>`}</section>` + vchart;
+    }
+    const ph = co.priceHist.slice(-104);
+    const q = co.quarters.map((x) => `<tr><td>Y${Math.floor(x.w / 48) + 1} A${Math.floor((x.w % 48) / 4) + 1}</td><td class="num">${money(x.rev)}</td><td class="num">${money(x.target)}</td><td class="${x.beat ? 'up' : 'down'}">${x.beat ? 'Aşıldı' : 'Kaçtı'}</td></tr>`).join('');
+    const left = I.quarterWeeks - (s.week - co.qStart);
+    return head + `<section class="box ${co.pressure >= I.boardAt ? 'hl' : ''}"><div class="head"><h3>Yönetim kurulu baskısı</h3><span class="pill ${co.pressure >= I.boardAt ? 'warn' : ''}">%${Math.round(co.pressure)}</span></div>${bar(co.pressure, 's')}
+      <p class="muted small">Bu çeyreğin bitmesine ${left} hafta. Hedef: ${money(co.lastQ * (1 + I.growthTarget))} satış geliri (şu an ${money(Co.quarterRevenue(c))}).</p>
+      <div class="btns"><button data-act="dividend">Temettü dağıt<small>${money(Math.max(0, s.cash) * I.dividendShare * co.pct)}</small></button><button data-act="buyback">%5 hisse geri al<small>${money(Co.buybackCost(c))}</small></button></div></section>
+      <section class="box"><h3>Hisse fiyatı</h3>${chart('price', ph, { labels: ph.map((_, i) => (i === ph.length - 1 ? 'şimdi' : `${ph.length - 1 - i} hf önce`)), fmtv: (x) => `${(+x).toFixed(2)} $`, color: 'var(--sky)' })}</section>
+      ${q ? `<div class="scroll"><table><thead><tr><th>Çeyrek</th><th>Gelir</th><th>Hedef</th><th></th></tr></thead><tbody>${q}</tbody></table></div>` : ''}` + vchart;
+  }
+  function winFinance(sub) {
+    if (sub === 'sirket') return companyView();
     const g = G(), s = g.state, c = ctx();
     const y = Math.floor(s.week / 48), years = [y - 2, y - 1, y].filter((v) => v >= 0);
     const cats = [...new Set(years.flatMap((v) => Object.keys(s.ledger.byYear[v] || {})))].sort();
@@ -668,6 +747,31 @@ export function boot(root, hotData = {}) {
       <section class="box"><h3>Kasa (aylık, son 10 yıl)</h3>${chart('cash', cash, { labels: cash.map((_, i) => `${cash.length - i} ay önce`).map((l, i, a) => (i === a.length - 1 ? 'şimdi' : l)), fmtv: money, color: 'var(--candy)' })}</section>
       <section class="box"><h3>Yıllık net kâr / zarar</h3>${chart('net', allYears.map((v) => g.ctx.ledger.yearProfit(v)), { labels: allYears.map(yearName), fmtv: money, kind: 'bar' })}</section>
       <div class="scroll"><table><thead><tr><th>Kalem</th>${head}</tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
+  }
+  // ---------- OYUN DÜNYASI: yılın hitleri, şirketler, platformlar, tarih
+  function winWorld(sub) {
+    const s = G().state, c = ctx(), y = Math.floor(M.tableYear(c));
+    const W = s.world || { hits: [], log: [] };
+    const gname = (id) => PACK.genres.find((x) => x.id === id)?.name || id;
+    if (sub === 'sirketler') {
+      const list = World.companyBoard(c, 40);
+      return `<p class="muted small">${y} yılında piyasadaki şirketler (güce göre). Platform devleri satın alınamaz. Yeni şirketler kurulur, eskiler zamanla piyasadan çekilir.</p>
+        <div class="board">${list.map((r, i) => `<div class="row-item"><div><b>${i + 1}. ${esc(r.name)} ${r.hw ? '<span class="pill">platform</span>' : ''}${r.pub ? '<span class="pill">yayıncı</span>' : ''}</b>${bar(r.rep, 'prog')}<small>güç ${Math.round(r.rep)} · ${r.since} · ${r.games} oyun · son not ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : r.hw ? '' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('')}</div>`;
+    }
+    if (sub === 'platformlar') {
+      const sh = World.platformShares(c, (p) => M.platformBase(c, p));
+      return `<p class="muted small">${y} yılında piyasadaki konsollar ve bilgisayarlar. Kurulu taban (milyon kişi) ve pazar payı.</p>
+        <div class="split-bars">${sh.map((x) => `<div><span>${esc(x.p.name)}<small class="muted"> ${x.p.owner ? esc(World.companyById(x.p.owner)?.name || '') : x.p.kind === 'pc' ? 'bilgisayar' : ''}</small></span>${bar(x.share * 100, 'prog')}<b class="num">${x.b.toFixed(1)} M</b></div>`).join('')}</div>
+        <p class="muted small">Yakında: ${PACK.platforms.filter((p) => p.from > M.tableYear(c) && p.from < M.tableYear(c) + 3).map((p) => `${esc(p.name)} (${p.from})`).join(', ') || '—'}</p>`;
+    }
+    if (sub === 'tarih') return `<ul class="news">${W.log.map((e) => `<li class="tarih"><small class="num">${World.MONTHS[e.m].slice(0, 3)} ${e.y}</small><span>${esc(e.t)}</span></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ul>`;
+    const hits = W.hits.filter((h) => h.year === y);
+    const ev = W.log.filter((e) => e.y === y).reverse();
+    const mine = s.games.filter((g) => g.year === y);
+    const rows = [...hits.map((h) => ({ ...h, mine: false })), ...mine.map((g) => ({ name: g.name, studio: s.companyName, score: g.score, genre: g.genre, mine: true }))].sort((a, b) => b.score - a.score);
+    return `<div class="proj-head"><div><h2>${y}</h2><p class="muted small">${hits.length}/10 büyük oyun çıktı · ${s.rivals.length} şirket piyasada</p></div></div>
+      <section class="box"><h3>Yılın oyunları</h3><ol class="charts">${rows.map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)} · ${gname(x.genre)}</small></li>`).join('') || '<li class="muted">Bu yıl henüz büyük bir oyun çıkmadı.</li>'}</ol></section>
+      <section class="box"><h3>Bu yılın olayları</h3><ul class="news">${ev.map((e) => `<li class="tarih"><small class="num">${World.MONTHS[e.m]}</small><span>${esc(e.t)}</span></li>`).join('') || '<li class="muted">Yeni yıl başladı.</li>'}</ul></section>`;
   }
   function winNews() {
     return `<ul class="news">${G().state.news.map((n) => `<li class="${n.type}"><small class="num">Y${Math.floor(n.w / 48) + 1}·A${Math.floor((n.w % 48) / 4) + 1}</small><span>${esc(n.t)}</span></li>`).join('')}</ul>`;
@@ -693,7 +797,7 @@ export function boot(root, hotData = {}) {
     const g = G(), s = g.state;
     if (s.gameOver) {
       store((st) => st.removeItem(SAVE_KEY));
-      return dialog(`<h2 class="big">${s.gameOver.reason === 'iflas' ? 'İFLAS' : 'SON'}</h2><p>${esc(s.gameOver.text)}</p>
+      return dialog(`<h2 class="big">${{ iflas: 'İFLAS', kurul: 'GÖREVDEN ALINDIN' }[s.gameOver.reason] || 'SON'}</h2><p>${esc(s.gameOver.text)}</p>
         <div class="kv"><span>Oyun</span><b class="num">${s.games.length}</b><span>Hayran</span><b class="num">${fmt(s.fans)}</b><span>Ödül</span><b class="num">${s.awards.length}</b><span>Skor</span><b class="num">${fmt(g.finalScore())}</b></div>
         <button class="primary block" data-act="newgame">Yeni kariyer</button>`, 'over');
     }
@@ -743,7 +847,7 @@ export function boot(root, hotData = {}) {
         <label>Kurucu adı<input id="n-founder" value="Sen"></label>
         <label>Kurucunun alanı<select id="n-spec">${PACK.disciplines.map((d) => `<option value="${d.id}">${d.name} · ${Staff.career({ pack: PACK }, PACK.careerRules.founderCareer[d.id]).name}</option>`).join('')}</select></label>
         <label>Zorluk<select id="n-diff">${PACK.difficulties.map((d) => `<option value="${d.id}" ${d.id === 'kolay' ? 'selected' : ''}>${d.name} · ${money(d.startCash)}</option>`).join('')}</select></label>
-        <label>Kariyer uzunluğu<select id="n-len">${Object.keys(PACK.meta.gameLengths).map((l) => `<option value="${l}" ${+l === PACK.meta.defaultLength ? 'selected' : ''}>${l} yıl</option>`).join('')}</select></label>
+        <label>Kariyer uzunluğu<select id="n-len">${Object.keys(PACK.meta.gameLengths).map((l) => `<option value="${l}" ${+l === PACK.meta.defaultLength ? 'selected' : ''}>${+l === 50 ? '50 yıl · tam tarih 1976–2025' : `${l} yıl`}</option>`).join('')}</select></label>
         <label>Tohum<input id="n-seed" type="number" value="${(Date.now() % 100000) | 0}"></label>
       </div>
       <button class="primary block big" data-act="begin">1976'da garajı aç</button>`, 'setup');
@@ -842,6 +946,12 @@ export function boot(root, hotData = {}) {
       case 'console': return run(g.startConsole({ ...app.consoleDraft }));
       case 'loan': return run(g.takeLoan(+id));
       case 'acquire': return run(g.acquireRival(+id));
+      case 'vacation': return run(g.sendVacation(+id));
+      case 'vacpol': return run(g.setVacationPolicy(id));
+      case 'design': return run(g.setDesign(b.dataset.b, id));
+      case 'ipo': return run(g.goPublic(+id));
+      case 'dividend': return run(g.dividend());
+      case 'buyback': return run(g.buyback());
     }
   });
   root.addEventListener('change', (e) => {
