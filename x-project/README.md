@@ -26,6 +26,10 @@ Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
 
 Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.random` yok; sistemler olay veriyoluyla haberleşir.
 
+## Arayüz
+
+Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi. Üstte ince bir HUD ve GDT tarzı proje sayacı (disiplin puanları + hata), altta ikonlu menü var. Yönetim panelleri sahnenin üstünde pencere olarak açılır; pencere açıkken oyun durur. Yeni oyun 3 adımlı bir sihirbazla başlar (fikir → platform → onay), her fazın başında zaman dağılımı sorulur, yayında eleştirmen ekranı gelir. Sahne 3/4 perspektifle çizilir: duvar kalınlıkları, gölgeler, gün-gece ışığı, oda tipine göre mobilya, çalışanların kafasından yükselen puan baloncukları.
+
 ## İçerik
 
 - 6 tür, 38 konu, 20 platform (1976–2032), 8 yayıncı, 5 oyun boyutu (MMO dahil)
