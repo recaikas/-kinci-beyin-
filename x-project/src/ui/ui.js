@@ -262,11 +262,28 @@ export function boot(root, hotData = {}) {
       <div class="foot"><button class="ghost danger" data-act="cancel">${app.confirm === 'cancel' ? 'Emin misin? Tekrar bas' : 'Projeyi iptal et'}</button></div>`;
   }
   function contractsView() {
-    const s = G().state;
-    const cur = s.contract ? `<section class="box hl"><h3>${esc(s.contract.client)}</h3><p class="muted small">${esc(s.contract.job)} · ${money(s.contract.reward)}</p>
-      ${bar((s.contract.progress / s.contract.need) * 100, 'prog')}<p class="muted small">${Math.round(s.contract.progress)}/${s.contract.need} puan · ${s.contract.deadline - s.week} hafta kaldı</p></section>` : '';
-    const offers = s.contract ? '' : s.contractOffers.map((o) => `<div class="row-item"><div><b>${esc(o.client)}</b><small>${esc(o.job)} · ${o.need} puan · ${o.weeks} hafta</small></div><button data-act="contract" data-id="${o.id}">${money(o.reward)}</button></div>`).join('');
-    return `<p class="muted small">Geliştirme odaları oyun yokken sözleşme yapar. Proje sürerken bir odayı Ofis penceresinden "Yalnızca sözleşme"ye al.</p>${cur}${offers || (cur ? '' : '<p class="muted">Bu ay teklif yok.</p>')}`;
+    const s = G().state, c = ctx();
+    const tierOf = (id) => PACK.contracts.tiers.find((t) => t.id === id) || PACK.contracts.tiers[0];
+    const needs = (o) => Object.entries(o.need).map(([d, n]) => `<span class="spec s-${d}">${discName(d)} ${fmt(n)}</span>`).join(' ');
+    const weekly = Prod.devCapacity(c);
+    let cur = '';
+    if (s.contract) {
+      const k = s.contract, t = tierOf(k.tier);
+      const bars = Object.entries(k.need).map(([d, n]) => { const v = (k.progress?.[d] || 0) / n * 100; return `<div class="disc"><span>${discName(d)}</span>${bar(v, 'd-' + d)}<b class="num">${Math.round(Math.min(v, 100))}%</b></div>`; }).join('');
+      cur = `<section class="box hl"><div class="head"><h3>${esc(k.client)}</h3><span class="pill tier-${t.id}">${t.name}</span></div>
+        <p class="muted small">${esc(k.job)} · ödül ${money(k.reward)} · ${k.deadline - s.week} hafta kaldı</p>${bars}
+        <p class="muted small">Gecikirse ödülün %${Math.round(PACK.contracts.penaltyShare * 100)}'ı kadar ceza ve itibar kaybı.</p></section>`;
+    }
+    const offers = s.contract ? '' : s.contractOffers.map((o) => {
+      const t = tierOf(o.tier || 'kolay'), need = typeof o.need === 'number' ? { oyn: o.need } : o.need;
+      const total = Object.values(need).reduce((a, b) => a + b, 0);
+      const est = weekly > 0 ? Math.ceil(total / weekly) : null;
+      return `<div class="row-item"><div><b>${esc(o.client)} <span class="pill tier-${t.id}">${t.name}</span></b>
+        <small>${esc(o.job)} · ${o.weeks} hafta süre${est ? ` · tüm ekiple ~${est} hf` : ''}</small><small>${needs({ need })}</small></div>
+        <button data-act="contract" data-id="${o.id}">${money(o.reward)}</button></div>`;
+    }).join('');
+    return `<p class="muted small">Sözleşmeyi geliştirme odaları yapar; oyun yokken kendiliğinden, proje sürerken yalnızca "Yalnızca sözleşme" modundaki odalar. İstenen her disiplin ayrı ayrı dolmalı; çalışanın kariyeri o disipline uygunsa daha hızlı ilerler. Zor işler daha çok öder, RP ve itibar getirir.</p>
+      ${cur}${offers || (cur ? '' : '<p class="muted">Bu ay teklif yok.</p>')}`;
   }
 
   // ---------- PERSONEL

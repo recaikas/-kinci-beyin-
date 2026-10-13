@@ -340,8 +340,16 @@ export const PACK = {
 
   contracts: {
     _tag: 'P',
-    pointsMult: 0.3, rewardPerPoint: 260, penaltyShare: 0.6,
-    weeksMin: 4, weeksMax: 10, offers: 3, repGain: 1,
+    // GDS (V): süre 6–13 hafta, 1–2 kategori şartı, zor sözleşme daha çok öder ama daha çok ister,
+    // başarı para + RP + itibar, başarısızlık ceza + itibar kaybı. Yük ve ödeme katsayıları P.
+    weeksMin: 6, weeksMax: 13, offers: 3,
+    rewardPerPoint: 260, penaltyShare: 0.6, twoDiscChance: 0.65,
+    minLoadH: 0.05, // stüdyo kapasitesi bilinmezse alt sınır: H(y) × bu × hafta
+    tiers: [
+      { id: 'kolay', name: 'Kolay', load: 0.65, pay: 1.0, rep: 1, repLoss: 1, rp: 4 },
+      { id: 'orta', name: 'Orta', load: 0.85, pay: 1.35, rep: 1, repLoss: 2, rp: 10 },
+      { id: 'zor', name: 'Zor', load: 1.1, pay: 1.8, rep: 2, repLoss: 3, rp: 22 },
+    ],
     clients: ['Belediye Bilgi İşlem', 'Kasap Mehmet Usta', 'Gizemli Holding', 'Tekstil Fabrikası', 'Okul Kantini Derneği', 'Kuzen Tuncay', 'Bakanlık (bir tanesi)', 'Halı Sahacı Cemil', 'Uzay Ajansı (hayal)'],
     jobs: ['muhasebe programı', 'reklam oyunu', 'eğitim yazılımı', 'menü otomasyonu', 'kiosk demosu', 'kurumsal ekran koruyucu', 'gizli bir şey (sormayın)'],
   },

@@ -160,7 +160,8 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Konsol engelleri listelenir', Con.consoleBlockers(ctx).length === 3);
   st.cash = 1e9; st.office.tier = 3; st.research.done.donanim_lab = 1;
   g.buildRoom('donanim');
-  const eng = Staff.makePerson(ctx, { career: 'donanimci', level: 3, skill: 80 }); eng.room = st.rooms[1].id; st.staff.push(eng);
+  // Rastgele olaylar mühendisi götürmesin diye kurucu gibi işaretlenir (istifa/transfer/kovulma dışı).
+  const eng = Staff.makePerson(ctx, { career: 'donanimci', level: 3, skill: 80 }); eng.room = st.rooms[1].id; eng.founder = true; st.staff.push(eng);
   const res = g.startConsole({ name: 'Piksel Kutu', type: 'konsol', cpu: 'b32', media: 'cd' });
   check('Konsol yapımı başlar', res.ok, res.msg || '');
   for (let i = 0; i < 400 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); g.tick(); }

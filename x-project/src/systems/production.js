@@ -99,25 +99,47 @@ export function outsource(ctx, i) {
   return { ok: true };
 }
 
-// --- Sözleşmeler
+// --- Sözleşmeler (GDS yapısı): 1–2 disiplin şartı, zorluk kademesi, iş yükü stüdyo kapasitesiyle ölçeklenir.
+const DISCS = ['oyn', 'gfx', 'ses', 'tek'];
+const contractRooms = (state) => (r) => r.type === 'gelistirme' && (r.mode === 'sozlesme' || (r.mode === 'otomatik' && !state.project));
+
+// Geliştirme odalarının haftalık toplam üretimi (sözleşme yükünü ölçeklemek için).
+export function devCapacity(ctx) {
+  return weeklyOutput(ctx, (r) => r.type === 'gelistirme').reduce((s, x) => s + x.w, 0);
+}
+
 export function genContracts(ctx) {
   const { state, pack, rng } = ctx;
   const c = pack.contracts;
   const h = H(ctx);
-  state.contractOffers = Array.from({ length: c.offers }, () => {
-    const need = Math.round(h * c.pointsMult * rng.range(0.6, 1.6) * (1 + state.reputation / 30));
+  const cap = devCapacity(ctx);
+  const perPoint = c.rewardPerPoint * Math.sqrt(inflation(ctx) * 40 / h);
+  state.contractOffers = Array.from({ length: c.offers }, (_, i) => {
+    const tier = c.tiers[i % c.tiers.length];
     const weeks = rng.int(c.weeksMin, c.weeksMax);
-    const reward = Math.round(need * c.rewardPerPoint * Math.sqrt(inflation(ctx) * 40 / h) * rng.range(0.8, 1.3));
-    return { id: state.nextId++, client: rng.pick(c.clients), job: rng.pick(c.jobs), need, weeks, reward };
+    const total = Math.max(cap, h * c.minLoadH) * weeks * tier.load * rng.range(0.9, 1.1);
+    const discs = [...DISCS].sort(() => rng.next() - 0.5).slice(0, rng.chance(c.twoDiscChance) ? 2 : 1);
+    const need = Object.fromEntries(discs.map((d) => [d, Math.round(total / discs.length)]));
+    const reward = Math.round(total * perPoint * tier.pay * rng.range(0.9, 1.15));
+    return { id: state.nextId++, client: rng.pick(c.clients), job: rng.pick(c.jobs), tier: tier.id, need, weeks, reward };
   });
 }
+
+// Eski kayıtlardaki tek sayılı sözleşmeleri yeni biçime çevir.
+function normalize(c) {
+  if (typeof c.need === 'number') { c.need = { oyn: c.need }; c.progress = { oyn: c.progress || 0 }; c.tier ||= 'kolay'; }
+  c.progress ||= Object.fromEntries(Object.keys(c.need).map((d) => [d, 0]));
+  return c;
+}
+export const contractDone = (c) => Object.keys(c.need).every((d) => c.progress[d] >= c.need[d]);
+export const contractShare = (c) => Object.keys(c.need).reduce((s, d) => s + Math.min(1, c.progress[d] / c.need[d]), 0) / Object.keys(c.need).length;
 
 export function acceptContract(ctx, id) {
   const { state } = ctx;
   if (state.contract) return { ok: false, msg: 'Zaten bir sözleşme sürüyor.' };
   const o = state.contractOffers.find((x) => x.id === id);
   if (!o) return { ok: false, msg: 'Teklif yok.' };
-  state.contract = { ...o, progress: 0, deadline: state.week + o.weeks };
+  state.contract = normalize({ ...o, progress: null, deadline: state.week + o.weeks });
   state.contractOffers = state.contractOffers.filter((x) => x.id !== id);
   ctx.bus.fire('contractStarted', state.contract);
   if (state.project && !state.rooms.some((r) => r.type === 'gelistirme' && r.mode === 'sozlesme'))
@@ -129,18 +151,24 @@ export function weeklyContract(ctx) {
   const { state, pack, ledger } = ctx;
   const c = state.contract;
   if (!c) return;
-  const filter = (r) => r.type === 'gelistirme' && (r.mode === 'sozlesme' || (r.mode === 'otomatik' && !state.project));
-  for (const { w } of weeklyOutput(ctx, filter)) c.progress += w;
-  if (c.progress >= c.need) {
+  normalize(c);
+  const discs = Object.keys(c.need);
+  for (const { p, w } of weeklyOutput(ctx, contractRooms(state))) {
+    const aff = careerOf(ctx, p).aff;
+    for (const d of discs) c.progress[d] += (w / discs.length) * aff[d];
+  }
+  const tier = pack.contracts.tiers.find((t) => t.id === c.tier) || pack.contracts.tiers[0];
+  if (contractDone(c)) {
     ledger.post('sozlesme', c.reward, `${c.client}: ${c.job}`);
-    state.reputation += pack.contracts.repGain;
-    ctx.news(`✅ Sözleşme teslim: ${c.client} (${c.job}).`, 'good');
+    state.reputation += tier.rep;
+    state.research.rp += tier.rp * inflation(ctx) ** 0.5;
+    ctx.news(`✅ Sözleşme teslim: ${c.client} (${c.job}). +${Math.round(tier.rp * inflation(ctx) ** 0.5)} RP`, 'good');
     ctx.bus.fire('contractFinished', c);
     state.contract = null;
   } else if (state.week >= c.deadline) {
     ledger.post('sozlesme', -Math.round(c.reward * pack.contracts.penaltyShare), `${c.client} gecikme cezası`);
-    state.reputation = Math.max(0, state.reputation - 2);
-    ctx.news(`⛔ ${c.client} sözleşmesi gecikti. Ceza kesildi, itibar düştü.`, 'bad');
+    state.reputation = Math.max(0, state.reputation - tier.repLoss);
+    ctx.news(`⛔ ${c.client} sözleşmesi yetişmedi (%${Math.round(contractShare(c) * 100)}). Ceza kesildi, itibar düştü.`, 'bad');
     state.contract = null;
   }
 }
