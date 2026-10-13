@@ -1,7 +1,8 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market } from '../src/game.js';
+import { COMPANIES, YEARS } from '../src/data/history.js';
 import * as M from '../src/models.js';
 import { runBot } from './bot.mjs';
 
@@ -260,6 +261,134 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const s2 = Staff.makePerson(g.ctx, { skill: 60 }); s2.room = st.rooms[1].id; s2.founder = true; st.staff.push(s2);
   const f0 = st.fans; for (let i = 0; i < 2; i++) { st.pending = []; g.tick(); }
   check('Müşteri destek hayran kazandırır', game.active ? st.fans > f0 : true, `${f0} → ${st.fans}`);
+}
+
+// 20) Tarihsel dünya: 1976–2025 her yıl 10 oyun + 12 aylık olay; gerçek marka adları yok.
+{
+  const ys = Object.keys(YEARS).map(Number);
+  check('Tarih 1976–2025 kesintisiz', ys[0] === 1976 && ys.at(-1) === 2025 && ys.length === 50, `${ys.length} yıl`, 'Veri');
+  check('Her yıl 10 oyun ve 12 olay', ys.every((y) => YEARS[y].g.length === 10 && YEARS[y].e.length === 12), '', 'Veri');
+  check('Oyunların şirketi ve türü geçerli', ys.every((y) => YEARS[y].g.every((g) => COMPANIES.some((c) => c.id === g[1]) && PACK.genres.some((x) => x.id === g[2]))), '', 'Veri');
+  const banned = /\b(Nintendo|Sega|Sony|Atari|Microsoft|Xbox|PlayStation|Mario|Zelda|Sonic|Activision|Electronic Arts|Capcom|Konami|Ubisoft|Valve|Rockstar|Blizzard|Pokemon|Pokémon|Tetris|Minecraft|Fortnite|Halo|Doom|Steam|Apple|Commodore|Amiga|Facebook|YouTube|Twitch|Kickstarter)\b/i;
+  const all = [...ys.flatMap((y) => [...YEARS[y].g.map((g) => g[0]), ...YEARS[y].e]), ...COMPANIES.map((c) => c.name), ...PACK.platforms.map((p) => p.name), ...PACK.publishers.map((p) => p.name)];
+  const hit = all.filter((t) => banned.test(t));
+  check('Telif: gerçek marka/ürün adı yok (parodi)', hit.length === 0, hit.slice(0, 3).join(' | '), 'Veri');
+  check('50 yıllık tam tarih modu', PACK.meta.gameLengths[50] === 1);
+  const g = newGame({ seed: 4, difficulty: 'orta', length: 50 });
+  const st = g.state;
+  const has = (id) => st.rivals.some((r) => r.cid === id);
+  check('1976: Ataro piyasada, Soni yok', has('ataro') && !has('soni'));
+  st.cash = 1e9;
+  let tarih = 0, hits = 0;
+  for (let i = 0; i < 48 * 22; i++) { st.pending = []; st.cash = 1e9; g.tick(); }
+  tarih = st.world.count; hits = st.world.hits.length;
+  check('Her ay bir tarihî olay', tarih >= 22 * 12 - 2 && tarih <= 22 * 12 + 1 && st.world.log.length <= PACK.world.logMax, `${tarih}`);
+  check('Yılda 10 hit oyun çıkar', hits >= 22 * 10 - 10, `${hits}`);
+  check('1998: Soni geldi, Ataro gitti', has('soni') && !has('ataro'), Math.floor(M.tableYear(g.ctx)) + '');
+  const soni = st.rivals.find((r) => r.cid === 'soni');
+  check('Platform devleri satın alınamaz', !Market.acquireRival(g.ctx, soni.id).ok);
+  const pubs = World.publishersAvailable(g.ctx);
+  check('Yayıncılar tarihten gelir (gücü yıla göre)', pubs.some((p) => p.hist) && pubs.every((p) => p.royalty > 0 && p.royalty < 0.6), pubs.slice(0, 3).map((p) => `${p.name} ${p.power}`).join(', '));
+  check('Ataro yayıncılığı 1998\'de yok', !pubs.some((p) => p.id === 'ataro'));
+  const act = M.activePlatforms(g.ctx).map((p) => p.id);
+  check('1998 platformları dönemine uygun', act.includes('oi1') && act.includes('n64') && !act.includes('ataro') && !act.includes('oi2'), act.join(','));
+}
+
+// 21) MGT personel: yetenek setleri ve iki huy
+{
+  const g = newGame({ seed: 8, difficulty: 'kolay' });
+  const ctx = g.ctx;
+  const ppl = Array.from({ length: 200 }, () => Staff.makePerson(ctx, { skill: 60 }));
+  check('Her çalışanın 8 yeteneği var', ppl.every((p) => Object.keys(p.skills).length === 8));
+  check('Uzmanlık alanı en güçlü yetenek', ppl.filter((p) => p.skills[M.DISC_SKILL[p.spec]] >= Math.max(p.skills.tasarim, p.skills.program, p.skills.grafik, p.skills.ses)).length > 150);
+  check('Bazı çalışanların iki huyu var', ppl.some((p) => p.trait && p.trait2 && p.trait !== p.trait2));
+  const p = ppl.find((x) => x.spec === 'gfx');
+  check('Grafikçi grafikte daha verimli', M.skillK(ctx, p, 'grafik') > M.skillK(ctx, p, 'program'), `${M.skillK(ctx, p, 'grafik').toFixed(2)} > ${M.skillK(ctx, p, 'program').toFixed(2)}`);
+  const q = { trait: 'iskolik', trait2: 'kafein' };
+  check('İki huyun çarpanları birleşir', Math.abs(M.traitOf(ctx, q, 'out') - 1.2 * 1.1) < 1e-9 && Math.abs(M.traitOf(ctx, q, 'stress') - 1.5 * 1.3) < 1e-9);
+}
+
+// 22) Tatil: kontenjan, aynı odada çakışma, yasak politikası
+{
+  const g = newGame({ seed: 9, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  st.office.tier = 3; st.cash = 1e8; g.buildRoom('gelistirme');
+  for (let i = 0; i < 6; i++) { const p = Staff.makePerson(ctx, { skill: 50 }); p.room = st.rooms[i < 3 ? 0 : 1].id; st.staff.push(p); }
+  const [a, b] = st.staff.filter((p) => p.room === st.rooms[0].id && !p.founder);
+  g.setVacationPolicy('planli');
+  check('Tatile gönderilir', g.sendVacation(a.id).ok && a.status === 'tatil');
+  check('Planlı: aynı odadan ikinci kişi reddedilir', !People.canVacation(ctx, b).ok, People.canVacation(ctx, b).why);
+  for (const p of st.staff) { p.stress = 90; p.vacDue = 5; }
+  g.setVacationPolicy('yasak');
+  let r = { granted: 0 }; for (let i = 0; i < 5; i++) r.granted += People.weeklyVacations(ctx).granted;
+  check('Yasak: kimse izne çıkamaz', r.granted === 0);
+  a.statusWeeks = 1; a.stress = 80; Staff.weeklyStaff(ctx);
+  check('Tatilden dönen dinlenmiş', a.status === 'ok' && a.stress < 50, `stres ${Math.round(a.stress)}`);
+}
+
+// 23) İlişkiler: aynı odada dostluk; toksik huy rekabet yaratır; verime yansır
+{
+  const g = newGame({ seed: 10, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  st.office.tier = 2;
+  const x = Staff.makePerson(ctx, { skill: 50 }), y = Staff.makePerson(ctx, { skill: 50 });
+  x.trait = 'neseli'; y.trait = 'lider'; x.trait2 = y.trait2 = null; x.room = y.room = st.rooms[0].id; st.staff.push(x, y);
+  for (let i = 0; i < 40; i++) People.weeklyRelations(ctx);
+  const v = People.relation(st, x, y);
+  check('Aynı odadakiler zamanla dost olur', v > 10, Math.round(v) + '');
+  const w1 = M.personWeekly(ctx, x, 3);
+  st.rel[M.relKey(x.id, y.id)] = -100; st.rel[M.relKey(x.id, st.staff[0].id)] = -100;
+  check('Düşmanlık verimi düşürür', M.personWeekly(ctx, x, 3) < w1);
+}
+
+// 24) Ofis tasarımları: ucuz plastik yavaş ve ucuz, konfor morali yükseltir
+{
+  const g = newGame({ seed: 12, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  check('5 ofis tasarımı', PACK.designs.length === 5);
+  const p = st.staff[0];
+  const w0 = M.personWeekly(ctx, p, 1), r0 = Eco.rent(ctx);
+  check('Ucuz plastik seçilir', g.setDesign('ana', 'plastik').ok);
+  check('Ucuz plastik: daha yavaş, kira düşük', M.personWeekly(ctx, p, 1) < w0 && Eco.rent(ctx) < r0, `${Eco.rent(ctx)} < ${r0}`);
+  st.cash = 1e7; g.setDesign('ana', 'konfor');
+  check('Konfor köşesi moral bonusu', M.designOf(ctx, p).morale > 0);
+}
+
+// 25) Şirket değeri ve halka arz: koşul, nakit girişi, çeyrek hedefi, kurul baskısı
+{
+  const g = newGame({ seed: 13, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  check('Garajda halka arz yok', Co.ipoCheck(ctx).length > 0);
+  st.office.tier = 3; st.week = 300; st.cash = 2e7; st.fans = 500000;
+  const v = Co.valuation(ctx), c0 = st.cash;
+  const r = g.goPublic(0.25);
+  check('Halka arz nakit getirir', r.ok && st.cash - c0 > v * 0.2, r.msg || Math.round((st.cash - c0) / 1e6) + ' M');
+  const co = Co.company(st);
+  check('Hisse fiyatı oluşur', co.price > 0, co.price + ' $');
+  st.salesHist = []; co.lastQ = 1e7; co.qStart = st.week - 12;
+  Co.weeklyCompany(ctx);
+  check('Hedef tutmazsa kurul baskısı artar', co.pressure > 0 && co.quarters[0].beat === false, '%' + Math.round(co.pressure));
+  co.pressure = 45; co.qStart = st.week - 12; co.lastQ = 1e7; Co.weeklyCompany(ctx);
+  check('Baskı yüksekse kurul toplanır', st.pending.some((e) => e.id === 'kurul'));
+  const pr = co.pressure; g.resolve(st.pending.findIndex((e) => e.id === 'kurul') === 0 ? 0 : 0);
+  check('Kurul kararı baskıyı düşürür', co.pressure < pr || st.pending.length > 0, `${Math.round(pr)} → ${Math.round(co.pressure)}`);
+  const pct = co.pct; st.cash = 1e9;
+  check('Hisse geri alımı oranı düşürür', g.buyback().ok && co.pct < pct);
+}
+
+// 26) MGT satış paneli verisi: geliştirme maliyeti, gelir, kâr geçmişi
+{
+  const g = newGame({ seed: 14, difficulty: 'kolay' });
+  const st = g.state;
+  st.cash = 1e7;
+  const hand = Staff.makePerson(g.ctx, { skill: 50 }); hand.room = st.rooms[0].id; st.staff.push(hand);
+  g.startProject({ name: 'K', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
+  const c0 = st.projects[0].cost;
+  while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
+  check('Proje maliyeti maaşlarla büyür', st.projects[0].cost > c0, `${Math.round(c0)} → ${Math.round(st.projects[0].cost)}`);
+  const game = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 }).game;
+  for (let i = 0; i < 6; i++) { st.pending = []; g.tick(); }
+  check('Oyunun maliyeti ve kâr geçmişi var', game.devCost > 0 && game.profitHist.length >= 5 && game.profitHist.at(-1) === Math.round(game.revenue - game.devCost - game.postCost));
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

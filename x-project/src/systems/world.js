@@ -108,6 +108,7 @@ export function weeklyWorld(ctx) {
     if (d) {
       const text = d.e[m];
       state.world.log.unshift({ y: Y, m, t: text });
+      state.world.count = (state.world.count || 0) + 1;
       if (state.world.log.length > pack.world.logMax) state.world.log.length = pack.world.logMax;
       ctx.news(`📰 ${MONTHS[m]} ${Y}: ${text}`, 'tarih');
     }

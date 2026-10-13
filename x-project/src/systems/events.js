@@ -1,5 +1,6 @@
 // Olay sistemi: tarihî dönemler, rastgele olaylar (36 + 48·r hafta, kaosla sıklaşır), etkiler.
 import { clamp } from '../kernel.js';
+import { applyBoard } from './company.js';
 import { inflation, tableYear } from '../models.js';
 import { removePerson } from './staff.js';
 
@@ -26,7 +27,7 @@ function cond(ctx, w = {}) {
   if (w.flag && !state.flags[w.flag]) return false;
   if (w.notFlag && state.flags[w.notFlag]) return false;
   if (w.noResearch && state.research.done[w.noResearch]) return false;
-  if (w.trait && !state.staff.some((p) => p.trait === w.trait)) return false;
+  if (w.trait && !state.staff.some((p) => p.trait === w.trait || p.trait2 === w.trait)) return false;
   return true;
 }
 
@@ -76,7 +77,7 @@ export function applyEffects(ctx, e = {}) {
     const top = others().sort((a, b) => b.skill - a.skill)[0];
     if (top) { top.salary = Math.round(top.salary * (1 + e.topRaise)); top.morale = clamp(top.morale + 20, 0, 100); }
   }
-  if (e.fireTrait) for (const p of others().filter((x) => x.trait === e.fireTrait)) { removePerson(ctx, p, 'kovuldu'); ctx.news(`📦 ${p.name} kovuldu.`, 'bad'); }
+  if (e.fireTrait) for (const p of others().filter((x) => x.trait === e.fireTrait || x.trait2 === e.fireTrait)) { removePerson(ctx, p, 'kovuldu'); ctx.news(`📦 ${p.name} kovuldu.`, 'bad'); }
   if (e.fireSpec) for (const p of others().filter((x) => x.spec === e.fireSpec)) { removePerson(ctx, p, 'kovuldu'); ctx.news(`🤖 ${p.name} yerini bir modele bıraktı.`, 'bad'); }
   if (e.layoffPct) {
     const k = Math.ceil(others().length * e.layoffPct);
@@ -88,6 +89,8 @@ export function applyEffects(ctx, e = {}) {
     const branch = rng.chance(e.chance.p) ? e.chance.yes : e.chance.no;
     applyEffects(ctx, branch);
   }
+  if (e.board) applyBoard(ctx, e.board);
+  if (e.crunch) state.crunch = true;
   if (e.news) ctx.news(e.news, 'info');
 }
 

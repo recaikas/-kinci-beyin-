@@ -14,6 +14,7 @@ export function patch(ctx, id) {
   const cost = patchCost(ctx, g);
   if (state.cash < cost) return { ok: false, msg: `Güncelleme ${cost.toLocaleString('tr-TR')} $.` };
   ledger.post('guncelleme', -cost, g.name);
+  g.postCost = (g.postCost || 0) + cost;
   g.patches++;
   g.weeks = Math.max(0, g.weeks - Math.round(p.patchWeeksBack / g.patches));
   const fans = Math.round(state.fans * p.patchFansPct * Math.min(1, (g.bugRate || 0) * 10 + 0.3));
@@ -58,7 +59,7 @@ export function port(ctx, id, pid) {
   const copy = {
     ...g, id: state.nextId++, name: `${g.name} (${p.name})`, platforms: [pid], score: Math.max(1, g.score - P(ctx).portScorePenalty),
     hype: P(ctx).portHype, releasedWeek: state.week, weeks: 0, active: true, sold: { [pid]: 0 }, units: 0, revenue: 0, lastWeek: 0,
-    hist: [], patches: 0, portOf: g.id, subs: 0, mmo: false,
+    hist: [], revHist: [], profitHist: [], rankHist: [], patches: 0, portOf: g.id, subs: 0, mmo: false, devCost: cost, postCost: 0, rank: null, bestRank: null,
   };
   copy.peak = peakWeekly(ctx, copy);
   for (const k in copy.peak) copy.peak[k] *= P(ctx).portSales;

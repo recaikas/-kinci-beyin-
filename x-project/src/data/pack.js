@@ -65,7 +65,7 @@ export const PACK = {
     _tag: 'P',
     // PDF: B 57000, Pz 0,02→1→8. Bu uygulamada stüdyo çarpanları (Y·St·I) erken dönemi zaten ~×0,1'e indirdiği için
     // yeniden kalibre edildi: garaj 1977 iyi oyun ≈ 300/hafta, 1992 yerleşik hit ≈ 40 bin/hafta (P).
-    B: 140000,
+    B: 145000,
     pzCurve: [[1976, 0.5], [1985, 0.7], [1992, 1], [2025, 8]],
     sA: 0.09, sCenter: 90, sCut: 60, sLow: -2.7, sLowK: 0.2,
     fanRef: 10000, fanK: 0.5, hypeK: 0.15,
@@ -483,7 +483,67 @@ export const PACK = {
     { id: 'sendikaci', name: 'Sendikacı', chaos: 2, union: true },
     { id: 'neseli', name: 'Neşe kaynağı', moraleTeam: 0.6, stress: 0.8 },
     { id: 'evrak', name: 'Evrak canavarı', out: 0.95, stress: 0.7 },
+    // MGT esinli yeni huylar: öğrenme, tatil isteği, ilişki eğilimi
+    { id: 'hizli', name: 'Hızlı öğrenir', learn: 1.6 },
+    { id: 'tatilci', name: 'Tatil hastası', vacation: 1.8, moraleSelf: 0.4 },
+    { id: 'lider', name: 'Doğal lider', moraleTeam: 0.7, social: 1.3 },
+    { id: 'yalniz', name: 'Yalnız kurt', out: 1.05, social: 0.4 },
+    { id: 'sosyal', name: 'Sosyal kelebek', social: 1.8, out: 0.97 },
+    { id: 'mukemmel', name: 'Mükemmeliyetçi', bugs: 0.7, stress: 1.2 },
+    { id: 'tembel', name: 'Tembel', out: 0.85, stress: 0.6 },
+    { id: 'sadik', name: 'Sadık', quit: 0.3 },
+    { id: 'hirsli', name: 'Hırslı', out: 1.1, quit: 1.4, moraleSelf: -0.3 },
+    { id: 'meraki', name: 'Teknoloji meraklısı', research: 1.4 },
+    { id: 'kiskanc', name: 'Kıskanç', social: 0.6, rival: true },
   ],
+  traitChance2: 0.35, // ikinci huy olasılığı (MGT: iki özellik)
+
+  // Yetenek setleri (MGT esinli, P): genel beceri + 8 yetenek. Uzmanlık alanı yüksek, diğerleri düşük.
+  // Çıktı çarpanı = (yetenek / geliştirme yeteneklerinin ortalaması)^kExp → ortalama aynı, uzmanlık dağılımı önemli.
+  skills: {
+    _tag: 'P',
+    keys: [['tasarim', 'Oyun tasarımı', 'oyn'], ['program', 'Programlama', 'tek'], ['grafik', 'Grafik', 'gfx'], ['ses', 'Ses', 'ses'],
+      ['test', 'Test'], ['pazar', 'Pazarlama'], ['arge', 'Araştırma'], ['donanim', 'Donanım']],
+    specHi: [1.05, 1.3], secondary: [0.85, 1.05], other: [0.5, 0.9], kExp: 0.8, kMin: 0.5, kMax: 1.6,
+  },
+
+  // Tatil (GDT/GDS esinli, P): yıllık izin hakkı birikir; aynı anda izne çıkanlar sınırlıdır, çakışınca biri reddedilir.
+  vacation: {
+    _tag: 'P',
+    perYear: 3, stressWant: 58, dueWant: 2, askChance: 0.3, weeks: [1, 2],
+    policies: {
+      serbest: { name: 'Serbest', cap: 0.34, perRoom: false, desc: 'İsteyen gider. Üretim dalgalanır ama herkes dinç.' },
+      planli: { name: 'Planlı', cap: 0.2, perRoom: true, desc: 'Aynı odadan aynı anda tek kişi. Çakışan istek reddedilir.' },
+      yasak: { name: 'Yasak', cap: 0, perRoom: true, desc: 'Kimse tatile çıkamaz. Stres ve tükenmişlik artar.' },
+    },
+    deniedMorale: -5, deniedStress: 3, backMorale: 10, backStress: -40, banBurnout: 1.8, banMorale: -4, conflictRel: -8,
+  },
+
+  // Çalışan ilişkileri (derin mekanik 1, P): aynı odada çalışanlar arasında dostluk/rekabet; verim ve morale yansır.
+  relations: {
+    _tag: 'P',
+    drift: 0.35, crunchDrift: -0.5, toxicDrift: -1.6, rivalDrift: -0.8, outK: 0.1, moraleK: 8,
+    eventChance: 0.05, fight: -25, friend: 18, enemyAt: -45, friendAt: 45, enemyStress: 1.5,
+  },
+
+  // Ofis tasarımları (P): her binanın kendi tasarımı; ucuz olan verimi düşürür, konforlu olan morali yükseltir.
+  designs: [
+    { id: 'standart', name: 'Standart', cost: 0, rentMult: 1, speed: 1, morale: 0, stress: 1, wall: null, floor: null, desc: 'Gri halı, gri masa, gri hayaller.' },
+    { id: 'plastik', name: 'Ucuz plastik', cost: 0, rentMult: 0.85, speed: 0.9, morale: -6, stress: 1.1, wall: '#5a5148', floor: '#4b4a3e', desc: 'Sallanan masalar, cızırtılı floresan. Kira düşük, verim de.' },
+    { id: 'ergonomik', name: 'Ergonomik verim', cost: 20000, rentMult: 1.1, speed: 1.12, morale: -1, stress: 1.05, wall: '#3e5a66', floor: '#33505c', desc: 'Ayarlı masalar, çift monitör, sessiz klavye. Hız odaklı.' },
+    { id: 'konfor', name: 'Konfor köşesi', cost: 25000, rentMult: 1.15, speed: 1, morale: 8, stress: 0.85, wall: '#6b4f5e', floor: '#5c4452', desc: 'Puf, bitki, kahve makinesi. Moral yüksek, stres düşük.' },
+    { id: 'luks', name: 'Lüks tasarım', cost: 60000, rentMult: 1.4, speed: 1.07, morale: 12, stress: 0.8, wall: '#6b5a2e', floor: '#4c4128', prestige: 0.05, desc: 'Mermer, neon tabela, meyve barı. Ziyaretçiler etkilenir.' },
+  ],
+
+  // Şirket değeri ve halka arz (derin mekanik 2, P): değerleme, hisse, çeyreklik hedefler, yönetim kurulu baskısı.
+  ipo: {
+    _tag: 'P',
+    minValuation: 4000000, minTier: 3, minWeeks: 240, profitMult: 7, fanValue: 2.5, ipK: 300000, prestigeK: 400000,
+    sellPcts: [0.1, 0.25, 0.4], discount: 0.9, shares: 1000000, quarterWeeks: 12, growthTarget: 0.05,
+    beatSent: 1.06, missSent: 0.93, pressureMissK: 40, pressureBeat: -12, boardAt: 60, fireAt: 100,
+    dividendShare: 0.1, dividendSent: 1.04, dividendPressure: -15, buybackPremium: 1.1, sentMin: 0.4, sentMax: 2.5,
+    excluded: ['sermaye', 'kredi', 'halka_arz', 'temettu', 'geri_alim'],
+  },
   traitChance: 0.6,
 
   wellbeing: {

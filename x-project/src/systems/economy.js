@@ -7,7 +7,30 @@ export const office = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state
 
 export function rent(ctx) {
   const o = office(ctx);
-  return Math.round((o.rent + (ctx.state.office.floors || 0) * (o.floorRent || 0)) * inflation(ctx) * ctx.state.rentMult);
+  return Math.round((o.rent + (ctx.state.office.floors || 0) * (o.floorRent || 0)) * inflation(ctx) * ctx.state.rentMult * designRentMult(ctx));
+}
+// --- Ofis tasarımları: her binanın kendi tasarımı; kira çarpanı oda sayısına göre ağırlıklı.
+export const designById = (ctx, id) => ctx.pack.designs.find((d) => d.id === id) || ctx.pack.designs[0];
+export const buildingRooms = (ctx, bid) => { const b = ctx.pack.buildings.find((x) => x.id === bid); return ctx.state.rooms.filter((r) => b.types.includes(r.type)); };
+export function designRentMult(ctx) {
+  const rooms = ctx.state.rooms;
+  if (!rooms.length) return 1;
+  let sum = 0;
+  for (const b of ctx.pack.buildings) sum += buildingRooms(ctx, b.id).length * designById(ctx, ctx.state.designs?.[b.id]).rentMult;
+  return sum / rooms.length;
+}
+export const designCost = (ctx, bid, did) => Math.round(designById(ctx, did).cost * Math.max(1, buildingRooms(ctx, bid).length) * inflation(ctx) ** 0.5);
+export function setDesign(ctx, bid, did) {
+  const { state, ledger, pack } = ctx;
+  const d = pack.designs.find((x) => x.id === did);
+  if (!d || !pack.buildings.some((b) => b.id === bid)) return { ok: false, msg: 'Geçersiz.' };
+  if ((state.designs?.[bid] || 'standart') === did) return { ok: true };
+  const cost = designCost(ctx, bid, did);
+  if (state.cash < cost) return { ok: false, msg: `${d.name} ${cost.toLocaleString('tr-TR')} $.` };
+  if (cost) ledger.post('dekor', -cost, `${pack.buildings.find((b) => b.id === bid).name}: ${d.name}`);
+  (state.designs ||= {})[bid] = did;
+  ctx.news(`🛋️ ${pack.buildings.find((b) => b.id === bid).name} yeniden döşendi: ${d.name}.`, 'good');
+  return { ok: true };
 }
 
 export function creditLimit(ctx) {
@@ -20,6 +43,8 @@ export function monthlyEconomy(ctx) {
   const wages = state.staff.reduce((s, p) => s + p.salary, 0);
   if (wages) ledger.post('maas', -wages, `${state.staff.length} kişi`);
   ledger.post('kira', -rent(ctx), office(ctx).name);
+  // Lüks ofis ziyaretçileri etkiler (küçük prestij)
+  for (const b of pack.buildings) { const d = designById(ctx, state.designs?.[b.id]); if (d.prestige && buildingRooms(ctx, b.id).length) state.prestige = Math.min(pack.prestige.max, state.prestige + d.prestige / 12); }
   for (const l of state.loans) {
     const pay = Math.min(l.remaining, l.monthly);
     ledger.post('kredi', -pay, 'Taksit');
@@ -112,8 +137,7 @@ export function weeklyChaos(ctx) {
   const n = state.staff.length;
   const avgStress = n ? state.staff.reduce((s, p) => s + p.stress, 0) / n : 0;
   const traitChaos = state.staff.reduce((s, p) => {
-    const t = p.trait && pack.traits.find((x) => x.id === p.trait);
-    return s + ((t && t.chaos) || 0);
+    return s + [p.trait, p.trait2].reduce((a, id) => a + ((id && pack.traits.find((x) => x.id === id)?.chaos) || 0), 0);
   }, 0);
   state.heat = Math.max(0, state.heat - c.heatDecay);
   const years = tableYear(ctx) - pack.meta.startYear;

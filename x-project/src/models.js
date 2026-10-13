@@ -28,10 +28,43 @@ export function stationFactor(ctx) {
   const tier = ctx.state.stationDown > 0 ? 0 : ctx.state.stationTier;
   return clamp(1 + ws.step * (tier - expectedStationTier(ctx)), ws.min, ws.max);
 }
+// İki huy (MGT): çarpanlar çarpılır, toplamsal değerler (def 0) toplanır.
+export const traitsOf = (p) => [p.trait, p.trait2].filter(Boolean);
+export const hasTrait = (p, id) => p.trait === id || p.trait2 === id;
 export function traitOf(ctx, p, key, def = 1) {
-  const t = p.trait && ctx.pack.traits.find((x) => x.id === p.trait);
-  return t && t[key] !== undefined ? t[key] : def;
+  let v = def;
+  for (const id of traitsOf(p)) {
+    const t = ctx.pack.traits.find((x) => x.id === id);
+    if (!t || t[key] === undefined) continue;
+    if (typeof t[key] !== 'number') return t[key];
+    v = def === 0 ? v + t[key] : v * t[key];
+  }
+  return v;
 }
+// Çalışanın odasının bulunduğu binanın tasarımı.
+export function designOf(ctx, p) {
+  const room = ctx.state.rooms.find((r) => r.id === p.room);
+  const b = room && ctx.pack.buildings.find((x) => x.types.includes(room.type));
+  const id = (b && ctx.state.designs?.[b.id]) || 'standart';
+  return ctx.pack.designs.find((d) => d.id === id) || ctx.pack.designs[0];
+}
+// İlişki: aynı odadaki çalışanlarla ortalama ilişki (−100..100).
+export const relKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+export function relAvg(ctx, p) {
+  const rel = ctx.state.rel;
+  if (!rel) return 0;
+  const mates = ctx.state.staff.filter((x) => x !== p && x.room === p.room);
+  if (!mates.length) return 0;
+  return mates.reduce((a, x) => a + (rel[relKey(p.id, x.id)] || 0), 0) / mates.length;
+}
+// Yetenek setleri (MGT): işin yeteneği / geliştirme yeteneklerinin ortalaması.
+export function skillK(ctx, p, key) {
+  const S = ctx.pack.skills;
+  if (!p.skills) return 1;
+  const avg = (p.skills.tasarim + p.skills.program + p.skills.grafik + p.skills.ses) / 4 || 1;
+  return clamp(Math.pow((p.skills[key] ?? avg) / avg, S.kExp), S.kMin, S.kMax);
+}
+export const DISC_SKILL = { oyn: 'tasarim', gfx: 'grafik', ses: 'ses', tek: 'program' };
 export function eraMult(ctx, key) {
   let m = 1;
   for (const mod of ctx.state.marketMods) if (mod[key] !== undefined) m *= mod[key];
@@ -48,7 +81,8 @@ export function personWeekly(ctx, p, n) {
   const crunch = ctx.state.crunch ? pr.crunchOut : 1;
   let prod = eraMult(ctx, 'prodMult');
   if (prod < 1 && ctx.state.research.done.uzaktan) prod = 1 - (1 - prod) * 0.3;
-  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl;
+  const rel = 1 + ctx.pack.relations.outK * relAvg(ctx, p) / 100;
+  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl * designOf(ctx, p).speed * rel;
 }
 
 // --- Production yardımcıları

@@ -1,8 +1,9 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp } from '../kernel.js';
-import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty } from '../models.js';
+import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
+import { growSkills } from './people.js';
 import { publishersAvailable, initWorld } from './world.js';
 export { publishersAvailable };
 
@@ -35,6 +36,7 @@ export function release(ctx, { projectId, publisherId, price }) {
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
+    devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [],
   };
   game.peak = peakWeekly(ctx, game);
   if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
@@ -61,7 +63,7 @@ export function release(ctx, { projectId, publisherId, price }) {
   ip.lastRelease = state.week; ip.games++;
   }
   // Deneyim
-  for (const p of state.staff) if (['gelistirme', 'grafik', 'ses', 'qa'].includes(roomOf(ctx, p)?.type)) { p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120)); p.games++; }
+  for (const p of state.staff) if (['gelistirme', 'grafik', 'ses', 'qa'].includes(roomOf(ctx, p)?.type)) { const o = p.skill; p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120) * traitOf(ctx, p, 'learn')); growSkills(ctx, p, o); p.games++; }
   const eng = state.engines.find((e) => e.id === pj.engineId);
   if (eng) for (const fid of eng.features) state.usedFeatures[fid] = true;
 
@@ -121,6 +123,7 @@ export function weeklySales(ctx) {
     }
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
+    (g.profitHist ||= []).push(Math.round(g.revenue - (g.devCost || 0) - (g.postCost || 0))); if (g.profitHist.length > 104) g.profitHist.shift();
     (g.hist ||= []).push(units); if (g.hist.length > 104) g.hist.shift();
     if (g.mmo) g.subs += units * pack.mmo.subPerUnit;
     if (rev) { ledger.post('satis', Math.round(rev), g.name); total += rev; }

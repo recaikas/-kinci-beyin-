@@ -12,6 +12,8 @@ import * as Con from './systems/console.js';
 import * as Post from './systems/post.js';
 import * as Know from './systems/knowledge.js';
 import * as World from './systems/world.js';
+import * as People from './systems/people.js';
+import * as Co from './systems/company.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -28,6 +30,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
     loans: [], debtWeeks: 0, flags: {},
     pending: [], eventCounts: {}, lastEvents: [], nextEventWeek: 20,
     news: [], gameOver: null, lastCombo: null,
+    designs: {}, vacationPolicy: 'planli', rel: {},
   };
 }
 
@@ -43,6 +46,9 @@ function migrate(state) {
   state.salesHist ||= [];
   state.rivalGames ||= [];
   state.top ||= [];
+  state.designs ||= {};
+  state.vacationPolicy ||= 'planli';
+  state.rel ||= {};
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -116,6 +122,7 @@ export function makeGame(state, pack = PACK) {
         state.prestige = Math.max(0, state.prestige - pack.prestige.decayPerYear);
         bus.fire('yearProceeded', state.week);
       }
+      Co.weeklyCompany(ctx);
       Eco.weeklyChaos(ctx);
       Eco.weeklySolvency(ctx);
       // olaylar
@@ -147,6 +154,7 @@ export function makeGame(state, pack = PACK) {
       if (state.cash - cost < -Eco.creditLimit(ctx)) return { ok: false, msg: `Geliştirme maliyeti ${cost.toLocaleString('tr-TR')} $; bütçe yetmiyor.` };
       ledger.post('gelistirme', -cost, `${o.name}: lisans ve kitler`);
       const pj = Prod.newProject(ctx, { ...o, roomId: room.id });
+      pj.cost = cost;
       state.projects.push(pj);
       bus.fire('projectStarted', pj);
       ctx.news(`🎮 Yeni proje: "${o.name}"`, 'info');
@@ -170,7 +178,9 @@ export function makeGame(state, pack = PACK) {
       const pj = api.projectById(pid);
       if (!pj) return { ok: false, msg: 'Pazarlanacak proje yok.' };
       if (c.research && !state.research.done[c.research]) return { ok: false, msg: 'Araştırma gerekli.' };
-      ledger.post('pazarlama', -Math.round(c.cost * M.inflation(ctx) ** 0.7), `${c.name}: ${pj.name}`);
+      const cc = Math.round(c.cost * M.inflation(ctx) ** 0.7);
+      ledger.post('pazarlama', -cc, `${c.name}: ${pj.name}`);
+      pj.cost = (pj.cost || 0) + cc;
       pj.hype = clamp(pj.hype + c.hype, 0, pack.hype.max);
       return { ok: true };
     },
@@ -238,6 +248,13 @@ export function makeGame(state, pack = PACK) {
     upgradeStations: () => Eco.upgradeStations(ctx),
     takeLoan: (a) => Eco.takeLoan(ctx, a),
     acquireRival: (id) => Market.acquireRival(ctx, id),
+    setDesign: (bid, did) => Eco.setDesign(ctx, bid, did),
+    // --- Tatil ve şirket
+    sendVacation: (id) => People.sendVacation(ctx, id),
+    setVacationPolicy: (id) => People.setVacationPolicy(ctx, id),
+    goPublic: (pct) => Co.goPublic(ctx, pct),
+    dividend: () => Co.dividend(ctx),
+    buyback: () => Co.buyback(ctx),
 
     finalScore() {
       const s = pack.score;
@@ -251,4 +268,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co };

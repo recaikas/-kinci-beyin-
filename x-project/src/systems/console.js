@@ -1,7 +1,7 @@
 // Özel konsol (Game Dev Story): donanım laboratuvarı + donanım mühendisi, iki aşamalı yapım, piyasaya çıkış,
 // donanım satışı ve rakiplerden lisans geliri. Yeni konsol eskisini piyasadan çeker (V).
 import { clamp, lerpTable } from '../kernel.js';
-import { H, Pz, inflation, tableYear } from '../models.js';
+import { H, Pz, inflation, tableYear, skillK } from '../models.js';
 import { weeklyOutput, hasRoom } from './staff.js';
 
 const C = (ctx) => ctx.pack.console;
@@ -59,7 +59,7 @@ export function weeklyConsole(ctx) {
   // Yapım
   const job = state.consoles.find((k) => k.id === state.consoleJob);
   if (job) {
-    for (const { p, w } of weeklyOutput(ctx, (r) => r.type === 'donanim')) job.points += w * ctx.pack.careers.find((x) => x.id === p.career).hw;
+    for (const { p, w } of weeklyOutput(ctx, (r) => r.type === 'donanim')) job.points += w * ctx.pack.careers.find((x) => x.id === p.career).hw * skillK(ctx, p, 'donanim');
     const built = state.week - job.startedWeek;
     if (built > 0 && built % c.fanLossWeeks === 0) {
       const last = state.games[state.games.length - 1];

@@ -1,6 +1,7 @@
 // Kadro sistemi: odalar (MGT2), kariyerler (Kairosoft), işe alım, maaş, stres, moral, tükenmişlik, istifa, transfer, eğitim.
 import { clamp } from '../kernel.js';
-import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel } from '../models.js';
+import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel, designOf, relAvg } from '../models.js';
+import { genSkills, growSkills, weeklyVacations, weeklyRelations, ensureSkills } from './people.js';
 
 // --- Odalar
 export const officeOf = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
@@ -105,8 +106,11 @@ export function makePerson(ctx, { skill, career: cid, founder = false, name, lev
   const c = cid ? pack.careers.find((x) => x.id === cid) : rng.pick(pack.careers.filter((x) => x.tier === 1));
   const lvl = level ?? rng.int(0, pack.careerRules.hireMaxLevel);
   const trait = !founder && rng.chance(pack.traitChance) ? rng.pick(pack.traits).id : null;
+  const trait2 = trait && rng.chance(pack.traitChance2) ? rng.pick(pack.traits.filter((t) => t.id !== trait)).id : null;
+  const skills = genSkills(ctx, sk, c.disc);
   const [j0, j1] = pack.economy.salaryJitter;
   return {
+    skills, trait2, vacDue: rng.range(0, 1.5),
     id: state.nextId++,
     name: name ?? `${rng.pick(g.first)} ${rng.pick(g.last)}`,
     skill: sk, career: c.id, careers: { [c.id]: lvl }, spec: c.disc, trait, founder,
@@ -203,18 +207,28 @@ export function weeklyStaff(ctx) {
   const restRoom = hasRoom(ctx, 'mola');
   const busyRooms = new Set(state.rooms.filter((r) => roomBusy(ctx, r)).map((r) => r.id));
   const leaving = [];
+  weeklyRelations(ctx);
+  weeklyVacations(ctx);
+  const banned = !pack.vacation.policies[state.vacationPolicy || 'planli'].cap;
   for (const p of state.staff) {
+    ensureSkills(ctx, p);
     if (!p.room || !state.rooms.some((r) => r.id === p.room)) p.room = (freeRoom(ctx) || state.rooms[0]).id;
     if (p.status !== 'ok') {
       p.statusWeeks--;
       p.stress = clamp(p.stress + wb.stressRest, 0, 100);
       if (p.statusWeeks <= 0) {
         if (p.status === 'egitim') {
-          const gain = p.trainGain * (1 - p.skill / pack.trainingRules.diminish);
+          const gain = p.trainGain * (1 - p.skill / pack.trainingRules.diminish) * traitOf(ctx, p, 'learn');
+          const old = p.skill;
           p.skill = clamp(Math.round(p.skill + gain), 1, pack.trainingRules.skillMax);
+          growSkills(ctx, p, old);
           p.salary = Math.round(p.salary * (1 + gain * pack.trainingRules.salaryRaisePerPoint));
           ctx.news(`🎓 ${p.name} eğitimi bitirdi (beceri ${p.skill}).`, 'good');
           ctx.bus.fire('trainingFinished', p);
+        }
+        if (p.status === 'tatil') {
+          p.morale = clamp(p.morale + pack.vacation.backMorale, 0, 100);
+          p.stress = clamp(p.stress + pack.vacation.backStress, 0, 100);
         }
         p.status = 'ok';
       }
@@ -227,14 +241,16 @@ export function weeklyStaff(ctx) {
     if (state.crunch && busy) ds += wb.stressCrunch;
     if (state.flags.union && state.crunch) ds -= 2;
     if (restRoom) ds += pack.rooms.restRoomStress;
-    p.stress = clamp(p.stress + ds * (ds > 0 ? traitOf(ctx, p, 'stress') : 1), 0, 100);
+    const des = designOf(ctx, p);
+    p.stress = clamp(p.stress + ds * (ds > 0 ? traitOf(ctx, p, 'stress') * des.stress : 1), 0, 100);
 
     const market = salaryFor(ctx, p.skill) * Math.pow(pack.careerRules.salaryPerLevel, careerLevel(p));
     const underpaid = p.founder ? 0 : Math.max(0, 1 - p.salary / market) * 100 * wb.moraleUnderpaidK;
-    const target = wb.moraleTarget - p.stress * wb.moraleStressK * 6 + teamMood + traitOf(ctx, p, 'moraleSelf', 0) - underpaid + (state.flags.union ? 5 : 0) + (restRoom ? 3 : 0);
+    const target = wb.moraleTarget - p.stress * wb.moraleStressK * 6 + teamMood + traitOf(ctx, p, 'moraleSelf', 0) - underpaid + (state.flags.union ? 5 : 0) + (restRoom ? 3 : 0)
+      + des.morale + pack.relations.moraleK * relAvg(ctx, p) / 100;
     p.morale = clamp(p.morale + (target - p.morale) * wb.moraleRecovery, 0, 100);
 
-    if (p.stress >= wb.burnoutAt && rng.chance(wb.burnoutChance)) {
+    if (p.stress >= wb.burnoutAt && rng.chance(wb.burnoutChance * (banned ? pack.vacation.banBurnout : 1))) {
       p.status = 'tukenmis'; p.statusWeeks = rng.int(...wb.burnoutWeeks);
       ctx.news(`💀 ${p.name} tükendi. ${p.statusWeeks} hafta yok.`, 'bad');
       state.heat += 3;

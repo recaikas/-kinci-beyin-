@@ -1,6 +1,6 @@
 // Üretim: oyun projesi (3 faz × 3 görev), uzman odalar, QA, hata ayıklama, dış kaynak, sözleşme, araştırma, motor.
 import { clamp } from '../kernel.js';
-import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf } from '../models.js';
+import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL } from '../models.js';
 import { weeklyOutput } from './staff.js';
 
 // --- Proje (MGT: her geliştirme odası kendi oyununu yapar; uzman odalar ve QA tüm projelere bölünür)
@@ -45,8 +45,11 @@ export function weeklyProject(ctx) {
   // Destek odası hedefi (MGT): atanmış projeye ya da (atanmamışsa) uygun tüm projelere eşit bölünür.
   for (const r of state.rooms) if (r.target && r.type !== 'gelistirme' && !state.projects.some((p) => p.id === r.target)) r.target = null;
   const share = (room, pj, pool) => (room.target ? (room.target === pj.id ? 1 : 0) : pool.includes(pj) ? 1 / pool.length : 0);
+  const wage = (p, k = 1) => (p.salary || 0) / 4 * k; // aylık maaşın haftalık payı → proje maliyeti (MGT satış paneli)
   for (const pj of state.projects) {
     const crew = weeklyOutput(ctx, worksOn(pj));
+    pj.cost = (pj.cost || 0) + crew.reduce((a, x) => a + wage(x.p), 0);
+    for (const { p, room } of weeklyOutput(ctx, (r) => ['grafik', 'ses', 'qa', 'pazarlama'].includes(r.type))) pj.cost += wage(p, share(room, pj, ['grafik', 'ses'].includes(room.type) ? inDev : state.projects));
     if (pj.status === 'dev') {
       const g = pack.genres.find((x) => x.id === pj.genre);
       pj.phase = Math.min(2, Math.floor(pj.week / (pj.totalWeeks / 3)));
@@ -57,7 +60,7 @@ export function weeklyProject(ctx) {
         const c = careerOf(ctx, p);
         for (const i of ids) {
           const m = pack.missions[i];
-          let pts = w * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc];
+          let pts = w * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc] * skillK(ctx, p, DISC_SKILL[m.disc]);
           if (m.disc === 'tek') pts *= eng;
           pj.points[m.disc] += pts;
           pj.bugs += pts * bugK(p);
@@ -68,12 +71,12 @@ export function weeklyProject(ctx) {
         const d = room.type === 'grafik' ? 'gfx' : 'ses';
         const k = share(room, pj, inDev);
         if (!k) continue;
-        const pts = w * rm.expertMult * careerOf(ctx, p).aff[d] * k;
+        const pts = w * rm.expertMult * careerOf(ctx, p).aff[d] * k * skillK(ctx, p, DISC_SKILL[d]);
         pj.points[d] += pts;
         pj.bugs += pts * bugK(p) * 0.5;
       }
       // Pazarlama odası: her hafta hype
-      for (const { w, room } of weeklyOutput(ctx, (r) => r.type === 'pazarlama')) pj.hype = Math.min(pack.hype.max, pj.hype + w * rm.marketingHypeK * share(room, pj, state.projects));
+      for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'pazarlama')) pj.hype = Math.min(pack.hype.max, pj.hype + w * rm.marketingHypeK * share(room, pj, state.projects) * skillK(ctx, p, 'pazar'));
       if (crew.length) pj.week++;
       pj.hype = Math.max(0, pj.hype - pack.hype.decayDev);
       if (pj.week >= pj.totalWeeks) {
@@ -87,7 +90,7 @@ export function weeklyProject(ctx) {
     // QA: tüm projelere bölünür; hata temizler, oynanışı cilalar.
     for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'qa')) {
       const k = share(room, pj, state.projects);
-      pj.bugs = Math.max(0, pj.bugs - debugRate(p, w) * rm.qaBugK * k);
+      pj.bugs = Math.max(0, pj.bugs - debugRate(p, w) * rm.qaBugK * k * skillK(ctx, p, 'test'));
       pj.points.oyn += w * rm.qaPolish * k;
     }
   }
@@ -109,6 +112,7 @@ export function outsource(ctx, pid, i) {
   if (state.office.tier < r.office) return { ok: false, msg: `${r.name} için daha büyük ofis gerekli.` };
   if (state.cash - r.fee < 0) return { ok: false, msg: `${r.name} ${r.fee.toLocaleString('tr-TR')} $ istiyor.` };
   ledger.post('dis_kaynak', -r.fee, r.name);
+  pj.cost = (pj.cost || 0) + r.fee;
   pj.points[r.disc] += r.points;
   pj.bugs += r.points * pack.outsource.bugShare;
   pj.outsourced++;
@@ -219,7 +223,7 @@ export function startResearch(ctx, id) {
 export function weeklyResearch(ctx) {
   const { state, pack } = ctx;
   const pr = pack.production;
-  for (const { w, room } of weeklyOutput(ctx, () => true)) state.research.rp += w * (pr.rpShare + (room.type === 'arastirma' ? pr.researchRoomRp : 0));
+  for (const { p, w, room } of weeklyOutput(ctx, () => true)) state.research.rp += w * (pr.rpShare + (room.type === 'arastirma' ? pr.researchRoomRp * skillK(ctx, p, 'arge') * traitOf(ctx, p, 'research') : 0));
   const cur = state.research.current;
   if (cur && --cur.weeksLeft <= 0) {
     state.research.done[cur.id] = state.week;
