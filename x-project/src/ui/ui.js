@@ -1,7 +1,7 @@
 // Arayüz (GDT/Kairosoft esinli): tam ekran sahne, üstte HUD ve proje sayacı, altta ikonlu menü,
 // menüden açılan pencereler (açıkken oyun durur), adım adım yeni oyun sihirbazı, faz başında dağılım
 // penceresi, yayında eleştirmen ekranı. Oyun mantığı game.js'te; burası yalnızca çağırır ve gösterir.
-import { newGame, loadGame, M, Prod, Eco, Market, Staff, Con } from '../game.js';
+import { newGame, loadGame, M, Prod, Eco, Market, Staff, Con, Post, Know } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { makeRenderer, menuIcon } from './render.js';
 import { money } from '../kernel.js';
@@ -23,7 +23,7 @@ export function boot(root, hotData = {}) {
   const app = {
     game: null, running: false, speed: 1, frame: 0, timer: null, win: null, sub: {}, wasRunning: false, wasRunningD: false, dialog: null,
     draft: null, wiz: 1, engineSel: new Set(), engineName: 'Motor', consoleDraft: { name: 'X Kutu', type: 'konsol', cpu: '', media: '' },
-    confirm: null, expanded: new Set(), seenNews: 0, lastPhase: null, askedRelease: null,
+    confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
   const el = { stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
@@ -76,9 +76,10 @@ export function boot(root, hotData = {}) {
     for (const n of g.state.news) { if (n === before) break; if (n.type !== 'info') note(n.t, n.type); }
     render();
     if (g.state.pending.length || g.state.gameOver) return showEvent();
-    const pj = g.state.project;
-    if (pj && pj.status === 'dev' && pj.phase !== app.lastPhase) phaseDialog();
-    else if (pj && pj.status === 'debug' && app.askedRelease !== pj.id) readyDialog();
+    for (const pj of g.state.projects) {
+      if (pj.status === 'dev' && app.phaseSeen[pj.id] !== pj.phase) return phaseDialog(pj);
+      if (pj.status === 'debug' && !app.readySeen[pj.id]) return readyDialog(pj);
+    }
   }
   function loop() {
     app.frame++;
@@ -122,11 +123,11 @@ export function boot(root, hotData = {}) {
     set('play', app.running ? '❚❚' : '▶'); f('play').className = app.running ? '' : 'primary'; f('play').setAttribute('aria-label', app.running ? 'Durdur' : 'Oynat');
     set('speed', `${app.speed}×`);
     // proje sayacı (GDT): yapı yalnızca proje değişince kurulur
-    const pj = s.project, slot = f('proj');
-    const key = pj ? `p${pj.id}` : 'none';
+    const pj = s.projects[0], slot = f('proj');
+    const key = pj ? `p${pj.id}:${s.projects.length}` : 'none';
     if (slot.dataset.key !== key) {
       slot.dataset.key = key;
-      slot.innerHTML = pj ? `<button class="proj" data-open="gelistir"><span class="pname"></span><span class="counters">${['oyn', 'gfx', 'ses', 'tek'].map((d) => `<b class="num c-${d}" title="${discName(d)}" data-d="${d}"></b>`).join('')}<b class="num c-bug" title="Hata" data-d="bug"></b></span><span class="bar prog"><i></i></span></button>`
+      slot.innerHTML = pj ? `<button class="proj" data-open="gelistir"><span class="pname"></span>${s.projects.length > 1 ? `<em class="more">+${s.projects.length - 1} proje</em>` : ''}<span class="counters">${['oyn', 'gfx', 'ses', 'tek'].map((d) => `<b class="num c-${d}" title="${discName(d)}" data-d="${d}"></b>`).join('')}<b class="num c-bug" title="Hata" data-d="bug"></b></span><span class="bar prog"><i></i></span></button>`
         : '<button class="proj idle" data-open="gelistir"><span>Proje yok</span><small>Yeni oyun başlat</small></button>';
     }
     if (pj) {
@@ -143,7 +144,7 @@ export function boot(root, hotData = {}) {
     if (!s) return;
     if (!el.menu.children.length) el.menu.innerHTML = MENU.map(([id, name]) => `<button data-open="${id}"><img src="${icons[id]}" alt=""><span>${name}</span><em class="badge" hidden></em></button>`).join('');
     const unread = Math.max(0, s.news.length - app.seenNews);
-    const badge = { gunluk: unread ? String(Math.min(unread, 99)) : '', gelistir: s.project?.status === 'debug' ? '!' : '', personel: s.staff.some((p) => p.status === 'tukenmis') ? '!' : '' };
+    const badge = { gunluk: unread ? String(Math.min(unread, 99)) : '', gelistir: s.projects.some((p) => p.status === 'debug') ? '!' : '', personel: s.staff.some((p) => p.status === 'tukenmis') ? '!' : '' };
     for (const b of el.menu.children) {
       const id = b.dataset.open, em = b.querySelector('.badge');
       b.classList.toggle('on', app.win === id);
@@ -180,33 +181,56 @@ export function boot(root, hotData = {}) {
     el.winBody.scrollTop = top;
   }
 
-  // ---------- GELİŞTİR
+  // ---------- GELİŞTİR: proje listesi, sihirbaz (bilgi rozetli), proje ayrıntısı
   function defaultDraft() {
     const g = G(), y = M.tableYear(ctx());
     const r = PACK.rivals, pick = (a) => a[(g.state.week + g.state.games.length * 3) % a.length];
-    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'] };
+    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '' };
   }
+  const badgeOf = (v) => (v == null ? '' : `<em class="kn k${v}">${Know.rating(v)[0]}</em>`);
   function winDevelop(sub) {
     if (sub === 'sozlesme') return contractsView();
-    return G().state.project ? projectView() : wizard();
+    const s = G().state;
+    const pj = app.sel && s.projects.find((p) => p.id === app.sel);
+    if (pj) return projectView(pj);
+    if (app.wizOn) return wizard();
+    return projectList();
+  }
+  function projectList() {
+    const g = G(), s = g.state, c = ctx();
+    const free = g.freeDevRooms();
+    const cards = s.projects.map((pj) => {
+      const v = pj.status === 'dev' ? (pj.week / pj.totalWeeks) * 100 : 100;
+      const room = s.rooms.find((r) => r.id === pj.roomId);
+      const helpers = s.rooms.filter((r) => r.mode === 'destek' && r.target === pj.id).length;
+      const pv = g.previewReview(pj.id);
+      return `<button class="pcard ${pj.status === 'debug' ? 'ready' : ''}" data-act="sel" data-id="${pj.id}">
+        <span class="top"><b>${esc(pj.name)}</b>${pj.kind === 'ek' ? '<span class="pill">Ek paket</span>' : ''}<span class="num score">${Math.round(pv.score)}</span></span>
+        <small class="muted">${PACK.genres.find((x) => x.id === pj.genre).name} · ${PACK.topics.find((t) => t[0] === pj.topic)[1]} · ${room ? Staff.roomType(c, room.type).name + ' #' + room.id : 'odasız'}${helpers ? ` + ${helpers} destek odası` : ''}</small>
+        ${bar(v, 'prog')}<small>${pj.status === 'dev' ? `${PACK.production.phaseNames[pj.phase]} · ${pj.week}/${pj.totalWeeks} hf` : `Yayına hazır · ${fmt(pj.bugs)} hata`}</small></button>`;
+    }).join('');
+    const why = free.length ? '' : '<p class="muted small">Boş geliştirme odası yok. Ofis penceresinden yeni bir geliştirme odası kur; ya da bir odayı başka projeye destek olarak çalıştır.</p>';
+    return `<div class="plist">${cards || '<p class="muted">Şu an süren proje yok.</p>'}</div>${why}
+      <div class="foot"><span class="muted small">${s.projects.length} proje · ${free.length} boş geliştirme odası</span><button class="primary big" data-act="new" ${free.length ? '' : 'disabled'}>Yeni oyun</button></div>`;
   }
   function wizard() {
-    const g = G(), s = g.state, c = ctx(), y = M.tableYear(c);
+    const g = G(), s = g.state, c = ctx(), y = M.tableYear(c), kn = Know.known(c);
     const d = (app.draft ||= defaultDraft());
     const done = s.research.done, trend = s.trend || {};
     const steps = ['Fikir', 'Platform', 'Onay'];
-    const head = `<ol class="steps">${steps.map((n, i) => `<li class="${app.wiz === i + 1 ? 'on' : app.wiz > i + 1 ? 'done' : ''}">${i + 1}. ${n}</li>`).join('')}</ol>`;
+    const head = `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div><ol class="steps">${steps.map((n, i) => `<li class="${app.wiz === i + 1 ? 'on' : app.wiz > i + 1 ? 'done' : ''}">${i + 1}. ${n}</li>`).join('')}</ol>`;
     const opt = (v, label, sel, dis = false) => `<option value="${v}" ${sel ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(label)}</option>`;
     const nav = (back, nextLabel) => `<div class="foot">${back ? '<button data-act="wiz" data-id="-1">Geri</button>' : ''}<span></span><button class="primary" data-act="wiz" data-id="1">${nextLabel}</button></div>`;
     if (app.wiz === 1) {
       const genres = PACK.genres.filter((x) => !x.research || done[x.research]);
       const topics = PACK.topics.filter((t) => t[4] <= y);
-      const tile = (key, id, label, on, hot) => `<button class="tile ${on ? 'on' : ''}" data-pick="${key}" data-id="${id}">${esc(label)}${hot ? '<em>trend</em>' : ''}</button>`;
+      const tile = (key, id, label, on, hot, k) => `<button class="tile ${on ? 'on' : ''}" data-pick="${key}" data-id="${id}">${esc(label)}${hot ? '<em>trend</em>' : ''}${badgeOf(k)}</button>`;
+      const focus = kn.genreFocus(d.genre) ? (() => { const gg = PACK.genres.find((x) => x.id === d.genre); return `<p class="muted small">Öğrendiğin ideal dağılım (${gg.name}): ${['oyn', 'gfx', 'ses', 'tek'].map((k) => `${discName(k)} %${Math.round(gg.disc[k] * 100)}`).join(' · ')}</p>`; })() : '';
       return head + `<label class="field">Oyunun adı<input id="f-name" data-draft="name" value="${esc(d.name)}" maxlength="40"></label>
-        <h3>Konu</h3><div class="tiles">${topics.map((t) => tile('topic', t[0], t[1], d.topic === t[0], trend.topic === t[0])).join('')}</div>
-        <h3>Tür</h3><div class="tiles">${genres.map((x) => tile('genre', x.id, x.name, d.genre === x.id, trend.genre === x.id)).join('')}</div>
+        <h3>Konu <small class="muted">rozet: seçili türle bilinen uyum</small></h3><div class="tiles">${topics.map((t) => tile('topic', t[0], t[1], d.topic === t[0], trend.topic === t[0], kn.topicGenre(t[0], d.genre))).join('')}</div>
+        <h3>Tür</h3><div class="tiles">${genres.map((x) => tile('genre', x.id, x.name, d.genre === x.id, trend.genre === x.id, kn.topicGenre(d.topic, x.id))).join('')}</div>${focus}
         <div class="form"><label>Alt tür<select id="f-sub" data-draft="sub" ${done.alt_tur ? '' : 'disabled'}>${opt('', done.alt_tur ? 'Yok (−3)' : 'Araştırma gerekli (−3)', !d.sub)}${genres.filter((x) => x.id !== d.genre).map((x) => opt(x.id, x.name, d.sub === x.id)).join('')}</select></label>
-        <label>Kitle<select id="f-aud" data-draft="audience">${PACK.audiences.map((a) => opt(a.id, a.name, d.audience === a.id)).join('')}</select></label></div>`
+        <label>Kitle<select id="f-aud" data-draft="audience">${PACK.audiences.map((a) => { const k = kn.topicAud(d.topic, a.id); return opt(a.id, a.name + (k ? ` (${Know.rating(k)[0]})` : ''), d.audience === a.id); }).join('')}</select></label></div>`
         + nav(false, 'Platforma geç');
     }
     if (app.wiz === 2) {
@@ -214,13 +238,15 @@ export function boot(root, hotData = {}) {
       const plats = M.activePlatforms(c).map((p) => {
         const locked = !p.own && p.tech > maxTech;
         return `<label class="pick ${locked ? 'locked' : ''}"><input type="checkbox" id="pl-${p.id}" data-plat="${p.id}" ${d.platforms.includes(p.id) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-          <span class="name">${esc(p.name)}${p.own ? ' ★' : ''}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
+          <span class="name">${esc(p.name)}${p.own ? ' ★' : ''} ${badgeOf(kn.platGenre(p.id, d.genre))}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
       }).join('');
-      return head + `<fieldset class="picks"><legend>Platformlar</legend>${plats}</fieldset>
+      const free = g.freeDevRooms();
+      return head + `<fieldset class="picks"><legend>Platformlar <small>rozet: seçili türle bilinen uyum</small></legend>${plats}</fieldset>
         <div class="form">
           <label>Boyut<select id="f-size" data-draft="size">${PACK.sizes.map((z) => { const lock = z.research && !done[z.research] ? ' (araştır)' : s.office.tier < z.office ? ` (${PACK.offices[z.office - 1].name})` : ''; return opt(z.id, `${z.name} · ${z.weeks} hf${lock}`, d.size === z.id, !!lock); }).join('')}</select></label>
           <label>Motor<select id="f-engine" data-draft="engineId">${opt('', 'Motorsuz', !d.engineId)}${s.engines.map((e) => opt(e.id, `${e.name} (${M.engineScore(c, e)})`, String(d.engineId) === String(e.id))).join('')}</select></label>
-          <label class="wide">Seri<select id="f-ip" data-draft="sequelOf">${opt('', 'Yeni IP', !d.sequelOf)}${s.ips.map((ip) => opt(ip.id, `${ip.name} ★${ip.value.toFixed(1)}`, String(d.sequelOf) === String(ip.id))).join('')}</select></label>
+          <label>Seri<select id="f-ip" data-draft="sequelOf">${opt('', 'Yeni IP', !d.sequelOf)}${s.ips.map((ip) => opt(ip.id, `${ip.name} ★${ip.value.toFixed(1)}`, String(d.sequelOf) === String(ip.id))).join('')}</select></label>
+          <label>Geliştirme odası<select id="f-room" data-draft="roomId">${free.map((r) => opt(r.id, `${Staff.roomType(c, r.type).name} #${r.id} · ${Staff.membersOf(c, r).length} kişi`, String(d.roomId) === String(r.id))).join('')}</select></label>
         </div>` + nav(true, 'Özete geç');
     }
     const genre = PACK.genres.find((x) => x.id === d.genre), topic = PACK.topics.find((t) => t[0] === d.topic);
@@ -232,15 +258,16 @@ export function boot(root, hotData = {}) {
         <span>Başlangıç maliyeti</span><b class="num">${money(Prod.projectCost(c, d))}</b><span>Kasa</span><b class="num">${money(s.cash)}</b></div>
       </div><div class="foot"><button data-act="wiz" data-id="-1">Geri</button><span></span><button class="primary big" data-act="start">Geliştirmeye başla</button></div>`;
   }
-  function projectView() {
-    const g = G(), s = g.state, c = ctx(), pj = s.project;
+  function projectView(pj) {
+    const g = G(), s = g.state, c = ctx();
     const genre = PACK.genres.find((x) => x.id === pj.genre);
     const topic = PACK.topics.find((t) => t[0] === pj.topic)[1];
     const prog = pj.status === 'dev' ? (pj.week / pj.totalWeeks) * 100 : 100;
-    const pv = g.previewReview();
+    const pv = g.previewReview(pj.id);
+    const pid = pj.id;
     const discs = ['oyn', 'gfx', 'ses', 'tek'].map((d) => { const v = (pj.points[d] / M.target(c, d, pj.size)) * 100; return `<div class="disc"><span>${discName(d)}</span>${bar(v, 'd-' + d)}<b class="num">${Math.round(Math.min(v, 999))}%</b></div>`; }).join('');
-    const camps = PACK.hype.campaigns.filter((x) => !x.minYear || M.tableYear(c) >= x.minYear).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('');
-    const outs = PACK.outsource.rows.map((_, i) => Prod.outsourceRow(c, i)).filter((r) => r.office <= s.office.tier).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>${discName(r.disc)} · +${fmt(r.points)} puan</small></div><button data-act="outsource" data-id="${r.i}" ${pj.status !== 'dev' ? 'disabled' : ''}>${money(r.fee)}</button></div>`).join('');
+    const camps = PACK.hype.campaigns.filter((x) => !x.minYear || M.tableYear(c) >= x.minYear).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pid}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('');
+    const outs = PACK.outsource.rows.map((_, i) => Prod.outsourceRow(c, i)).filter((r) => r.office <= s.office.tier).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>${discName(r.disc)} · +${fmt(r.points)} puan</small></div><button data-act="outsource" data-pid="${pid}" data-id="${r.i}" ${pj.status !== 'dev' ? 'disabled' : ''}>${money(r.fee)}</button></div>`).join('');
     let release = '';
     if (pj.status === 'debug') {
       const pubs = Market.publishersAvailable(c);
@@ -248,18 +275,19 @@ export function boot(root, hotData = {}) {
         <label class="wide">Yayıncı<select id="r-pub">${pubs.map((p) => `<option value="${p.id}" ${s.fans < p.minFans ? 'disabled' : ''}>${esc(p.name)} · güç ${p.power} · pay %${Math.round(p.royalty * 100)}${s.fans < p.minFans ? ` (${fmt(p.minFans)} hayran)` : ''}</option>`).join('')}
           ${s.research.done.oz_yayin ? `<option value="">Kendi yayınım · güç ${Math.round(M.selfPublishPower(c))}</option>` : ''}</select></label>
         <label>Fiyat ($)<input id="r-price" type="number" min="1" max="120" value="${Math.max(10, Math.round(20 * M.inflation(c) ** 0.4))}"></label></div>
-        <div class="foot"><span class="muted small">${fmt(pj.bugs)} hata kaldı. Beklemek hataları azaltır, maaş yer.</span><button class="primary big" data-act="release">Yayınla</button></div></section>`;
+        <div class="foot"><span class="muted small">${fmt(pj.bugs)} hata kaldı. Beklemek hataları azaltır, maaş yer.</span><button class="primary big" data-act="release" data-pid="${pid}">Yayınla</button></div></section>`;
     }
-    return `<div class="proj-head"><div><h2>${esc(pj.name)}</h2><p class="muted small">${genre.name}${pj.sub ? ' + ' + PACK.genres.find((x) => x.id === pj.sub).name : ''} · ${esc(topic)} · ${PACK.sizes.find((z) => z.id === pj.size).name}</p></div>
+    return `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div>
+      <div class="proj-head"><div><h2>${esc(pj.name)}</h2><p class="muted small">${genre.name}${pj.sub ? ' + ' + PACK.genres.find((x) => x.id === pj.sub).name : ''} · ${esc(topic)} · ${PACK.sizes.find((z) => z.id === pj.size).name}${pj.kind === 'ek' ? ' · ek paket' : ''}</p></div>
         <div class="forecast"><small>Şu an çıksa</small><b class="num">${Math.round(pv.score)}</b></div></div>
       <div class="progress"><span>${pj.status === 'dev' ? `${PACK.production.phaseNames[pj.phase]} · hafta ${pj.week}/${pj.totalWeeks}` : 'Hata ayıklama'}</span>${bar(prog, 'prog')}</div>
       ${release}
       <section class="box"><h3>Hedefe ulaşma</h3>${discs}<p class="muted small">${pv.notes.map(esc).join(' · ') || 'Ceza yok'} · Uyum ×${pv.F.toFixed(2)} · Hiza ×${pv.hiza.toFixed(2)} · Hype ${Math.round(pj.hype)}</p>
-        ${pj.status === 'dev' ? '<div class="foot"><button data-act="phase">Zaman dağılımını ayarla</button></div>' : ''}</section>
+        ${pj.status === 'dev' ? `<div class="foot"><button data-act="phase" data-pid="${pid}">Zaman dağılımını ayarla</button></div>` : ''}</section>
       <section class="box"><h3>Pazarlama</h3><div class="btns">${camps}</div></section>
-      <section class="box"><h3>Baskı</h3><div class="foot"><span class="muted small">Crunch: +%40 üretim; stres, hata ve skandal riski patlar.</span><button data-act="crunch" class="${s.crunch ? 'danger on' : ''}">${s.crunch ? 'Crunch\'ı bitir' : 'Crunch başlat'}</button></div></section>
+      <section class="box"><h3>Baskı</h3><div class="foot"><span class="muted small">Crunch tüm stüdyoya uygulanır: +%40 üretim; stres, hata ve skandal riski patlar.</span><button data-act="crunch" class="${s.crunch ? 'danger on' : ''}">${s.crunch ? 'Crunch\'ı bitir' : 'Crunch başlat'}</button></div></section>
       <details class="box"><summary><h3>Dış kaynak</h3></summary><p class="muted small">Tek seferlik ücretle anında puan. Pahalılaştıkça getirisi azalır.</p>${outs}</details>
-      <div class="foot"><button class="ghost danger" data-act="cancel">${app.confirm === 'cancel' ? 'Emin misin? Tekrar bas' : 'Projeyi iptal et'}</button></div>`;
+      <div class="foot"><button class="ghost danger" data-act="cancel" data-pid="${pid}">${app.confirm === 'cancel' + pid ? 'Emin misin? Tekrar bas' : 'Projeyi iptal et'}</button></div>`;
   }
   function contractsView() {
     const s = G().state, c = ctx();
@@ -328,7 +356,10 @@ export function boot(root, hotData = {}) {
     const st = PACK.workstations.tiers[s.stationTier], up = Eco.stationUpgradeCost(c), cap = Staff.roomSeats(c);
     const rooms = s.rooms.map((r) => {
       const t = Staff.roomType(c, r.type), people = Staff.membersOf(c, r);
-      const mode = r.type === 'gelistirme' ? `<select id="md-${r.id}" data-act="mode" data-id="${r.id}" aria-label="Oda modu">${Object.entries(PACK.rooms.modes).map(([k, v]) => `<option value="${k}" ${r.mode === k ? 'selected' : ''}>${v}</option>`).join('')}</select>` : '';
+      const own = s.projects.find((p) => p.roomId === r.id);
+      const modeOpts = Object.entries(PACK.rooms.modes).filter(([k]) => k !== 'destek').map(([k, v]) => `<option value="${k}" ${r.mode === k ? 'selected' : ''}>${v}</option>`).join('')
+        + (own ? '' : s.projects.map((p) => `<option value="destek:${p.id}" ${r.mode === 'destek' && r.target === p.id ? 'selected' : ''}>Destek: ${esc(p.name)}</option>`).join(''));
+      const mode = r.type === 'gelistirme' ? `<p class="muted small">${own ? `Projesi: <b>${esc(own.name)}</b>` : r.mode === 'destek' ? 'Başka projeye destek veriyor' : 'Projesi yok'}</p><select id="md-${r.id}" data-act="mode" data-id="${r.id}" aria-label="Oda modu">${modeOpts}</select>` : '';
       return `<section class="box room r-${r.type}"><div class="head"><h3>${t.name}</h3><span class="pill">${people.length}/${cap}</span></div>
         <p class="muted small">${t.desc}</p>${mode}
         <p class="names">${people.map((p) => `<span class="spec s-${p.spec}">${esc(p.name.split(' ')[0])}</span>`).join('') || '<span class="muted small">Boş</span>'}</p>
@@ -384,15 +415,89 @@ export function boot(root, hotData = {}) {
       <div class="foot"><b class="num">${q ? money(q.cost) : ''}</b><button class="primary" data-act="console" ${q ? '' : 'disabled'}>Konsolu yap</button></div>${mine}`;
   }
 
+  // ---------- GRAFİKLER: tek seri, ortak bir y ekseni, üzerine gelince çizgi + değer (kayıtlı veri app.charts'ta)
+  function chart(id, values, { labels = [], fmtv = fmt, color = 'var(--sky)', kind = 'line', h = 150 } = {}) {
+    if (!values.length) return '<p class="muted small">Henüz veri yok.</p>';
+    app.charts[id] = { values, labels, fmtv };
+    const W = 600, H = h, pl = 54, pr = 10, pt = 10, pb = 22;
+    const max = Math.max(1, ...values), min = Math.min(0, ...values);
+    const x = (i) => pl + (values.length === 1 ? (W - pl - pr) / 2 : (i * (W - pl - pr)) / (values.length - 1));
+    const y = (v) => pt + ((max - v) * (H - pt - pb)) / (max - min || 1);
+    const ticks = (min < 0 ? [max, 0, min] : [max, max / 2, 0]).map((v) => `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl - 6}" y="${y(v) + 4}" class="ax" text-anchor="end">${esc(fmtv(v))}</text>`).join('');
+    let marks = '';
+    if (kind === 'bar') {
+      const bw = Math.max(4, Math.min(28, (W - pl - pr) / values.length - 4));
+      marks = values.map((v, i) => { const x0 = pl + ((i + 0.5) * (W - pl - pr)) / values.length - bw / 2; const top = Math.min(y(v), y(0)), hh = Math.max(1, Math.abs(y(v) - y(0))); return `<rect x="${x0}" y="${top}" width="${bw}" height="${hh}" rx="2" class="${v < 0 ? 'neg' : 'pos'}"/>`; }).join('');
+    } else {
+      const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      marks = `<polygon points="${pl},${y(Math.max(0, min))} ${pts} ${x(values.length - 1)},${y(Math.max(0, min))}" fill="${color}" opacity="0.14"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>
+        <circle cx="${x(values.length - 1)}" cy="${y(values[values.length - 1])}" r="4" fill="${color}" stroke="var(--panel-2)" stroke-width="2"/>`;
+    }
+    const lab = labels.length ? `<text x="${pl}" y="${H - 6}" class="ax">${esc(labels[0])}</text><text x="${W - pr}" y="${H - 6}" class="ax" text-anchor="end">${esc(labels[labels.length - 1])}</text>` : '';
+    return `<div class="chart" data-chart="${id}" data-kind="${kind}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(id)}">${ticks}${marks}${lab}<line class="cross" x1="0" x2="0" y1="${pt}" y2="${H - pb}" visibility="hidden"/></svg><div class="tip" hidden></div></div>`;
+  }
+  const spark = (vals) => {
+    if (!vals || vals.length < 2) return '';
+    const max = Math.max(1, ...vals);
+    return `<svg class="spark" viewBox="0 0 60 16" preserveAspectRatio="none" aria-hidden="true"><polyline points="${vals.map((v, i) => `${(i * 60) / (vals.length - 1)},${15 - (v / max) * 14}`).join(' ')}" fill="none" stroke="var(--sky)" stroke-width="1.5"/></svg>`;
+  };
+  root.addEventListener('pointermove', (e) => {
+    const box = e.target.closest?.('.chart');
+    if (!box) return;
+    const data = app.charts[box.dataset.chart];
+    if (!data) return;
+    const svg = box.querySelector('svg'), r = svg.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / r.width * 600;
+    const n = data.values.length, pl = 54, pr = 10;
+    const i = box.dataset.kind === 'bar' ? Math.floor(((fx - pl) / (600 - pl - pr)) * n) : Math.round(((fx - pl) / (600 - pl - pr)) * (n - 1));
+    const k = Math.max(0, Math.min(n - 1, i));
+    const cx = box.dataset.kind === 'bar' ? pl + ((k + 0.5) * (600 - pl - pr)) / n : pl + (n === 1 ? 0 : (k * (600 - pl - pr)) / (n - 1));
+    const cross = svg.querySelector('.cross'); cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    const tip = box.querySelector('.tip');
+    tip.hidden = false; tip.textContent = `${data.labels[k] ?? ''} · ${data.fmtv(data.values[k])}`;
+    tip.style.left = `${Math.min(r.width - 140, Math.max(0, (cx / 600) * r.width - 60))}px`;
+  });
+  root.addEventListener('pointerleave', (e) => {
+    const box = e.target.closest?.('.chart');
+    if (box) { box.querySelector('.tip').hidden = true; box.querySelector('.cross').setAttribute('visibility', 'hidden'); }
+  }, true);
+
   // ---------- PAZAR
+  function gameDetail(gm) {
+    const g = G(), s = g.state, c = ctx();
+    const P = PACK.post;
+    const targets = Post.portTargets(c, gm);
+    const canExp = Post.expansionAllowed(c, gm) && g.freeDevRooms().length;
+    const wk = (gm.hist || []).map((_, i, a) => `${gm.weeks - a.length + i + 1}. hafta`);
+    const actions = gm.active ? `<div class="btns">
+        <button data-act="patch" data-id="${gm.id}" ${gm.patches >= P.patchMax ? 'disabled' : ''}>Güncelleme yayınla<small>${gm.patches >= P.patchMax ? 'sınırda' : money(Post.patchCost(c, gm))}</small></button>
+        <button data-act="pricedrop" data-id="${gm.id}">Fiyatı %${Math.round(P.priceDropPct * 100)} düşür<small>${gm.price} $ → ${Math.max(P.priceFloor, Math.round(gm.price * (1 - P.priceDropPct)))} $</small></button>
+      </div>` : '<p class="muted small">Oyun raflardan kalktı. Port ile yeni platformda yeniden çıkabilir.</p>';
+    const port = !gm.expansion && !gm.portOf && targets.length ? `<div class="form"><label class="wide">Başka platforma uyarla (port)<select id="port-sel">${targets.map((p) => `<option value="${p.id}">${esc(p.name)} · ${money(Post.portCost(c, gm, p.id))}</option>`).join('')}</select></label></div>
+      <div class="foot"><span class="muted small">Not −${P.portScorePenalty}, satış ×${P.portSales}.</span><button data-act="port" data-id="${gm.id}">Uyarla</button></div>` : '';
+    const exp = !gm.expansion && !gm.portOf ? `<div class="foot"><span class="muted small">Ek paket: aynı konu ve türde kısa proje, temel oyunun satışlarına bağlı. ${Post.expansionAllowed(c, gm) ? '' : 'Bu oyun için artık yapılamaz.'}</span><button data-act="expansion" data-id="${gm.id}" ${canExp ? '' : 'disabled'}>Ek paket başlat</button></div>` : '';
+    return `<div class="foot"><button class="ghost" data-act="back-game">← Oyunlar</button><span></span></div>
+      <div class="proj-head"><div><h2>${esc(gm.name)}</h2><p class="muted small">${PACK.genres.find((x) => x.id === gm.genre).name} · ${gm.year} · ${gm.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ')} · ${gm.price} $</p></div>
+        <div class="forecast"><small>Not</small><b class="num">${gm.score}</b></div></div>
+      <div class="kv"><span>Kopya</span><b class="num">${fmt(gm.units)}</b><span>Gelir</span><b class="num">${money(gm.revenue)}</b><span>Rafta</span><b>${gm.weeks} hafta${gm.active ? '' : ' (bitti)'}</b><span>Güncelleme</span><b>${gm.patches || 0}/${P.patchMax}</b></div>
+      <section class="box"><h3>Haftalık satış (kopya)</h3>${chart('game' + gm.id, gm.hist || [], { labels: wk })}</section>
+      <section class="box"><h3>Yayın sonrası</h3>${actions}${port}${exp}</section>`;
+  }
   function winMarket(sub) {
     const s = G().state, c = ctx();
     if (sub === 'liste') return `<ol class="charts">${s.charts.slice(0, 15).map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)}</small></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ol>`;
     if (sub === 'rakip') return s.rivals.map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('');
+    const gm = app.selGame && s.games.find((x) => x.id === app.selGame);
+    if (gm) return gameDetail(gm);
     const tr = s.trend ? (s.trend.genre ? PACK.genres.find((x) => x.id === s.trend.genre).name : PACK.topics.find((t) => t[0] === s.trend.topic)[1]) : '—';
     const mods = s.marketMods.map((m) => { const e = PACK.eras.find((x) => x.id === m.id); return `<span class="pill ${m.salesMult < 1 ? 'warn' : ''}">${esc(e.title)} · satış ×${m.salesMult}</span>`; }).join('');
-    const games = [...s.games].reverse().map((x) => `<tr class="${x.active ? '' : 'dim'}"><td>${esc(x.name)}</td><td class="num">${x.score}</td><td class="num">${fmt(x.units)}</td><td class="num">${money(x.revenue)}</td><td class="num">${x.active ? fmt(x.lastWeek) : x.mmo && x.subs > 0 ? fmt(x.subs) + ' ab.' : '—'}</td></tr>`).join('');
-    return `<div class="btns"><span class="pill">Trend: ${esc(tr)}</span>${mods}</div><div class="scroll"><table><thead><tr><th>Oyun</th><th>Not</th><th>Kopya</th><th>Gelir</th><th>Bu hf</th></tr></thead><tbody>${games || '<tr><td colspan="5" class="muted">Henüz oyun yok.</td></tr>'}</tbody></table></div>`;
+    const hist = s.salesHist.slice(-104);
+    const labels = hist.map((h) => `Y${Math.floor(h.w / 48) + 1} A${Math.floor((h.w % 48) / 4) + 1}`);
+    const games = [...s.games].reverse().map((x) => `<tr class="${x.active ? '' : 'dim'} click" data-game="${x.id}"><td>${esc(x.name)}${x.expansion ? ' <small>ek</small>' : x.portOf ? ' <small>port</small>' : ''}</td><td class="num">${x.score}</td><td>${spark((x.hist || []).slice(-26))}</td><td class="num">${fmt(x.units)}</td><td class="num">${money(x.revenue)}</td></tr>`).join('');
+    return `<div class="btns"><span class="pill">Trend: ${esc(tr)}</span>${mods}</div>
+      <section class="box"><h3>Stüdyonun haftalık geliri (son 2 yıl)</h3>${chart('sales', hist.map((h) => h.r), { labels, fmtv: money, color: 'var(--mint)' })}</section>
+      <p class="muted small">Ayrıntı, güncelleme, port ve ek paket için bir oyuna dokun.</p>
+      <div class="scroll"><table><thead><tr><th>Oyun</th><th>Not</th><th>Son 6 ay</th><th>Kopya</th><th>Gelir</th></tr></thead><tbody>${games || '<tr><td colspan="5" class="muted">Henüz oyun yok.</td></tr>'}</tbody></table></div>`;
   }
 
   // ---------- FİNANS
@@ -400,15 +505,20 @@ export function boot(root, hotData = {}) {
     const g = G(), s = g.state, c = ctx();
     const y = Math.floor(s.week / 48), years = [y - 2, y - 1, y].filter((v) => v >= 0);
     const cats = [...new Set(years.flatMap((v) => Object.keys(s.ledger.byYear[v] || {})))].sort();
-    const head = years.map((v) => `<th>${Math.floor(PACK.meta.startYear + v / s.lengthMult)}</th>`).join('');
+    const yearName = (v) => String(Math.floor(PACK.meta.startYear + v / s.lengthMult));
+    const head = years.map((v) => `<th>${yearName(v)}</th>`).join('');
     const rows = cats.map((k) => `<tr><td>${k.replace('_', ' ')}</td>${years.map((v) => { const a = (s.ledger.byYear[v] || {})[k] || 0; return `<td class="num ${a < 0 ? 'neg' : ''}">${a ? money(a) : '—'}</td>`; }).join('')}</tr>`).join('');
     const tot = `<tr class="tot"><td>Net</td>${years.map((v) => { const a = g.ctx.ledger.yearProfit(v); return `<td class="num ${a < 0 ? 'neg' : ''}">${money(a)}</td>`; }).join('')}</tr>`;
     const owed = s.loans.reduce((a, l) => a + l.remaining, 0), avail = Math.max(0, Eco.creditLimit(c) * 3 - owed);
+    const allYears = Array.from({ length: y + 1 }, (_, i) => i).slice(-15);
+    const cash = s.cashHist.slice(-120);
     return `<section class="box"><div class="kv"><span>Aylık maaş</span><b class="num">${money(s.staff.reduce((a, p) => a + p.salary, 0))}</b><span>Aylık kira</span><b class="num">${money(Eco.rent(c))}</b>
       <span>Kredi limiti</span><b class="num">${money(Eco.creditLimit(c))}</b><span>Borç</span><b class="num">${money(owed)}</b></div>
       ${s.debtWeeks ? `<p class="neg">Limit aşımı: ${s.debtWeeks}/${PACK.economy.bankruptWeeks} hafta. Sonra iflas.</p>` : ''}
-      <p class="muted small">Kredi: 24 ay, yıllık %${PACK.economy.loanRateYear * 100}.</p>
+      <p class="muted small">Kredi: 24 ay, yıllık %${Math.round(PACK.economy.loanRateYear * 100)}.</p>
       <div class="btns">${[0.25, 0.5, 1].map((f) => `<button data-act="loan" data-id="${Math.round(avail * f)}" ${avail < 1000 ? 'disabled' : ''}>${money(avail * f)} çek</button>`).join('')}</div></section>
+      <section class="box"><h3>Kasa (aylık, son 10 yıl)</h3>${chart('cash', cash, { labels: cash.map((_, i) => `${cash.length - i} ay önce`).map((l, i, a) => (i === a.length - 1 ? 'şimdi' : l)), fmtv: money, color: 'var(--candy)' })}</section>
+      <section class="box"><h3>Yıllık net kâr / zarar</h3>${chart('net', allYears.map((v) => g.ctx.ledger.yearProfit(v)), { labels: allYears.map(yearName), fmtv: money, kind: 'bar' })}</section>
       <div class="scroll"><table><thead><tr><th>Kalem</th>${head}</tr></thead><tbody>${rows}${tot}</tbody></table></div>`;
   }
   function winNews() {
@@ -444,9 +554,9 @@ export function boot(root, hotData = {}) {
     dialog(`<small class="muted">${g.cal().era} · ${g.cal().label}</small><h2>${esc(ev.title)}</h2><p>${esc(ev.text)}</p>
       <div class="choices">${ev.choices.map((ch, i) => `<button data-choice="${i}" class="${i === 0 ? 'primary' : ''}">${esc(ch.label)}</button>`).join('')}</div>`, 'event');
   }
-  function phaseDialog() {
-    const pj = G().state.project, genre = PACK.genres.find((x) => x.id === pj.genre);
-    app.lastPhase = pj.phase;
+  function phaseDialog(pj) {
+    const genre = PACK.genres.find((x) => x.id === pj.genre);
+    app.phaseSeen[pj.id] = pj.phase; app.dlgPid = pj.id;
     const ids = PACK.missions.map((m, i) => i).filter((i) => PACK.missions[i].phase === pj.phase);
     dialog(`<small class="muted">${esc(pj.name)} · ${genre.name}</small><h2>${PACK.production.phaseNames[pj.phase]}</h2>
       <p class="small">Ekibin zamanını bu fazın üç görevine dağıt. ◆ işaretli görevler bu tür için kritik.</p>
@@ -456,24 +566,23 @@ export function boot(root, hotData = {}) {
     updatePhasePct();
   }
   function updatePhasePct() {
-    const pj = G()?.state.project;
+    const pj = G()?.state.projects.find((p) => p.id === app.dlgPid);
     if (!pj) return;
     const ids = PACK.missions.map((m, i) => i).filter((i) => PACK.missions[i].phase === pj.phase);
     const sum = ids.reduce((a, i) => a + pj.alloc[i], 0) || 1;
     for (const i of ids) { const b = el.modal.querySelector(`#pct-${i}`); if (b) b.textContent = `%${Math.round((pj.alloc[i] / sum) * 100)}`; }
   }
-  function readyDialog() {
-    const pj = G().state.project;
-    app.askedRelease = pj.id;
+  function readyDialog(pj) {
+    app.readySeen[pj.id] = true;
     dialog(`<h2>"${esc(pj.name)}" hazır</h2><p>İçerik tamamlandı. Ekip şimdi hataları ayıklıyor (${fmt(pj.bugs)} hata). İstediğin an yayınlayabilirsin.</p>
-      <div class="choices"><button class="primary" data-act="go-release">Yayın ekranına git</button><button data-act="close-dialog">Biraz daha ayıklasınlar</button></div>`);
+      <div class="choices"><button class="primary" data-act="go-release" data-pid="${pj.id}">Yayın ekranına git</button><button data-act="close-dialog">Biraz daha ayıklasınlar</button></div>`);
   }
-  function reviewDialog(game, rv) {
+  function reviewDialog(game, rv, report = []) {
     const verdict = rv.score >= 90 ? 'Başyapıt!' : rv.score >= 75 ? 'Çok iyi' : rv.score >= 60 ? 'Fena değil' : rv.score >= 40 ? 'Vasat' : 'Felaket';
     dialog(`<small class="muted">Eleştirmenler konuştu</small><h2>${esc(game.name)}</h2>
       <div class="critics">${rv.critics.map((k, i) => `<div class="critic" style="animation-delay:${0.25 + i * 0.35}s"><small>${esc(k.name)}</small><b class="num">${k.score}</b></div>`).join('')}</div>
       <p class="verdict" style="animation-delay:1.8s"><b class="num">${rv.score}</b> ${verdict}</p>
-      <p class="muted small">${rv.notes.map(esc).join(' · ') || 'Ceza yok'}</p>
+      <div class="report"><h3>Oyun raporu</h3><ul>${report.map((l) => `<li class="${l.tone}">${esc(l.text)}</li>`).join('')}</ul><p class="muted small">Öğrendiklerin yeni oyun sihirbazında rozet olarak görünür.</p></div>
       <button class="primary block" data-act="close-dialog">Satışları izle</button>`, 'review');
   }
   function setupScreen() {
@@ -492,17 +601,20 @@ export function boot(root, hotData = {}) {
   }
   function start(game) {
     app.game = game; app.draft = null; app.wiz = 1; app.engineSel = new Set(); app.seenNews = game.state.news.length;
-    app.lastPhase = game.state.project?.phase ?? null; app.askedRelease = game.state.project?.status === 'debug' ? game.state.project.id : null;
+    app.phaseSeen = Object.fromEntries(game.state.projects.map((p) => [p.id, p.phase])); app.readySeen = Object.fromEntries(game.state.projects.filter((p) => p.status === 'debug').map((p) => [p.id, true]));
+    app.sel = null; app.selGame = null; app.wizOn = false;
     app.dialog = null; app.wasRunningD = false; el.modal.hidden = true; el.modal.innerHTML = '';
     fit(); render();
     play(true);
     if (game.state.pending.length) return showEvent();
-    if (!game.state.project && !game.state.games.length) { app.sub.gelistir = 'oyun'; openWin('gelistir'); }
+    if (!game.state.projects.length && !game.state.games.length) { app.sub.gelistir = 'oyun'; app.wizOn = true; openWin('gelistir'); }
   }
 
   // --- etkileşim
   root.addEventListener('click', (e) => {
     if (e.target === el.win) return closeWin();
+    const row = e.target.closest('tr[data-game]');
+    if (row) { app.selGame = +row.dataset.game; el.winBody.scrollTop = 0; return renderWindow(); }
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
     const g = G();
@@ -510,7 +622,7 @@ export function boot(root, hotData = {}) {
     if (b.dataset.sub) { app.sub[app.win] = b.dataset.sub; el.winBody.scrollTop = 0; return renderWindow(); }
     if (b.dataset.pick) { app.draft[b.dataset.pick] = b.dataset.id; if (b.dataset.pick === 'genre' && app.draft.sub === b.dataset.id) app.draft.sub = ''; return renderWindow(); }
     if (b.dataset.choice !== undefined) { g.resolve(+b.dataset.choice); save(); return closeDialog(); }
-    const act = b.dataset.act, id = b.dataset.id;
+    const act = b.dataset.act, id = b.dataset.id, pid = +b.dataset.pid;
     const twice = (key, fn) => { if (app.confirm === key) { app.confirm = null; return run(fn()); } app.confirm = key; return render(); };
     switch (act) {
       case 'close-win': return closeWin();
@@ -527,26 +639,35 @@ export function boot(root, hotData = {}) {
         if (+id > 0 && app.wiz === 2 && !app.draft.platforms.length) return note('En az bir platform seç.', 'bad');
         app.wiz = Math.max(1, Math.min(3, app.wiz + +id)); el.winBody.scrollTop = 0; return renderWindow();
       }
+      case 'new': app.wizOn = true; app.wiz = 1; app.draft = null; el.winBody.scrollTop = 0; return renderWindow();
+      case 'back': app.sel = null; app.wizOn = false; app.confirm = null; el.winBody.scrollTop = 0; return renderWindow();
+      case 'sel': app.sel = +id; el.winBody.scrollTop = 0; return renderWindow();
+      case 'back-game': app.selGame = null; el.winBody.scrollTop = 0; return renderWindow();
       case 'start': {
         const d = app.draft;
-        const res = g.startProject({ ...d, engineId: d.engineId ? +d.engineId : null, sequelOf: d.sequelOf ? +d.sequelOf : null, sub: d.sub || null });
+        const res = g.startProject({ ...d, roomId: d.roomId ? +d.roomId : null, engineId: d.engineId ? +d.engineId : null, sequelOf: d.sequelOf ? +d.sequelOf : null, sub: d.sub || null });
         if (!res.ok) return run(res);
-        app.draft = null; app.wiz = 1; app.wasRunning = false;
-        closeWin(); app.wasRunningD = true;
-        return phaseDialog();
-      }
-      case 'phase': if (app.win) { closeWin(); app.wasRunningD = app.wasRunning; } return phaseDialog();
-      case 'go-release': app.dialog = null; el.modal.hidden = true; app.sub.gelistir = 'oyun'; openWin('gelistir'); app.wasRunning = app.wasRunningD; app.wasRunningD = false; return;
-      case 'release': {
-        const res = g.release({ publisherId: root.querySelector('#r-pub').value || null, price: Math.max(1, +root.querySelector('#r-price').value || 20) });
-        if (!res.ok) return run(res);
+        app.draft = null; app.wiz = 1; app.wizOn = false; app.sel = null;
         const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true;
-        return reviewDialog(res.game, res.review);
+        return phaseDialog(res.project);
+      }
+      case 'phase': { const pj = g.projectById(pid); if (!pj) return; if (app.win) { const r = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = r; } return phaseDialog(pj); }
+      case 'go-release': app.dialog = null; el.modal.hidden = true; app.sub.gelistir = 'oyun'; app.sel = pid; openWin('gelistir'); app.wasRunning = app.wasRunningD; app.wasRunningD = false; return;
+      case 'release': {
+        const res = g.release({ projectId: pid, publisherId: root.querySelector('#r-pub').value || null, price: Math.max(1, +root.querySelector('#r-price').value || 20) });
+        if (!res.ok) return run(res);
+        app.sel = null;
+        const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true;
+        return reviewDialog(res.game, res.review, res.report);
       }
       case 'crunch': g.toggleCrunch(); return render();
-      case 'cancel': return twice('cancel', () => g.cancelProject());
-      case 'campaign': return run(g.campaign(id));
-      case 'outsource': return run(g.outsource(+id));
+      case 'cancel': return twice('cancel' + pid, () => { app.sel = null; return g.cancelProject(pid); });
+      case 'campaign': return run(g.campaign(pid, id));
+      case 'outsource': return run(g.outsource(pid, +id));
+      case 'patch': return run(g.patch(+id));
+      case 'pricedrop': return run(g.priceDrop(+id));
+      case 'port': return run(g.port(+id, root.querySelector('#port-sel').value));
+      case 'expansion': { const r = g.startExpansion(+id); if (!r.ok) return run(r); app.selGame = null; const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true; return phaseDialog(r.project); }
       case 'contract': return run(g.acceptContract(+id));
       case 'hire': return run(g.hire(+id));
       case 'fire': return twice('fire' + id, () => g.fire(+id));
@@ -575,13 +696,13 @@ export function boot(root, hotData = {}) {
     if (t.dataset.con) { app.consoleDraft[t.dataset.con] = t.value; if (t.dataset.con !== 'name') { t.blur(); renderWindow(); } return; }
     const id = +t.dataset.id;
     if (t.dataset.act === 'move') { t.blur(); return run(g.moveStaff(id, +t.value)); }
-    if (t.dataset.act === 'mode') { g.setRoomMode(id, t.value); t.blur(); return render(); }
+    if (t.dataset.act === 'mode') { t.blur(); return run(g.setRoomMode(id, t.value)); }
     if (t.dataset.act === 'train' && t.value) { t.blur(); return run(g.train(id, t.value)); }
     if (t.dataset.act === 'career' && t.value) { t.blur(); return run(g.changeCareer(id, t.value)); }
   });
   root.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.dataset.alloc !== undefined) { G().setAlloc(+t.dataset.alloc, +t.value); updatePhasePct(); }
+    if (t.dataset.alloc !== undefined) { G().setAlloc(app.dlgPid, +t.dataset.alloc, +t.value); updatePhasePct(); }
     if (t.dataset.draft === 'name') app.draft.name = t.value;
     if (t.dataset.con === 'name') app.consoleDraft.name = t.value;
   });

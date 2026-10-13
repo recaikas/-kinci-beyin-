@@ -8,7 +8,7 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 81 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 90 kalibrasyon ve tutarlılık kontrolü
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -42,6 +42,10 @@ Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi
 - **Kariyerler (Game Dev Story)**: 8 kariyer × 5 seviye, RP ile seviye, ön koşullu ileri kariyerler (Yönetmen, Yapımcı, Donanım Mühendisi, Hacker), seviye başına maaş ×1,2
 - **Dış kaynak**: 20 dış çalışan, ücret arttıkça getirisi azalan kalite eğrisi
 - **Kendi konsolun**: tip, işlemci ve medya seç; iki aşamada üret, piyasaya çıkar, donanım ve lisans geliri topla. Yeni konsol eskisini emekli eder
+- **Çoklu proje (MGT)**: her geliştirme odası kendi oyununu yapar; bir oda "Destek" moduyla başka projeye katılabilir. Uzman odalar ve QA projelere bölünür
+- **Oyun raporu ve bilgi (GDT)**: her yayından sonra konu×tür, konu×kitle, platform×tür uyumu ve zaman dağılımı dersleri; sihirbazda rozet olarak görünür
+- **Yayın sonrası**: güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket
+- **Grafikler**: stüdyonun haftalık geliri, oyun başına haftalık satış, aylık kasa, yıllık kâr/zarar
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…
@@ -50,8 +54,8 @@ Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi
 
 | Zorluk | Sonuç |
 |---|---|
-| Kolay | 64–82 M $, 28–34 kişi |
-| Orta | 21–26 M $ |
+| Kolay | 73–94 M $, 30 kişi |
+| Orta | 11–18 M $, 34 kişi |
 | Zor / Efsanevi | Bot garajdan çıkamadan batıyor |
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.

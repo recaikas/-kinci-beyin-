@@ -9,17 +9,19 @@ import * as Market from './systems/market.js';
 import * as Eco from './systems/economy.js';
 import * as Ev from './systems/events.js';
 import * as Con from './systems/console.js';
+import * as Post from './systems/post.js';
+import * as Know from './systems/knowledge.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
   return {
-    version: 2, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
+    version: 3, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
     companyName, founderName, founderSpec, cash: 0, startCash: diff.startCash,
     ledger: { byYear: {}, total: {}, recent: [] },
     office: { tier: 1, floors: 0 }, rooms: [], consoles: [], consoleJob: null, stationTier: 0, stationDown: 0, rentMult: 1,
     staff: [], applicants: [], nextId: 1,
     research: { done: {}, current: null, rp: 0 }, engines: [], engineJob: null, usedFeatures: {},
-    project: null, contract: null, contractOffers: [], games: [], ips: [], charts: [], awards: [],
+    projects: [], knowledge: {}, cashHist: [], salesHist: [], contract: null, contractOffers: [], games: [], ips: [], charts: [], awards: [],
     fans: 0, prestige: 0, reputation: 0, kaos: 0, heat: 0, crunch: false,
     marketMods: [], gameMods: [], erasFired: {}, trend: null, rivals: [],
     loans: [], debtWeeks: 0, flags: {},
@@ -28,7 +30,21 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
   };
 }
 
+// Eski kayıtları taşı: tek proje → proje listesi (v3).
+function migrate(state) {
+  if (!state.projects) {
+    const dev = (state.rooms || []).find((r) => r.type === 'gelistirme');
+    state.projects = state.project ? [{ ...state.project, roomId: dev ? dev.id : null }] : [];
+    delete state.project;
+  }
+  state.knowledge ||= {};
+  state.cashHist ||= [];
+  state.salesHist ||= [];
+  state.version = 3;
+}
+
 export function makeGame(state, pack = PACK) {
+  migrate(state);
   const bus = makeBus();
   const rng = makeRng(state);
   const ledger = makeLedger(state, bus);
@@ -86,6 +102,8 @@ export function makeGame(state, pack = PACK) {
         Con.monthlyConsole(ctx);
         Staff.genApplicants(ctx);
         if (!state.contract || state.contractOffers.length === 0) Prod.genContracts(ctx);
+        state.cashHist.push(Math.round(state.cash));
+        if (state.cashHist.length > 480) state.cashHist.shift();
         bus.fire('monthProceeded', state.week);
       }
       if (newYear) {
@@ -104,9 +122,13 @@ export function makeGame(state, pack = PACK) {
 
     resolve(i) { Ev.resolvePending(ctx, i); },
 
-    // --- Proje
+    // --- Projeler (MGT: her geliştirme odası kendi oyununu yapar)
+    projectById: (id) => state.projects.find((p) => p.id === id),
+    freeDevRooms: () => Prod.freeDevRooms(ctx),
     startProject(o) {
-      if (state.project) return { ok: false, msg: 'Zaten bir proje var.' };
+      const free = Prod.freeDevRooms(ctx);
+      const room = o.roomId ? free.find((r) => r.id === o.roomId) : free[0];
+      if (!room) return { ok: false, msg: 'Boş geliştirme odası yok. Ofis penceresinden yeni bir geliştirme odası kur.' };
       const size = pack.sizes.find((s) => s.id === o.size);
       if (size.research && !state.research.done[size.research]) return { ok: false, msg: 'Bu boyut için araştırma gerekli.' };
       if (state.office.tier < size.office) return { ok: false, msg: `Bu boyut için en az "${pack.offices[size.office - 1].name}" gerekli.` };
@@ -118,28 +140,42 @@ export function makeGame(state, pack = PACK) {
       const cost = Prod.projectCost(ctx, o);
       if (state.cash - cost < -Eco.creditLimit(ctx)) return { ok: false, msg: `Geliştirme maliyeti ${cost.toLocaleString('tr-TR')} $; bütçe yetmiyor.` };
       ledger.post('gelistirme', -cost, `${o.name}: lisans ve kitler`);
-      state.project = Prod.newProject(ctx, o);
-      bus.fire('projectStarted', state.project);
+      const pj = Prod.newProject(ctx, { ...o, roomId: room.id });
+      state.projects.push(pj);
+      bus.fire('projectStarted', pj);
       ctx.news(`🎮 Yeni proje: "${o.name}"`, 'info');
-      return { ok: true };
+      return { ok: true, project: pj };
     },
-    setAlloc(i, v) { if (state.project) state.project.alloc[i] = clamp(v, 0, 100); },
-    cancelProject() {
-      if (!state.project) return;
-      ctx.news(`🗑️ "${state.project.name}" iptal edildi. Ekip sessizce masaya bakıyor.`, 'bad');
+    setAlloc(pid, i, v) { const pj = api.projectById(pid); if (pj) pj.alloc[i] = clamp(v, 0, 100); },
+    cancelProject(pid) {
+      const pj = api.projectById(pid);
+      if (!pj) return { ok: false };
+      ctx.news(`🗑️ "${pj.name}" iptal edildi. Ekip sessizce masaya bakıyor.`, 'bad');
       for (const p of state.staff) p.morale = clamp(p.morale - 10, 0, 100);
-      bus.fire('gameDefinitionCanceled', state.project);
-      state.project = null; state.crunch = false;
+      bus.fire('gameDefinitionCanceled', pj);
+      state.projects = state.projects.filter((x) => x !== pj);
+      if (!state.projects.length) state.crunch = false;
+      return { ok: true };
     },
     release(o) { return Market.release(ctx, o); },
-    previewReview() { return state.project ? M.review({ ...ctx, rng: makeRng({ rng: 7 }) }, state.project) : null; },
-    campaign(id) {
+    previewReview(pid) { const pj = api.projectById(pid); return pj ? M.review({ ...ctx, rng: makeRng({ rng: 7 }) }, pj) : null; },
+    campaign(pid, id) {
       const c = pack.hype.campaigns.find((x) => x.id === id);
-      if (!state.project) return { ok: false, msg: 'Pazarlanacak proje yok.' };
+      const pj = api.projectById(pid);
+      if (!pj) return { ok: false, msg: 'Pazarlanacak proje yok.' };
       if (c.research && !state.research.done[c.research]) return { ok: false, msg: 'Araştırma gerekli.' };
-      ledger.post('pazarlama', -Math.round(c.cost * M.inflation(ctx) ** 0.7), c.name);
-      state.project.hype = clamp(state.project.hype + c.hype, 0, pack.hype.max);
+      ledger.post('pazarlama', -Math.round(c.cost * M.inflation(ctx) ** 0.7), `${c.name}: ${pj.name}`);
+      pj.hype = clamp(pj.hype + c.hype, 0, pack.hype.max);
       return { ok: true };
+    },
+    // --- Yayın sonrası
+    patch: (id) => Post.patch(ctx, id),
+    priceDrop: (id) => Post.priceDrop(ctx, id),
+    port: (id, pid) => Post.port(ctx, id, pid),
+    startExpansion(gid) {
+      const g = state.games.find((x) => x.id === gid);
+      if (!Post.expansionAllowed(ctx, g)) return { ok: false, msg: 'Bu oyuna ek paket yapılamaz (çok eski ya da zaten yapılıyor).' };
+      return api.startProject(Post.expansionDraft(ctx, g));
     },
     toggleCrunch() {
       state.crunch = !state.crunch;
@@ -154,11 +190,23 @@ export function makeGame(state, pack = PACK) {
     // --- Odalar ve kariyer
     buildRoom: (type) => Staff.buildRoom(ctx, type),
     demolishRoom: (id) => Staff.demolishRoom(ctx, id),
-    setRoomMode(id, mode) { const r = state.rooms.find((x) => x.id === id); if (r && pack.rooms.modes[mode]) r.mode = mode; },
+    // mode: 'otomatik' | 'oyun' | 'sozlesme' | 'destek:<projeId>'
+    setRoomMode(id, mode) {
+      const r = state.rooms.find((x) => x.id === id);
+      if (!r) return { ok: false };
+      if (mode.startsWith('destek:')) {
+        const pid = +mode.split(':')[1];
+        if (!state.projects.some((p) => p.id === pid)) return { ok: false, msg: 'Proje yok.' };
+        if (state.projects.some((p) => p.roomId === r.id)) return { ok: false, msg: 'Bu odanın kendi projesi var; önce onu bitir.' };
+        r.mode = 'destek'; r.target = pid; return { ok: true };
+      }
+      if (pack.rooms.modes[mode]) { r.mode = mode; r.target = null; }
+      return { ok: true };
+    },
     moveStaff: (id, roomId) => Staff.moveStaff(ctx, id, roomId),
     levelUp: (id) => Staff.levelUp(ctx, id),
     changeCareer: (id, cid) => Staff.changeCareer(ctx, id, cid),
-    outsource: (i) => Prod.outsource(ctx, i),
+    outsource: (pid, i) => Prod.outsource(ctx, pid, i),
     startConsole: (d) => Con.startConsole(ctx, d),
 
     // --- Sözleşme, araştırma, motor
@@ -188,4 +236,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know };

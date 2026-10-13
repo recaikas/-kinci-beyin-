@@ -3,16 +3,17 @@ import { clamp } from '../kernel.js';
 import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf } from '../models.js';
 import { weeklyOutput } from './staff.js';
 
-// --- Proje
+// --- Proje (MGT: her geliştirme odası kendi oyununu yapar; uzman odalar ve QA tüm projelere bölünür)
 export function newProject(ctx, o) {
   const { state, pack } = ctx;
   const size = pack.sizes.find((s) => s.id === o.size);
   return {
     id: state.nextId++, name: o.name, genre: o.genre, sub: o.sub || null, topic: o.topic, audience: o.audience,
-    platforms: o.platforms, size: o.size, engineId: o.engineId ?? null, sequelOf: o.sequelOf ?? null,
+    platforms: o.platforms, size: o.size, engineId: o.engineId ?? null, sequelOf: o.sequelOf ?? null, roomId: o.roomId ?? null,
+    kind: o.kind || 'oyun', baseGameId: o.baseGameId ?? null,
     alloc: o.alloc || pack.genres.find((g) => g.id === o.genre).hint.map((v) => Math.max(20, v)),
-    week: 0, totalWeeks: size.weeks, phase: 0, status: 'dev',
-    points: { oyn: 0, gfx: 0, ses: 0, tek: 0 }, bugs: 0, hype: 0, startedWeek: state.week, mmo: !!size.mmo, outsourced: 0,
+    week: 0, totalWeeks: Math.round(size.weeks * (o.kind === 'ek' ? pack.post.expansionWeeks : 1)), phase: 0, status: 'dev',
+    points: { oyn: 0, gfx: 0, ses: 0, tek: 0 }, bugs: 0, hype: 0, startedWeek: state.week, mmo: !!size.mmo && o.kind !== 'ek', outsourced: 0,
   };
 }
 
@@ -23,56 +24,64 @@ export function projectCost(ctx, o) {
     const p = platformById(ctx, id);
     if (p) cost += p.licence + p.devCost * size.devCost;
   }
-  return Math.round(cost);
+  return Math.round(cost * (o.kind === 'ek' ? ctx.pack.post.expansionCost : 1));
 }
 
-const devRoom = (mode) => (r) => r.type === 'gelistirme' && r.mode !== mode;
+export const projectOfRoom = (state, room) => state.projects.find((p) => p.roomId === room.id) || null;
+export const freeDevRooms = (ctx) => ctx.state.rooms.filter((r) => r.type === 'gelistirme' && r.mode !== 'sozlesme' && r.mode !== 'destek' && !projectOfRoom(ctx.state, r));
+// Projede çalışan odalar: kendi odası + ona destek veren odalar.
+export const worksOn = (pj) => (r) => r.type === 'gelistirme' && ((r.id === pj.roomId && r.mode !== 'sozlesme' && r.mode !== 'destek') || (r.mode === 'destek' && r.target === pj.id));
 
 export function weeklyProject(ctx) {
   const { state, pack } = ctx;
-  const pj = state.project;
-  if (!pj) return;
+  if (!state.projects.length) return;
   const pr = pack.production, rm = pack.rooms;
-  const crew = weeklyOutput(ctx, devRoom('sozlesme'));
   const bugK = (p) => pr.bugPerPoint * traitOf(ctx, p, 'bugs') * (state.crunch ? pr.crunchBugMult : 1) * clamp(1.3 - p.skill / 100, 0.3, 1.3);
   const debugRate = (p, w) => w * pr.debugPerPointK * (0.5 + p.skill / 100) * careerOf(ctx, p).debug;
-  if (pj.status === 'dev') {
-    const g = pack.genres.find((x) => x.id === pj.genre);
-    pj.phase = Math.min(2, Math.floor(pj.week / (pj.totalWeeks / 3)));
-    const ids = pack.missions.map((m, i) => i).filter((i) => pack.missions[i].phase === pj.phase);
-    const sum = ids.reduce((s, i) => s + pj.alloc[i], 0) || 1;
-    const eng = engineFactor(ctx, state.engines.find((e) => e.id === pj.engineId));
-    for (const { p, w } of crew) {
-      const c = careerOf(ctx, p);
-      for (const i of ids) {
-        const m = pack.missions[i];
-        let pts = w * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc];
-        if (m.disc === 'tek') pts *= eng;
-        pj.points[m.disc] += pts;
-        pj.bugs += pts * bugK(p);
+  // Odası sökülmüş projeye boş bir geliştirme odası bul.
+  for (const pj of state.projects) if (!state.rooms.some((r) => r.id === pj.roomId)) pj.roomId = freeDevRooms(ctx)[0]?.id ?? null;
+  for (const r of state.rooms) if (r.mode === 'destek' && !state.projects.some((p) => p.id === r.target)) { r.mode = 'otomatik'; r.target = null; }
+  const inDev = state.projects.filter((p) => p.status === 'dev');
+  for (const pj of state.projects) {
+    const crew = weeklyOutput(ctx, worksOn(pj));
+    if (pj.status === 'dev') {
+      const g = pack.genres.find((x) => x.id === pj.genre);
+      pj.phase = Math.min(2, Math.floor(pj.week / (pj.totalWeeks / 3)));
+      const ids = pack.missions.map((m, i) => i).filter((i) => pack.missions[i].phase === pj.phase);
+      const sum = ids.reduce((s, i) => s + pj.alloc[i], 0) || 1;
+      const eng = engineFactor(ctx, state.engines.find((e) => e.id === pj.engineId));
+      for (const { p, w } of crew) {
+        const c = careerOf(ctx, p);
+        for (const i of ids) {
+          const m = pack.missions[i];
+          let pts = w * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc];
+          if (m.disc === 'tek') pts *= eng;
+          pj.points[m.disc] += pts;
+          pj.bugs += pts * bugK(p);
+        }
       }
+      // Uzman odalar: geliştirmedeki projelere eşit bölünür, yalnızca kendi disiplinine.
+      for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'grafik' || r.type === 'ses')) {
+        const d = room.type === 'grafik' ? 'gfx' : 'ses';
+        const pts = (w * rm.expertMult * careerOf(ctx, p).aff[d]) / inDev.length;
+        pj.points[d] += pts;
+        pj.bugs += pts * bugK(p) * 0.5;
+      }
+      if (crew.length) pj.week++;
+      pj.hype = Math.max(0, pj.hype - pack.hype.decayDev);
+      if (pj.week >= pj.totalWeeks) {
+        pj.status = 'debug';
+        ctx.news(`🐞 "${pj.name}" içerik olarak bitti. Hata ayıklama başladı; istediğin an yayınlayabilirsin.`, 'info');
+        ctx.bus.fire('projectContentDone', pj);
+      }
+    } else {
+      for (const { p, w } of crew) pj.bugs = Math.max(0, pj.bugs - debugRate(p, w));
     }
-    // Uzman odalar: tüm proje boyunca yalnızca kendi disiplinine, hızlı (MGT2).
-    for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'grafik' || r.type === 'ses')) {
-      const d = room.type === 'grafik' ? 'gfx' : 'ses';
-      const pts = w * rm.expertMult * careerOf(ctx, p).aff[d];
-      pj.points[d] += pts;
-      pj.bugs += pts * bugK(p) * 0.5;
+    // QA: tüm projelere bölünür; hata temizler, oynanışı cilalar.
+    for (const { p, w } of weeklyOutput(ctx, (r) => r.type === 'qa')) {
+      pj.bugs = Math.max(0, pj.bugs - (debugRate(p, w) * rm.qaBugK) / state.projects.length);
+      pj.points.oyn += (w * rm.qaPolish) / state.projects.length;
     }
-    if (crew.length) pj.week++;
-    pj.hype = Math.max(0, pj.hype - pack.hype.decayDev);
-    if (pj.week >= pj.totalWeeks) {
-      pj.status = 'debug';
-      ctx.news(`🐞 "${pj.name}" içerik olarak bitti. Hata ayıklama başladı; istediğin an yayınlayabilirsin.`, 'info');
-      ctx.bus.fire('projectContentDone', pj);
-    }
-  } else {
-    for (const { p, w } of crew) pj.bugs = Math.max(0, pj.bugs - debugRate(p, w));
-  }
-  // QA: geliştirme ve ayıklama boyunca hata temizler, oynanışı cilalar.
-  for (const { p, w } of weeklyOutput(ctx, (r) => r.type === 'qa')) {
-    pj.bugs = Math.max(0, pj.bugs - debugRate(p, w) * rm.qaBugK);
-    pj.points.oyn += w * rm.qaPolish;
   }
 }
 
@@ -84,9 +93,9 @@ export function outsourceRow(ctx, i) {
   const q = Math.pow(feeK / o.rows[0][1], o.qualityExp);
   return { i, name, disc, office, fee, points: Math.round(q * H(ctx) * o.pointsPerQuality) };
 }
-export function outsource(ctx, i) {
+export function outsource(ctx, pid, i) {
   const { state, ledger, pack } = ctx;
-  const pj = state.project;
+  const pj = state.projects.find((p) => p.id === pid);
   if (!pj || pj.status !== 'dev') return { ok: false, msg: 'Dış kaynak yalnızca geliştirme sırasında işe yarar.' };
   const r = outsourceRow(ctx, i);
   if (state.office.tier < r.office) return { ok: false, msg: `${r.name} için daha büyük ofis gerekli.` };
@@ -95,13 +104,13 @@ export function outsource(ctx, i) {
   pj.points[r.disc] += r.points;
   pj.bugs += r.points * pack.outsource.bugShare;
   pj.outsourced++;
-  ctx.news(`📦 ${r.name} teslim etti: +${r.points} puan.`, 'info');
+  ctx.news(`📦 ${r.name} teslim etti: +${r.points} puan (${pj.name}).`, 'info');
   return { ok: true };
 }
 
 // --- Sözleşmeler (GDS yapısı): 1–2 disiplin şartı, zorluk kademesi, iş yükü stüdyo kapasitesiyle ölçeklenir.
 const DISCS = ['oyn', 'gfx', 'ses', 'tek'];
-const contractRooms = (state) => (r) => r.type === 'gelistirme' && (r.mode === 'sozlesme' || (r.mode === 'otomatik' && !state.project));
+const contractRooms = (state) => (r) => r.type === 'gelistirme' && (r.mode === 'sozlesme' || (r.mode === 'otomatik' && !projectOfRoom(state, r)));
 
 // Geliştirme odalarının haftalık toplam üretimi (sözleşme yükünü ölçeklemek için).
 export function devCapacity(ctx) {
@@ -142,8 +151,8 @@ export function acceptContract(ctx, id) {
   state.contract = normalize({ ...o, progress: null, deadline: state.week + o.weeks });
   state.contractOffers = state.contractOffers.filter((x) => x.id !== id);
   ctx.bus.fire('contractStarted', state.contract);
-  if (state.project && !state.rooms.some((r) => r.type === 'gelistirme' && r.mode === 'sozlesme'))
-    ctx.news('📝 Proje sürerken geliştirme odaları oyuna öncelik verir. Bir odayı "Yalnızca sözleşme"ye al.', 'warn');
+  if (!state.rooms.some((r) => r.type === 'gelistirme' && (r.mode === 'sozlesme' || !projectOfRoom(state, r))))
+    ctx.news('📝 Tüm geliştirme odaları oyunla meşgul. Bir odayı "Yalnızca sözleşme"ye al, yoksa sözleşme ilerlemez.', 'warn');
   return { ok: true };
 }
 

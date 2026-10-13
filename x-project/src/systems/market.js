@@ -2,15 +2,16 @@
 import { clamp } from '../kernel.js';
 import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById } from '../models.js';
 import { roomOf } from './staff.js';
+import { learn } from './knowledge.js';
 
 export function publishersAvailable(ctx) {
   const y = tableYear(ctx);
   return ctx.pack.publishers.filter((p) => y >= p.from && y < p.to);
 }
 
-export function release(ctx, { publisherId, price }) {
-  const { state, pack, ledger, bus, rng } = ctx;
-  const pj = state.project;
+export function release(ctx, { projectId, publisherId, price }) {
+  const { state, pack, ledger, bus } = ctx;
+  const pj = state.projects.find((p) => p.id === (projectId ?? state.projects.find((x) => x.status === 'debug')?.id));
   if (!pj || pj.status !== 'debug') return { ok: false, msg: 'Yayınlanacak hazır proje yok.' };
   let pub = null;
   if (publisherId) {
@@ -23,8 +24,10 @@ export function release(ctx, { publisherId, price }) {
   const rv = review(ctx, pj);
   bus.fire('afterGameReview', { project: pj, review: rv });
 
-  // IP
-  let ip = pj.sequelOf ? state.ips.find((x) => x.id === pj.sequelOf) : null;
+  // IP (ek paket temel oyunun IP'sini kullanır, IP değerini değiştirmez)
+  const isExp = pj.kind === 'ek';
+  const base = isExp ? state.games.find((g) => g.id === pj.baseGameId) : null;
+  let ip = base ? state.ips.find((x) => x.id === base.ipId) : pj.sequelOf ? state.ips.find((x) => x.id === pj.sequelOf) : null;
   if (!ip) { ip = { id: state.nextId++, name: pj.name, value: 0, lastRelease: -999, games: 0 }; state.ips.push(ip); }
   const ipValueAtRelease = ip.value;
 
@@ -34,8 +37,10 @@ export function release(ctx, { publisherId, price }) {
     publisherId: pub ? pub.id : null, publisherPower: pub ? pub.power : selfPublishPower(ctx), royalty: pub ? pub.royalty : null,
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
+    expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate,
   };
   game.peak = peakWeekly(ctx, game);
+  if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
   for (const id of game.platforms) game.sold[id] = 0;
 
   // Yayıncı avansı
@@ -52,10 +57,12 @@ export function release(ctx, { publisherId, price }) {
   if (rv.score >= pack.prestige.scoreForUp) state.prestige = Math.min(pack.prestige.max, state.prestige + 1);
   // IP gelişimi (12 ay kuralı)
   const ipr = pack.ip;
+  if (!isExp) {
   const fresh = state.week - ip.lastRelease >= ipr.waitWeeks;
   const gain = (rv.score - ipr.gainScoreRef) * ipr.gainK * (fresh ? 1 : 0.3);
   ip.value = clamp(ip.value + Math.max(ipr.minGain, gain) + (ip.games === 0 ? 0.2 : 0), 0, ipr.max);
   ip.lastRelease = state.week; ip.games++;
+  }
   // Deneyim
   for (const p of state.staff) if (['gelistirme', 'grafik', 'ses', 'qa'].includes(roomOf(ctx, p)?.type)) { p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120)); p.games++; }
   const eng = state.engines.find((e) => e.id === pj.engineId);
@@ -63,15 +70,16 @@ export function release(ctx, { publisherId, price }) {
 
   state.games.push(game);
   state.lastCombo = `${pj.topic}/${pj.genre}`;
-  state.project = null;
-  state.crunch = false;
+  state.projects = state.projects.filter((x) => x !== pj);
+  if (!state.projects.length) state.crunch = false;
+  const report = learn(ctx, pj, rv);
   state.charts.unshift({ name: game.name, studio: state.companyName, score: game.score, week: state.week, mine: true, genre: game.genre });
   bus.fire('afterReleaseGame', game);
   const mood = rv.score >= 85 ? '🎉' : rv.score >= 70 ? '🙂' : rv.score >= 50 ? '😐' : '💩';
   ctx.news(`${mood} "${game.name}" yayında! Not: ${rv.score}. Hayran ${dFans >= 0 ? '+' : ''}${Math.round(dFans)}.`, rv.score >= 70 ? 'good' : 'bad');
   for (const p of state.staff) p.morale = clamp(p.morale + (rv.score - 65) / 3, 0, 100);
   if (rv.score < 40) state.heat += 8;
-  return { ok: true, game, review: rv };
+  return { ok: true, game, review: rv, report };
 }
 
 function weekMult(ctx, game) {
@@ -114,9 +122,12 @@ export function weeklySales(ctx) {
       rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * inflation(ctx) ** 0.5);
     }
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
+    (g.hist ||= []).push(units); if (g.hist.length > 104) g.hist.shift();
     if (g.mmo) g.subs += units * pack.mmo.subPerUnit;
     if (rev) { ledger.post('satis', Math.round(rev), g.name); total += rev; }
   }
+  state.salesHist.push({ w: state.week, u: state.games.reduce((a, g) => a + (g.active ? g.lastWeek : 0), 0), r: Math.round(total) });
+  if (state.salesHist.length > 156) state.salesHist.shift();
   bus.fire('salesCalculated', total);
 }
 
@@ -200,9 +211,10 @@ export function monthlySubsidiaries(ctx) {
 export function scheduled(ctx) {
   const { state, pack } = ctx;
   const month = Math.floor((state.week % 48) / 4) + 1, wk = (state.week % 4) + 1;
-  if (month === pack.fair.month && wk === pack.fair.week && state.project) {
+  const fairPj = state.projects[0];
+  if (month === pack.fair.month && wk === pack.fair.week && fairPj) {
     const cost = Math.round(pack.fair.boothCost * inflation(ctx) ** 0.7);
-    ctx.queue({ id: 'fuar', title: 'GameCon Fuarı', text: `Yıllık fuar kapıda. "${state.project.name}" için stant açmak ${cost.toLocaleString('tr-TR')} $.`,
+    ctx.queue({ id: 'fuar', title: 'GameCon Fuarı', text: `Yıllık fuar kapıda. "${fairPj.name}" için stant açmak ${cost.toLocaleString('tr-TR')} $.`,
       choices: [{ label: 'Stant aç!', effects: { cashRaw: -cost, hype: pack.fair.hype, fans: pack.fair.fans } }, { label: 'Bu yıl pas', effects: {} }] });
   }
   if (month === pack.awards.month && wk === pack.awards.week) awards(ctx);

@@ -12,7 +12,7 @@ function cond(ctx, w = {}) {
   if (w.maxYear && y > w.maxYear) return false;
   if (w.minStaff && n < w.minStaff) return false;
   if (w.officeTier && state.office.tier !== w.officeTier) return false;
-  if (w.hasProject && !state.project) return false;
+  if (w.hasProject && !state.projects.length) return false;
   if (w.hasReleased && !state.games.length) return false;
   if (w.hasMmo && !state.games.some((g) => g.mmo && g.subs > 0)) return false;
   if (w.hasPublisherGame && !state.games.some((g) => g.active && g.publisherId)) return false;
@@ -42,14 +42,16 @@ export function applyEffects(ctx, e = {}) {
   if (e.morale) all((p) => (p.morale = clamp(p.morale + e.morale, 0, 100)));
   if (e.stress) all((p) => (p.stress = clamp(p.stress + e.stress, 0, 100)));
   if (e.skill) all((p) => (p.skill = clamp(p.skill + e.skill, 1, 100)));
-  if (e.hype && state.project) state.project.hype = clamp(state.project.hype + e.hype, 0, ctx.pack.hype.max);
+  // Proje etkileri rastgele bir projeye düşer.
+  const pj = state.projects.length ? rng.pick(state.projects) : null;
+  if (e.hype && pj) pj.hype = clamp(pj.hype + e.hype, 0, ctx.pack.hype.max);
   if (e.fans) state.fans = Math.max(0, Math.round(state.fans + e.fans * Math.max(1, infl ** 0.5)));
   if (e.fansPct) state.fans = Math.max(0, Math.round(state.fans * (1 + e.fansPct)));
   if (e.prestige) state.prestige = clamp(state.prestige + e.prestige, 0, ctx.pack.prestige.max);
   if (e.kaos) state.heat += e.kaos;
   if (e.rp) state.research.rp += e.rp * infl ** 0.5;
-  if (e.progress && state.project && state.project.status === 'dev') state.project.week = clamp(state.project.week + e.progress, 0, state.project.totalWeeks);
-  if (e.bugsPct && state.project) state.project.bugs *= 1 + e.bugsPct;
+  if (e.progress && pj && pj.status === 'dev') pj.week = clamp(pj.week + e.progress, 0, pj.totalWeeks);
+  if (e.bugsPct && pj) pj.bugs *= 1 + e.bugsPct;
   if (e.salesMult) state.gameMods.push({ mult: e.salesMult.mult, untilWeek: state.week + e.salesMult.weeks });
   if (e.salaryPct) all((p) => { if (!p.founder) p.salary = Math.round(p.salary * (1 + e.salaryPct)); });
   if (e.rentPct) state.rentMult *= 1 + e.rentPct;
@@ -108,7 +110,7 @@ export function weeklyEvents(ctx) {
     state.marketMods.push({ id: era.id, salesMult: era.salesMult, prodMult: era.prodMult, creditMult: era.creditMult, untilWeek: state.week + Math.round(era.weeks * state.lengthMult) });
     if (era.flag) state.flags[era.flag] = true;
     if (era.kaos) state.heat += era.kaos;
-    if (era.hype && state.project) state.project.hype += era.hype;
+    for (const p of state.projects) if (era.hype) p.hype += era.hype;
     ctx.queue({ id: era.id, title: `📰 ${era.title}`, text: era.text, choices: [{ label: 'Kemerleri bağla', effects: {} }] });
   }
   for (const m of state.marketMods) if (m.untilWeek <= state.week) {

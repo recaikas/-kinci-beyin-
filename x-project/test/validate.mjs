@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know } from '../src/game.js';
 import * as M from '../src/models.js';
 import { runBot } from './bot.mjs';
 
@@ -148,8 +148,8 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   g.startProject({ name: 'T', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
   const artist = Staff.makePerson(g.ctx, { career: 'tasarimci', level: 0, skill: 50 });
   artist.room = st.rooms[1].id; st.staff.push(artist);
-  const gfx0 = st.project.points.gfx; Prod.weeklyProject(g.ctx);
-  check('Grafik stüdyosu faz 1’de bile grafik üretir', st.project.points.gfx > gfx0);
+  const pj = st.projects[0]; const gfx0 = pj.points.gfx; Prod.weeklyProject(g.ctx);
+  check('Grafik stüdyosu faz 1’de bile grafik üretir', pj.points.gfx > gfx0);
 }
 
 // 15) Özel konsol: engeller, yapım ve çıkış
@@ -169,6 +169,41 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Konsol piyasaya çıkar', !!k.launched, `${k.phase}/${PACK.console.phases.length}`);
   for (let i = 0; i < 20; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
   check('Konsol satar ve platform olur', k.sold > 0 && M.activePlatforms(ctx).some((p) => p.id === k.id), k.sold.toLocaleString());
+}
+
+// 16) Çoklu proje (MGT): her geliştirme odası kendi oyununu yapar
+{
+  const g = newGame({ seed: 12, difficulty: 'kolay' });
+  const st = g.state;
+  st.cash = 1e7; st.office.tier = 2;
+  const base = { genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' };
+  check('İlk proje başlar', g.startProject({ ...base, name: 'A' }).ok);
+  check('Oda yokken ikinci proje başlamaz', !g.startProject({ ...base, name: 'B' }).ok);
+  g.buildRoom('gelistirme');
+  const p2 = Staff.makePerson(g.ctx, { skill: 50 }); p2.room = st.rooms[1].id; st.staff.push(p2);
+  check('Yeni odada ikinci proje başlar', g.startProject({ ...base, name: 'B' }).ok && st.projects.length === 2);
+  for (let i = 0; i < 4; i++) { st.pending = []; g.tick(); }
+  check('İki proje birlikte ilerler', st.projects.every((p) => p.week > 0), st.projects.map((p) => p.week).join('/'));
+}
+
+// 17) Oyun raporu ve yayın sonrası
+{
+  const g = newGame({ seed: 13, difficulty: 'kolay' });
+  const st = g.state;
+  st.cash = 1e7;
+  g.startProject({ name: 'R', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
+  while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
+  const res = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 });
+  check('Rapor üretilir ve bilgi birikir', res.report.length >= 3 && Know.known(g.ctx).topicGenre('uzay', 'aksiyon') === 10, res.report.length + ' satır');
+  const game = res.game;
+  for (let i = 0; i < 3; i++) { st.pending = []; g.tick(); }
+  const w = game.weeks; check('Güncelleme satış ömrünü uzatır', g.patch(game.id).ok && game.weeks < w);
+  const pr = game.price; check('Fiyat indirimi', g.priceDrop(game.id).ok && game.price < pr);
+  st.week = Math.round(8 * 48 * st.lengthMult);
+  const target = Post.portTargets(g.ctx, game)[0];
+  check('Port yeni oyun kaydı açar', !!target && g.port(game.id, target.id).ok && st.games.length === 2, target?.name || '');
+  st.week = game.releasedWeek + 10;
+  check('Ek paket projesi başlar', g.startExpansion(game.id).ok && st.projects[0].kind === 'ek');
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

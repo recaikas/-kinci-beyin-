@@ -172,9 +172,12 @@ export function makeRenderer(canvas) {
     if (r.type === 'grafik') disc = 'gfx';
     else if (r.type === 'ses') disc = 'ses';
     else if (r.type === 'qa' || r.type === 'arastirma' || r.type === 'donanim') disc = null;
-    else if (state.project && state.project.status === 'dev') {
-      const ms = pack.missions.filter((m) => m.phase === state.project.phase);
+    else {
+      const pj = state.projects.find((x) => x.roomId === r.id || (r.mode === 'destek' && r.target === x.id));
+      if (!pj || pj.status !== 'dev') { disc = null; } else {
+      const ms = pack.missions.filter((m) => m.phase === pj.phase);
       disc = ms[(p.id + bubbles.length) % ms.length].disc;
+      }
     }
     const bug = disc && (p.trait === 'hatamakinesi' || state.crunch) && bubbles.length % 4 === 0;
     const color = bug ? '#ff5a6e' : disc ? DISC_COLOR[disc] : r.type === 'arastirma' ? '#ffd36f' : r.type === 'qa' ? '#8ff0c4' : '#b0b0c8';

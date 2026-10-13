@@ -234,7 +234,7 @@ export const PACK = {
       { id: 'mola', name: 'Mola odası', cost: 15000, floor: '#734a5a', desc: 'Buradakiler hızla dinlenir; varlığı herkesin stresini azaltır.' },
       { id: 'donanim', name: 'Donanım laboratuvarı', cost: 500000, research: 'donanim_lab', office: 3, floor: '#4a4a5a', desc: 'Kendi konsolunu yapar. Donanım mühendisi gerekir.' },
     ],
-    modes: { otomatik: 'Oyun, yoksa sözleşme', oyun: 'Yalnızca oyun', sozlesme: 'Yalnızca sözleşme' },
+    modes: { otomatik: 'Kendi oyunu, yoksa sözleşme', oyun: 'Yalnızca kendi oyunu', sozlesme: 'Yalnızca sözleşme', destek: 'Başka projeye destek' },
     expertMult: 2.4, // P (şartname: uzman odada çarpan 2,4)
     qaBugK: 0.9, qaPolish: 0.2,
     restRoomStress: -0.6, restRoomMorale: 0.05,
@@ -272,6 +272,15 @@ export const PACK = {
       ['Bip Bülent', 10, 'ses', 1], ['Synth Sinan', 90, 'ses', 1], ['Orkestra Oya', 300, 'ses', 2], ['Bestekâr Bora', 1100, 'ses', 3], ['Maestro Melis', 2800, 'ses', 4],
       ['Stajyer Sarp', 10, 'tek', 1], ['Freelance Ferda', 100, 'tek', 1], ['Assembly Asım', 350, 'tek', 2], ['Çekirdek Cemre', 1000, 'tek', 3], ['Efsane Ertan', 2500, 'tek', 4],
     ],
+  },
+
+  // Yayın sonrası (MGT/GDT esinli, sayılar P)
+  post: {
+    _tag: 'P',
+    patchCost: 12000, patchMax: 3, patchWeeksBack: 6, patchFansPct: 0.02,
+    priceDropPct: 0.25, priceFloor: 5, priceDropWeeksBack: 2,
+    portCostMult: 0.6, portScorePenalty: 3, portSales: 0.6, portHype: 10,
+    expansionWeeks: 0.5, expansionCost: 0.4, expansionSales: 0.45, expansionMaxAgeWeeks: 96,
   },
 
   // Özel konsol (GDS, V parça ve bedelleri ×0,3 ölçek; yıllar, teknoloji ve satış P)

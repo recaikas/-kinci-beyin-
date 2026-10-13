@@ -180,8 +180,13 @@ export const working = (state) => state.staff.filter((p) => p.status === 'ok');
 export function roomBusy(ctx, room) {
   const s = ctx.state;
   switch (room.type) {
-    case 'gelistirme': return (room.mode !== 'sozlesme' && !!s.project) || (room.mode !== 'oyun' && !!s.contract);
-    case 'grafik': case 'ses': case 'qa': return !!s.project;
+    case 'gelistirme': {
+      if (room.mode === 'destek') return s.projects.some((p) => p.id === room.target);
+      const own = s.projects.some((p) => p.roomId === room.id);
+      return (room.mode !== 'sozlesme' && own) || (!!s.contract && (room.mode === 'sozlesme' || (room.mode === 'otomatik' && !own)));
+    }
+    case 'grafik': case 'ses': return s.projects.some((p) => p.status === 'dev');
+    case 'qa': return s.projects.length > 0;
     case 'arastirma': return true;
     case 'donanim': return !!(s.consoleJob);
     default: return false;

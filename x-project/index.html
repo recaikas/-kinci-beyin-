@@ -162,6 +162,31 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .disc { display: grid; grid-template-columns: 70px 1fr 46px; gap: 6px; align-items: center; font-size: var(--s-1); }
 .disc b { text-align: right; }
 
+/* projeler, bilgi rozetleri, rapor, grafikler */
+.plist { display: grid; gap: 8px; }
+.pcard { display: grid; gap: 4px; text-align: left; padding: 10px 12px; }
+.pcard .top { display: flex; align-items: center; gap: 8px; }
+.pcard .top b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .score { font-size: 1.6rem; color: var(--candy); line-height: 1; }
+.pcard.ready { border-color: var(--mint); }
+.pcard small { font-size: var(--s-1); }
+.more { font-style: normal; font-size: 0.7rem; color: var(--amber); margin-left: 6px; }
+.kn { font-style: normal; font-family: var(--font-num); font-size: 0.95rem; margin-left: 6px; padding: 0 4px; background: var(--panel); border: 1px solid var(--line); }
+.tile.on .kn { background: var(--night); color: var(--ink); }
+.k10, .k9 { color: var(--mint); } .k8 { color: var(--ink-2); } .k7, .k6 { color: var(--blood); }
+.report { display: grid; gap: 6px; text-align: left; }
+.report ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--s-1); }
+.report .good { color: var(--mint); } .report .bad { color: #ffb3bd; }
+.chart { position: relative; }
+.chart svg { width: 100%; height: 150px; display: block; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.chart .ax { fill: var(--ink-2); font-family: var(--font-num); font-size: 15px; }
+.chart .cross { stroke: var(--ink-2); stroke-width: 1; }
+.chart rect.pos { fill: var(--mint); } .chart rect.neg { fill: var(--blood); }
+.chart .tip { position: absolute; top: -6px; background: var(--night); border: 2px solid var(--line); padding: 2px 8px; font-family: var(--font-num); font-size: 1rem; white-space: nowrap; pointer-events: none; }
+.spark { width: 60px; height: 16px; display: block; }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--panel); }
+
 /* personel */
 .legend { display: flex; gap: 14px; font-size: var(--s-1); color: var(--ink-2); flex-wrap: wrap; }
 .dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; }
@@ -202,7 +227,7 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
 
 /* ---- diyaloglar */
 #modal { position: fixed; inset: 0; background: rgba(8, 5, 14, 0.72); display: grid; place-items: center; padding: 16px; z-index: 12; }
-.dialog { background: var(--panel); border: 3px solid var(--candy); box-shadow: 8px 8px 0 var(--shadow); padding: 18px; width: min(480px, 100%); display: grid; gap: 12px; max-height: 90vh; overflow: auto; animation: pop 0.18s steps(3); }
+.dialog { background: var(--panel); border: 3px solid var(--candy); box-shadow: 8px 8px 0 var(--shadow); padding: 18px; width: min(520px, 100%); display: grid; gap: 12px; max-height: 90vh; overflow: auto; animation: pop 0.18s steps(3); }
 .dialog h2 { font-size: var(--s2); }
 .dialog p { font-size: var(--s1); }
 .dialog p.small { font-size: var(--s-1); }

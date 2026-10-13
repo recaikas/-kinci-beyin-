@@ -26,8 +26,9 @@ export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = fa
       const last = state.engines[state.engines.length - 1];
       if (feats.length && (!last || feats.length > last.features.length + 1) && state.cash > 300000 * M.inflation(ctx)) g.buildEngine(`Motor ${state.engines.length + 1}`, feats);
     }
-    // proje
-    if (!state.project) {
+    // projeler: her boş geliştirme odasına bir oyun (sözleşme odası hariç)
+    // Tek büyük proje: diğer geliştirme odaları ona destek verir (sözleşme odası hariç).
+    if (!state.projects.length && g.freeDevRooms().length) {
       const sizes = pack.sizes.filter((s) => !s.mmo && (!s.research || state.research.done[s.research]) && state.office.tier >= s.office);
       const size = sizes[sizes.length - 1];
       const genres = pack.genres.filter((x) => !x.research || state.research.done[x.research]);
@@ -43,15 +44,17 @@ export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = fa
       const alloc = pack.missions.map((m, i) => Math.round(100 * genre.disc[m.disc] / share[m.disc] * genre.mission[i]));
       const eng = state.engines[state.engines.length - 1];
       g.startProject({ name: `Oyun ${++n}`, genre: genre.id, sub, topic: topic[0], audience: 'herkes', platforms: plats, size: size.id, alloc, engineId: eng?.id });
-    } else if (state.project.status === 'debug') {
-      const pj = state.project;
-      const pts = Object.values(pj.points).reduce((a, b) => a + b, 0);
-      if (pj.bugs / pts < 0.02 || state.week - pj.startedWeek > pj.totalWeeks + 6) {
-        const pubs = publishersAvailable(ctx).filter((p) => state.fans >= p.minFans).sort((a, b) => b.power - a.power);
-        const self = state.research.done.oz_yayin && state.fans > 100000;
-        g.release({ publisherId: self ? null : pubs[0]?.id, price: 30 });
-      }
-    } else if (!state.project.campaigned && state.project.week > state.project.totalWeeks / 2 && state.cash > 150000 * M.inflation(ctx)) state.project.campaigned = g.campaign(state.research.done.pazarlama_buyuk && state.cash > 2e6 ? 'tv' : state.research.done.pazarlama_kucuk ? 'dergi' : 'flyer');
+    }
+    for (const pj of [...state.projects]) {
+      if (pj.status === 'debug') {
+        const pts = Object.values(pj.points).reduce((a, b) => a + b, 0);
+        if (pj.bugs / pts < 0.02 || state.week - pj.startedWeek > pj.totalWeeks + 6) {
+          const pubs = publishersAvailable(ctx).filter((p) => state.fans >= p.minFans).sort((a, b) => b.power - a.power);
+          const self = state.research.done.oz_yayin && state.fans > 100000;
+          g.release({ projectId: pj.id, publisherId: self ? null : pubs[0]?.id, price: 30 });
+        }
+      } else if (!pj.campaigned && pj.week > pj.totalWeeks / 2 && state.cash > 150000 * M.inflation(ctx)) pj.campaigned = g.campaign(pj.id, state.research.done.pazarlama_buyuk && state.cash > 2e6 ? 'tv' : state.research.done.pazarlama_kucuk ? 'dergi' : 'flyer');
+    }
     // kadro & ofis
     if (state.week % 4 === 1) {
       const wages = state.staff.reduce((s, p) => s + p.salary, 0) || 1000;
@@ -75,8 +78,9 @@ export function runBot({ seed = 1, difficulty = 'orta', years = 20, verbose = fa
       if (sc && M.expectedStationTier(ctx) > state.stationTier && state.cash > sc * 3) g.upgradeStations();
       if (!state.contract && state.cash < wages * 6 && state.contractOffers.length) g.acceptContract(state.contractOffers[0].id);
       const dev = state.rooms.filter((r) => r.type === 'gelistirme');
-      for (const r of dev) r.mode = 'otomatik';
-      if (state.contract) dev[dev.length > 1 ? dev.length - 1 : 0].mode = 'sozlesme';
+      const lead = state.projects[0];
+      for (const r of dev) { if (lead && r.id !== lead.roomId) g.setRoomMode(r.id, 'destek:' + lead.id); else g.setRoomMode(r.id, 'otomatik'); }
+      if (state.contract) { const r = dev.length > 1 ? dev[dev.length - 1] : dev[0]; if (!lead || r.id !== lead.roomId || dev.length === 1) g.setRoomMode(r.id, 'sozlesme'); }
       // Artan RP ile kariyer seviyesi
       if (state.research.rp > 120) {
         const p = [...state.staff].sort((a, b) => (a.careers[a.career] || 0) - (b.careers[b.career] || 0))[0];
