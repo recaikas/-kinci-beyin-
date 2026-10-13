@@ -11,6 +11,7 @@ import * as Ev from './systems/events.js';
 import * as Con from './systems/console.js';
 import * as Post from './systems/post.js';
 import * as Know from './systems/knowledge.js';
+import * as World from './systems/world.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -42,6 +43,7 @@ function migrate(state) {
   state.salesHist ||= [];
   state.rivalGames ||= [];
   state.top ||= [];
+  if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
 
@@ -95,6 +97,7 @@ export function makeGame(state, pack = PACK) {
       // satış
       Market.weeklySales(ctx);
       Market.weeklyTrend(ctx);
+      World.weeklyWorld(ctx);
       Market.weeklyRivals(ctx);
       Market.weeklyCharts(ctx);
       // ekonomi
@@ -248,4 +251,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World };

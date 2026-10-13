@@ -1,0 +1,65 @@
+// Oyun dünyasının tarihi (parodi adlarla; gerçek marka ve kişi adı kullanılmaz).
+// companies: rakip stüdyolar ve yayıncılar; rep eğrisi yıllara göre güç (0–100), from/to piyasada oldukları yıllar.
+// kind: 'hw' platform sahibi (satın alınamaz), 'pub' yayıncı, 'dev' geliştirici.
+// years: her yıl için popüler 10 oyun [ad, şirket, tür, not] ve her ay bir tarihî olay (12 satır, Ocak→Aralık).
+import { YEARS_A } from './history_a.js';
+import { YEARS_B } from './history_b.js';
+import { YEARS_C } from './history_c.js';
+
+export const COMPANIES = [
+  { id: 'ataro', name: 'Ataro', from: 1976, to: 1997, kind: ['hw', 'pub', 'dev'], rep: [[1976, 88], [1982, 95], [1984, 52], [1990, 35], [1996, 20]] },
+  { id: 'yariyol', name: 'Yarıyol Oyunları', from: 1976, to: 2009, kind: ['pub', 'dev'], rep: [[1976, 70], [1992, 86], [2000, 60], [2008, 35]] },
+  { id: 'taytoo', name: 'Taytoo', from: 1976, to: 2005, kind: ['dev'], rep: [[1976, 68], [1978, 85], [1990, 65], [2004, 45]] },
+  { id: 'egzidi', name: 'Egzidi', from: 1976, to: 1989, kind: ['dev'], rep: [[1976, 60], [1988, 30]] },
+  { id: 'sinematronik', name: 'Sinematronik', from: 1976, to: 1987, kind: ['dev'], rep: [[1976, 60], [1986, 35]] },
+  { id: 'viliams', name: 'Viliams Elektronik', from: 1976, to: 1998, kind: ['dev'], rep: [[1976, 65], [1981, 85], [1997, 50]] },
+  { id: 'namko', name: 'Namko', from: 1976, to: 2006, kind: ['pub', 'dev'], rep: [[1976, 70], [1980, 92], [1995, 82], [2005, 70]] },
+  { id: 'bandajnamko', name: 'Bandaj Namko', from: 2006, to: 2200, kind: ['pub', 'dev'], rep: [[2006, 75], [2025, 82]] },
+  { id: 'segga', name: 'Segga', from: 1976, to: 2200, kind: ['hw', 'pub', 'dev'], rep: [[1976, 60], [1988, 85], [1992, 95], [1998, 70], [2001, 65], [2025, 72]] },
+  { id: 'pandando', name: 'Pandando', from: 1977, to: 2200, kind: ['hw', 'pub', 'dev'], rep: [[1977, 50], [1981, 76], [1985, 96], [1996, 92], [2002, 80], [2006, 95], [2013, 78], [2017, 97]] },
+  { id: 'esneka', name: 'ESNEKA', from: 1978, to: 2200, kind: ['dev'], rep: [[1978, 55], [1991, 82], [2001, 50], [2025, 62]] },
+  { id: 'aktivasyon', name: 'Aktivasyon', from: 1979, to: 2200, kind: ['pub', 'dev'], rep: [[1979, 76], [1983, 42], [1991, 45], [2003, 80], [2008, 93], [2020, 84]] },
+  { id: 'bilgicom', name: 'Bilgicom', from: 1979, to: 1989, kind: ['dev'], rep: [[1979, 70], [1985, 78], [1988, 40]] },
+  { id: 'siradag', name: 'Sıradağ Çevrimiçi', from: 1979, to: 2008, kind: ['pub', 'dev'], rep: [[1979, 60], [1990, 86], [1999, 60], [2007, 40]] },
+  { id: 'kapkom', name: 'Kapkom', from: 1979, to: 2200, kind: ['pub', 'dev'], rep: [[1979, 65], [1991, 92], [2005, 85], [2017, 90]] },
+  { id: 'konamii', name: 'Konamii', from: 1979, to: 2200, kind: ['pub', 'dev'], rep: [[1979, 65], [1987, 88], [2001, 88], [2015, 60], [2025, 70]] },
+  { id: 'hadson', name: 'Hadson Yazılım', from: 1980, to: 2012, kind: ['dev'], rep: [[1980, 60], [1988, 75], [2011, 45]] },
+  { id: 'elektronik', name: 'Elektronik Sanatlar', from: 1982, to: 2200, kind: ['pub', 'dev'], rep: [[1982, 66], [1995, 85], [2005, 92], [2025, 84]] },
+  { id: 'lukas', name: 'Lukaş Sanat', from: 1982, to: 2013, kind: ['dev'], rep: [[1982, 70], [1993, 90], [2005, 65], [2012, 50]] },
+  { id: 'mikroduzyazi', name: 'MikroDüzyazı', from: 1982, to: 2001, kind: ['pub', 'dev'], rep: [[1982, 65], [1991, 86], [2000, 50]] },
+  { id: 'eniks', name: 'Eniks', from: 1982, to: 2003, kind: ['pub', 'dev'], rep: [[1982, 60], [1986, 88], [2002, 75]] },
+  { id: 'alekseyev', name: 'Moskova Bilgi Merkezi', from: 1984, to: 1991, kind: ['dev'], rep: [[1984, 70], [1990, 60]] },
+  { id: 'psiknoz', name: 'Psiknoz', from: 1984, to: 2012, kind: ['pub', 'dev'], rep: [[1984, 60], [1995, 82], [2011, 50]] },
+  { id: 'yaramaz', name: 'Yaramaz Köpek', from: 1984, to: 2200, kind: ['dev'], rep: [[1984, 50], [1996, 82], [2013, 97]] },
+  { id: 'nadir', name: 'Nadir Ltd.', from: 1985, to: 2200, kind: ['dev'], rep: [[1985, 70], [1994, 92], [2002, 70], [2025, 65]] },
+  { id: 'batiorman', name: 'Batıorman Stüdyoları', from: 1985, to: 2003, kind: ['dev'], rep: [[1985, 60], [1995, 90], [2002, 60]] },
+  { id: 'kare', name: 'Kare Yazılım', from: 1986, to: 2003, kind: ['pub', 'dev'], rep: [[1986, 70], [1994, 94], [2002, 85]] },
+  { id: 'kareeniks', name: 'Kare Eniks', from: 2003, to: 2200, kind: ['pub', 'dev'], rep: [[2003, 88], [2015, 78], [2025, 76]] },
+  { id: 'ubisof', name: 'Ubisof', from: 1986, to: 2200, kind: ['pub', 'dev'], rep: [[1986, 50], [2000, 75], [2010, 86], [2025, 62]] },
+  { id: 'kodustalari', name: 'Kodustaları', from: 1986, to: 2200, kind: ['pub', 'dev'], rep: [[1986, 55], [1998, 75], [2025, 55]] },
+  { id: 'betesta', name: 'Betesta', from: 1986, to: 2200, kind: ['pub', 'dev'], rep: [[1986, 50], [2002, 80], [2011, 95], [2025, 78]] },
+  { id: 'maksis', name: 'Maksis', from: 1987, to: 2015, kind: ['dev'], rep: [[1987, 65], [2000, 94], [2014, 60]] },
+  { id: 'okuzkurbagasi', name: 'Öküzkurbağası', from: 1987, to: 2001, kind: ['dev'], rep: [[1987, 65], [1994, 85], [2000, 55]] },
+  { id: 'siyan', name: 'Siyan Dünyaları', from: 1987, to: 2200, kind: ['dev'], rep: [[1987, 55], [1993, 90], [2005, 45]] },
+  { id: 'alkis', name: 'Alkış Eğlence', from: 1987, to: 2004, kind: ['pub', 'dev'], rep: [[1987, 55], [1994, 80], [2003, 35]] },
+  { id: 'oyunhevesi', name: 'Oyun Hevesi', from: 1989, to: 2200, kind: ['dev'], rep: [[1989, 55], [1996, 95], [2025, 85]] },
+  { id: 'tehaku', name: 'TeHaKu', from: 1990, to: 2013, kind: ['pub', 'dev'], rep: [[1990, 50], [2002, 75], [2012, 35]] },
+  { id: 'eidoz', name: 'Eidoz Etkileşim', from: 1990, to: 2009, kind: ['pub', 'dev'], rep: [[1990, 55], [1996, 86], [2008, 55]] },
+  { id: 'kimlik', name: 'Kimlik Yazılım', from: 1991, to: 2200, kind: ['dev'], rep: [[1991, 70], [1993, 96], [2004, 80], [2016, 85]] },
+  { id: 'tipi', name: 'Tipi Eğlence', from: 1991, to: 2200, kind: ['dev'], rep: [[1991, 55], [1998, 92], [2004, 97], [2020, 75]] },
+  { id: 'destan', name: 'Destan Oyunları', from: 1991, to: 2200, kind: ['pub', 'dev'], rep: [[1991, 50], [1999, 80], [2018, 95]] },
+  { id: 'bangi', name: 'Bangi', from: 1991, to: 2200, kind: ['dev'], rep: [[1991, 50], [2001, 92], [2014, 85], [2024, 65]] },
+  { id: 'soni', name: 'Soni Eğlence', from: 1993, to: 2200, kind: ['hw', 'pub', 'dev'], rep: [[1993, 80], [1998, 95], [2006, 80], [2016, 96]] },
+  { id: 'vana', name: 'Vana', from: 1996, to: 2200, kind: ['pub', 'dev'], rep: [[1996, 60], [1998, 92], [2007, 96], [2025, 90]] },
+  { id: 'kayastar', name: 'Kayastar Oyunları', from: 1997, to: 2200, kind: ['pub', 'dev'], rep: [[1997, 70], [2001, 92], [2013, 99]] },
+  { id: 'mikroyumusak', name: 'MikroYumuşak Oyun', from: 2000, to: 2200, kind: ['hw', 'pub', 'dev'], rep: [[2000, 70], [2005, 90], [2013, 78], [2025, 82]] },
+  { id: 'sdproje', name: 'SD Proje Kırmızı', from: 2002, to: 2200, kind: ['dev'], rep: [[2002, 50], [2015, 96], [2020, 70], [2023, 85]] },
+  { id: 'rovyo', name: 'Rovyo', from: 2003, to: 2200, kind: ['dev'], rep: [[2003, 40], [2010, 85], [2016, 50]] },
+  { id: 'kral', name: 'Kral Dijital', from: 2003, to: 2200, kind: ['dev'], rep: [[2003, 45], [2013, 90], [2025, 70]] },
+  { id: 'isyan', name: 'İsyan Oyunları', from: 2006, to: 2200, kind: ['dev'], rep: [[2006, 50], [2012, 92], [2025, 85]] },
+  { id: 'mocang', name: 'Mocang', from: 2009, to: 2200, kind: ['dev'], rep: [[2009, 60], [2011, 95], [2025, 80]] },
+  { id: 'superhucre', name: 'Süperhücre', from: 2010, to: 2200, kind: ['dev'], rep: [[2010, 55], [2013, 90], [2025, 75]] },
+  { id: 'bagimsiz', name: 'Bağımsız Geliştirici', from: 1976, to: 2200, kind: ['dev'], rep: [[1976, 40], [2008, 60], [2015, 75], [2025, 80]] },
+];
+
+export const YEARS = { ...YEARS_A, ...YEARS_B, ...YEARS_C };

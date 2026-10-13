@@ -9,7 +9,7 @@ export const PACK = {
     startYear: 1976,
     weeksPerMonth: 4,
     monthsPerYear: 12,
-    gameLengths: { 30: 1, 35: 1.16667, 42: 1.4 }, // V (GDT)
+    gameLengths: { 30: 1, 35: 1.16667, 42: 1.4, 50: 1 }, // V (GDT); 50 = tam tarih 1976–2025
     defaultLength: 35,
     msPerWeek: { 1: 1400, 2: 700, 4: 320, 8: 140 }, // P (arayüz hızı)
   },
@@ -176,42 +176,69 @@ export const PACK = {
   // Platformlar (parodi adlar). GDT alanları (V); değerler P.
   // base: milyon kurulu taban; key: doğrusal olmayan büyüme (marketKeyPoints).
   platforms: [
-    { id: 'pc', name: 'Kişisel Bilgisayar', from: 1976, to: 2200, start: 0.05, units: 250, licence: 0, devCost: 800, tech: 1,
+    // Bilgisayarlar
+    { id: 'pc', name: 'Kişisel Bilgisayar', kind: 'pc', owner: null, from: 1976, to: 2200, start: 0.05, units: 250, licence: 0, devCost: 800, tech: 1,
       genre: [9, 9, 10, 10, 10, 8], aud: [8, 9, 10], key: [[1976, 0.05], [1985, 10], [1995, 40], [2005, 90], [2015, 150], [2030, 250]] },
-    { id: 'ataro', name: 'Ataro 2600', from: 1977, to: 1991, start: 0.4, units: 30, licence: 1500, devCost: 2000, tech: 1, genre: [10, 7, 6, 8, 6, 10], aud: [10, 10, 7] },
-    { id: 'komodor', name: 'Komodor 64', from: 1982, to: 1994, start: 0.5, units: 17, licence: 3000, devCost: 3000, tech: 2, genre: [9, 10, 9, 9, 9, 8], aud: [10, 9, 9] },
-    { id: 'nfc', name: 'Nintando FC', from: 1983, to: 1995, start: 0.5, units: 62, licence: 25000, devCost: 15000, tech: 2, genre: [10, 9, 10, 7, 7, 10], aud: [10, 10, 7] },
-    { id: 'segga', name: 'Segga Mega', from: 1988, to: 1998, start: 0.4, units: 35, licence: 40000, devCost: 25000, tech: 3, genre: [10, 8, 9, 7, 7, 9], aud: [10, 9, 8] },
-    { id: 'oyunboi', name: 'Oyun Boi', from: 1989, to: 2003, start: 1, units: 118, licence: 30000, devCost: 15000, tech: 2, genre: [8, 8, 10, 7, 7, 10], aud: [10, 10, 7] },
-    { id: 'snes', name: 'Süper Nintando', from: 1990, to: 2000, start: 0.8, units: 49, licence: 60000, devCost: 40000, tech: 3, genre: [10, 9, 10, 8, 8, 10], aud: [10, 10, 8] },
-    { id: 'oi1', name: 'Oyunİstasyonu', from: 1994, to: 2006, start: 1, units: 102, licence: 100000, devCost: 80000, tech: 4, genre: [10, 9, 10, 9, 7, 9], aud: [9, 10, 10] },
-    { id: 'n64', name: 'Nintando 64', from: 1996, to: 2002, start: 1, units: 33, licence: 120000, devCost: 100000, tech: 4, genre: [10, 10, 8, 7, 6, 10], aud: [10, 10, 7] },
-    { id: 'oi2', name: 'Oyunİstasyonu 2', from: 2000, to: 2013, start: 1.5, units: 155, licence: 200000, devCost: 150000, tech: 5, genre: [10, 9, 10, 9, 7, 9], aud: [9, 10, 10] },
-    { id: 'xkutu', name: 'X-Kutu', from: 2001, to: 2009, start: 1, units: 24, licence: 200000, devCost: 150000, tech: 5, genre: [10, 8, 9, 8, 8, 7], aud: [8, 9, 10] },
-    { id: 'ndz', name: 'Nintando DZ', from: 2004, to: 2014, start: 1, units: 154, licence: 150000, devCost: 80000, tech: 5, genre: [8, 9, 9, 9, 8, 10], aud: [10, 10, 7] },
-    { id: 'x360', name: 'X-Kutu 360', from: 2005, to: 2016, start: 1.5, units: 84, licence: 400000, devCost: 400000, tech: 6, genre: [10, 8, 9, 8, 8, 8], aud: [8, 9, 10] },
-    { id: 'viivii', name: 'Vii-Vii', from: 2006, to: 2014, start: 2, units: 101, licence: 200000, devCost: 120000, tech: 5, genre: [8, 7, 7, 10, 6, 10], aud: [10, 10, 7] },
-    { id: 'oi3', name: 'Oyunİstasyonu 3', from: 2006, to: 2017, start: 1, units: 87, licence: 450000, devCost: 450000, tech: 6, genre: [10, 9, 10, 8, 8, 7], aud: [8, 9, 10] },
-    { id: 'afon', name: 'aFon (mobil)', from: 2008, to: 2200, start: 5, units: 800, licence: 100, devCost: 20000, tech: 5, priceRef: 5,
+    { id: 'elma2', name: 'Elma II', kind: 'pc', owner: null, from: 1977, to: 1993, start: 0.05, units: 5, licence: 0, devCost: 1200, tech: 1, genre: [8, 10, 10, 9, 9, 7], aud: [8, 9, 10] },
+    { id: 'zx', name: 'ZX Tayfı', kind: 'pc', owner: null, from: 1982, to: 1992, start: 0.3, units: 5, licence: 0, devCost: 1500, tech: 1, genre: [9, 10, 8, 8, 8, 9], aud: [10, 9, 8] },
+    { id: 'komodor', name: 'Komodor 64', kind: 'pc', owner: null, from: 1982, to: 1994, start: 0.5, units: 17, licence: 3000, devCost: 3000, tech: 2, genre: [9, 10, 9, 9, 9, 8], aud: [10, 9, 9] },
+    { id: 'amigo', name: 'Amigo 500', kind: 'pc', owner: null, from: 1985, to: 1996, start: 0.2, units: 6, licence: 2000, devCost: 8000, tech: 3, genre: [9, 10, 9, 10, 10, 8], aud: [9, 9, 10] },
+    // Konsollar
+    { id: 'ataro', name: 'Ataro 2600', kind: 'konsol', owner: 'ataro', from: 1977, to: 1991, start: 0.4, units: 30, licence: 1500, devCost: 2000, tech: 1, genre: [10, 7, 6, 8, 6, 10], aud: [10, 10, 7] },
+    { id: 'zekavizyon', name: 'Zekâvizyon', kind: 'konsol', owner: null, from: 1980, to: 1985, start: 0.2, units: 3, licence: 2000, devCost: 3000, tech: 1, genre: [9, 7, 7, 9, 8, 9], aud: [9, 10, 8] },
+    { id: 'kolekovizyon', name: 'Kolekovizyon', kind: 'konsol', owner: null, from: 1982, to: 1986, start: 0.3, units: 2, licence: 2500, devCost: 3500, tech: 2, genre: [10, 7, 7, 7, 6, 9], aud: [10, 9, 7] },
+    { id: 'nfc', name: 'Pandando Aile Bilgisayarı', kind: 'konsol', owner: 'pandando', from: 1983, to: 1995, start: 0.5, units: 62, licence: 25000, devCost: 15000, tech: 2, genre: [10, 9, 10, 7, 7, 10], aud: [10, 10, 7] },
+    { id: 'seggams', name: 'Segga Usta Sistem', kind: 'konsol', owner: 'segga', from: 1986, to: 1993, start: 0.3, units: 13, licence: 15000, devCost: 12000, tech: 2, genre: [10, 8, 8, 7, 6, 9], aud: [10, 9, 8] },
+    { id: 'turbo', name: 'Turbo Grafik 16', kind: 'konsol', owner: 'hadson', from: 1988, to: 1994, start: 0.3, units: 10, licence: 20000, devCost: 15000, tech: 3, genre: [10, 7, 9, 6, 6, 8], aud: [9, 9, 8] },
+    { id: 'segga', name: 'Segga Mega', kind: 'konsol', owner: 'segga', from: 1988, to: 1998, start: 0.4, units: 35, licence: 40000, devCost: 25000, tech: 3, genre: [10, 8, 9, 7, 7, 9], aud: [10, 9, 8] },
+    { id: 'oyunboi', name: 'Oyun Boi', kind: 'el', owner: 'pandando', from: 1989, to: 2003, start: 1, units: 118, licence: 30000, devCost: 15000, tech: 2, genre: [8, 8, 10, 7, 7, 10], aud: [10, 10, 7] },
+    { id: 'links', name: 'Ataro Links', kind: 'el', owner: 'ataro', from: 1989, to: 1995, start: 0.2, units: 3, licence: 15000, devCost: 10000, tech: 2, genre: [9, 7, 7, 6, 6, 9], aud: [10, 9, 7] },
+    { id: 'snes', name: 'Süper Pandando', kind: 'konsol', owner: 'pandando', from: 1990, to: 2000, start: 0.8, units: 49, licence: 60000, devCost: 40000, tech: 3, genre: [10, 9, 10, 8, 8, 10], aud: [10, 10, 8] },
+    { id: 'jagar', name: 'Ataro Jagar', kind: 'konsol', owner: 'ataro', from: 1993, to: 1997, start: 0.1, units: 0.3, licence: 50000, devCost: 60000, tech: 4, genre: [9, 6, 6, 6, 6, 7], aud: [8, 8, 9] },
+    { id: 'saturn', name: 'Segga Satürn', kind: 'konsol', owner: 'segga', from: 1994, to: 2000, start: 0.5, units: 9, licence: 80000, devCost: 70000, tech: 4, genre: [10, 8, 9, 7, 7, 7], aud: [8, 9, 10] },
+    { id: 'oi1', name: 'Oyunİstasyonu', kind: 'konsol', owner: 'soni', from: 1994, to: 2006, start: 1, units: 102, licence: 100000, devCost: 80000, tech: 4, genre: [10, 9, 10, 9, 7, 9], aud: [9, 10, 10] },
+    { id: 'n64', name: 'Pandando 64', kind: 'konsol', owner: 'pandando', from: 1996, to: 2002, start: 1, units: 33, licence: 120000, devCost: 100000, tech: 4, genre: [10, 10, 8, 7, 6, 10], aud: [10, 10, 7] },
+    { id: 'ruya', name: 'Segga Rüyayayın', kind: 'konsol', owner: 'segga', from: 1998, to: 2002, start: 0.6, units: 9, licence: 120000, devCost: 90000, tech: 5, genre: [10, 9, 9, 8, 7, 9], aud: [9, 9, 9] },
+    { id: 'oi2', name: 'Oyunİstasyonu 2', kind: 'konsol', owner: 'soni', from: 2000, to: 2013, start: 1.5, units: 155, licence: 200000, devCost: 150000, tech: 5, genre: [10, 9, 10, 9, 7, 9], aud: [9, 10, 10] },
+    { id: 'xkutu', name: 'X-Kutu', kind: 'konsol', owner: 'mikroyumusak', from: 2001, to: 2009, start: 1, units: 24, licence: 200000, devCost: 150000, tech: 5, genre: [10, 8, 9, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'kup', name: 'Pandando KüpOyun', kind: 'konsol', owner: 'pandando', from: 2001, to: 2007, start: 0.8, units: 22, licence: 150000, devCost: 110000, tech: 5, genre: [10, 10, 8, 7, 6, 10], aud: [10, 10, 7] },
+    { id: 'oboileri', name: 'Oyun Boi İleri', kind: 'el', owner: 'pandando', from: 2001, to: 2008, start: 1, units: 81, licence: 60000, devCost: 30000, tech: 3, genre: [9, 9, 10, 8, 8, 10], aud: [10, 10, 7] },
+    { id: 'ndz', name: 'Pandando ÇE', kind: 'el', owner: 'pandando', from: 2004, to: 2014, start: 1, units: 154, licence: 150000, devCost: 80000, tech: 5, genre: [8, 9, 9, 9, 8, 10], aud: [10, 10, 7] },
+    { id: 'oicep', name: 'Oyunİstasyonu Cep', kind: 'el', owner: 'soni', from: 2004, to: 2014, start: 1, units: 80, licence: 150000, devCost: 100000, tech: 5, genre: [10, 8, 10, 7, 7, 8], aud: [8, 9, 10] },
+    { id: 'x360', name: 'X-Kutu 360', kind: 'konsol', owner: 'mikroyumusak', from: 2005, to: 2016, start: 1.5, units: 84, licence: 400000, devCost: 400000, tech: 6, genre: [10, 8, 9, 8, 8, 8], aud: [8, 9, 10] },
+    { id: 'viivii', name: 'Vii-Vii', kind: 'konsol', owner: 'pandando', from: 2006, to: 2014, start: 2, units: 101, licence: 200000, devCost: 120000, tech: 5, genre: [8, 7, 7, 10, 6, 10], aud: [10, 10, 7] },
+    { id: 'oi3', name: 'Oyunİstasyonu 3', kind: 'konsol', owner: 'soni', from: 2006, to: 2017, start: 1, units: 87, licence: 450000, devCost: 450000, tech: 6, genre: [10, 9, 10, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'afon', name: 'aFon (mobil)', kind: 'mobil', owner: null, from: 2008, to: 2200, start: 5, units: 800, licence: 100, devCost: 20000, tech: 5, priceRef: 5,
       genre: [8, 7, 7, 9, 8, 10], aud: [10, 10, 8], key: [[2008, 5], [2012, 150], [2018, 500], [2030, 800]] },
-    { id: 'oi4', name: 'Oyunİstasyonu 4', from: 2013, to: 2025, start: 2, units: 117, licence: 800000, devCost: 700000, tech: 7, genre: [10, 10, 10, 8, 8, 7], aud: [8, 9, 10] },
-    { id: 'xbir', name: 'X-Kutu Bir', from: 2013, to: 2022, start: 1, units: 50, licence: 700000, devCost: 700000, tech: 7, genre: [10, 8, 9, 8, 8, 7], aud: [8, 9, 10] },
-    { id: 'svic', name: 'Nintando Sviç', from: 2017, to: 2028, start: 2, units: 145, licence: 500000, devCost: 400000, tech: 7, genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 8] },
-    { id: 'oi5', name: 'Oyunİstasyonu 5', from: 2020, to: 2032, start: 4, units: 100, licence: 1200000, devCost: 1000000, tech: 7, genre: [10, 10, 10, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'p3ce', name: 'Pandando 3ÇE', kind: 'el', owner: 'pandando', from: 2011, to: 2020, start: 1, units: 75, licence: 200000, devCost: 120000, tech: 5, genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 7] },
+    { id: 'vita', name: 'Oyunİstasyonu Vita', kind: 'el', owner: 'soni', from: 2011, to: 2019, start: 0.5, units: 15, licence: 250000, devCost: 200000, tech: 6, genre: [10, 8, 10, 7, 7, 8], aud: [8, 9, 10] },
+    { id: 'viiu', name: 'Vii U', kind: 'konsol', owner: 'pandando', from: 2012, to: 2017, start: 0.5, units: 13, licence: 300000, devCost: 250000, tech: 6, genre: [9, 9, 8, 8, 7, 10], aud: [10, 10, 7] },
+    { id: 'oi4', name: 'Oyunİstasyonu 4', kind: 'konsol', owner: 'soni', from: 2013, to: 2025, start: 2, units: 117, licence: 800000, devCost: 700000, tech: 7, genre: [10, 10, 10, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'xbir', name: 'X-Kutu Bir', kind: 'konsol', owner: 'mikroyumusak', from: 2013, to: 2022, start: 1, units: 50, licence: 700000, devCost: 700000, tech: 7, genre: [10, 8, 9, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'svic', name: 'Pandando Sviç', kind: 'konsol', owner: 'pandando', from: 2017, to: 2028, start: 2, units: 145, licence: 500000, devCost: 400000, tech: 7, genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 8] },
+    { id: 'oi5', name: 'Oyunİstasyonu 5', kind: 'konsol', owner: 'soni', from: 2020, to: 2032, start: 4, units: 100, licence: 1200000, devCost: 1000000, tech: 7, genre: [10, 10, 10, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'xseri', name: 'X-Kutu Seri X', kind: 'konsol', owner: 'mikroyumusak', from: 2020, to: 2032, start: 2, units: 33, licence: 1100000, devCost: 1000000, tech: 7, genre: [10, 8, 9, 8, 8, 7], aud: [8, 9, 10] },
+    { id: 'guverte', name: 'Buhar Güvertesi', kind: 'el', owner: 'vana', from: 2022, to: 2032, start: 1, units: 8, licence: 0, devCost: 50000, tech: 7, genre: [10, 9, 10, 9, 9, 8], aud: [8, 9, 10] },
+    { id: 'svic2', name: 'Pandando Sviç 2', kind: 'konsol', owner: 'pandando', from: 2025, to: 2035, start: 3, units: 120, licence: 900000, devCost: 600000, tech: 7, genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 8] },
   ],
   platformGrowth: { _tag: 'P', peakAt: 0.75 },
 
   // Yayıncılar. power: MGT2 gizli güç (V örnekleri), diğerleri P.
+  // Yayıncılar: sabit küçükler + tarihten gelen büyükler (history.js 'pub' şirketleri; gücü yıllara göre değişir).
   publishers: [
     { id: 'mantar', name: 'Kırmızı Mantar', power: 55, royalty: 0.40, from: 1976, to: 2200, minFans: 0 },
-    { id: 'ataro', name: 'Ataro Yayıncılık', power: 90, royalty: 0.25, from: 1976, to: 1990, minFans: 5000 },
-    { id: 'esat', name: 'Elektronik Sanatlar & Ticaret', power: 92, royalty: 0.20, from: 1983, to: 2200, minFans: 20000 },
-    { id: 'segga', name: 'Segga Yayın', power: 95, royalty: 0.22, from: 1986, to: 2005, minFans: 40000 },
-    { id: 'ubi', name: 'Ubisof Kadıköy', power: 85, royalty: 0.25, from: 1990, to: 2200, minFans: 15000 },
-    { id: 'soni', name: 'Soni Eğlence', power: 99, royalty: 0.18, from: 1994, to: 2200, minFans: 80000 },
-    { id: 'aktiv', name: 'Aktivasyon Devlet', power: 97, royalty: 0.15, from: 1998, to: 2200, minFans: 60000 },
     { id: 'morayi', name: 'Mor Ayı Indie', power: 60, royalty: 0.45, from: 2008, to: 2200, minFans: 0 },
   ],
+  // Tarihsel dünya (P): rakipler ve yayıncılar history.js'ten; her yıl 10 hit, her ay bir olay.
+  world: {
+    _tag: 'P',
+    pubMinRep: 55, pubMax: 8, royaltyA: 0.52, royaltyK: 0.003, royaltyMin: 0.2, minFansK: 36,
+    activeRivals: 14, // en güçlü N şirket düzenli oyun çıkarır
+    hitPeakK: 1.5, hitRankDecay: 0.06, hitPower: 80,
+    histScoreK: { cok_kolay: 0.86, kolay: 0.9, orta: 0.95, zor: 0.98, cok_zor: 1, efsanevi: 1 },
+    genreAward: { prestige: 0.5, fans: 8000, cash: 20000 },
+    logMax: 120,
+  },
   publisherAdvance: { _tag: 'P', base: 8000 },
 
   // Ofis kademeleri (V: 4 kademe). Koltuklar artık odalardan gelir (MGT2 oda motoru): slot × oda başına koltuk.
@@ -484,7 +511,7 @@ export const PACK = {
   rivals: {
     _tag: 'P',
     names: ['Kodzilla Games', 'Pikselhane', 'Bit Kafe Stüdyo', 'Ejderha Yazılım', 'Mavi Kutu Interactive', 'Gece Kuşu Oyun', 'Kuantum Patates', 'Sarı Ördek Labs'],
-    count: 8, repRange: [30, 70], releaseWeeks: [14, 40], scoreSpread: 12, scoreBias: 4,
+    count: 8, repRange: [30, 70], releaseWeeks: [14, 40], scoreSpread: 9, scoreBias: 4, repScoreK: 0.72,
     acquireMin: 2000000, acquireYears: 8, monthlyCostShare: 0.004, profitPerRep: 12000,
     // Rakip oyun satışı (MGT satış listesi için, P): stüdyo gücü ve nota göre zirve, oyuncuyla aynı hafta eğrisi
     salesPeakK: 0.7, sizePick: [0.55, 1.0, 1.7], topN: 10, rankHistMax: 104,

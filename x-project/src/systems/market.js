@@ -3,11 +3,8 @@ import { clamp } from '../kernel.js';
 import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
-
-export function publishersAvailable(ctx) {
-  const y = tableYear(ctx);
-  return ctx.pack.publishers.filter((p) => y >= p.from && y < p.to);
-}
+import { publishersAvailable, initWorld } from './world.js';
+export { publishersAvailable };
 
 export function release(ctx, { projectId, publisherId, price }) {
   const { state, pack, ledger, bus } = ctx;
@@ -34,7 +31,7 @@ export function release(ctx, { projectId, publisherId, price }) {
   const game = {
     id: pj.id, name: pj.name, genre: pj.genre, sub: pj.sub, topic: pj.topic, audience: pj.audience, platforms: pj.platforms,
     size: pj.size, score: rv.score, critics: rv.critics, review: rv, price, hype: pj.hype, ipId: ip.id, ipValue: ipValueAtRelease,
-    publisherId: pub ? pub.id : null, publisherPower: pub ? pub.power : Math.min(100, selfPublishPower(ctx) + (hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0)), royalty: pub ? pub.royalty : null,
+    publisherId: pub ? pub.id : null, publisherName: pub ? pub.name : null, publisherPower: pub ? pub.power : Math.min(100, selfPublishPower(ctx) + (hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0)), royalty: pub ? pub.royalty : null,
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
@@ -165,14 +162,10 @@ export function weeklyTrend(ctx) {
 export function initRivals(ctx) {
   const { state, pack, rng } = ctx;
   const r = pack.rivals;
-  const names = [...r.names];
-  state.rivals = Array.from({ length: r.count }, () => {
-    const name = names.splice(rng.int(0, names.length - 1), 1)[0];
-    return { id: state.nextId++, name, rep: rng.int(...r.repRange), nextRelease: rng.int(...r.releaseWeeks), acquired: false, games: 0, lastScore: 0 };
-  });
-  // Pazar boş başlamasın: her rakibin rafta zaten bir oyunu var (rastgele haftada).
-  for (const rv of state.rivals) {
-    const score = Math.round(clamp(rng.normal(rv.rep + 5, r.scoreSpread), 20, 95));
+  initWorld(ctx);
+  // Pazar boş başlamasın: güçlü şirketlerin rafta zaten birer oyunu var.
+  for (const rv of [...state.rivals].sort((a, b) => b.rep - a.rep).slice(0, 6)) {
+    const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + 5, r.scoreSpread), 20, 95));
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
     state.rivalGames.push({ id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: rng.pick(pack.genres).id, weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true });
@@ -187,6 +180,7 @@ export function acquireRival(ctx, id) {
   const { state, ledger } = ctx;
   const rv = state.rivals.find((x) => x.id === id);
   if (!rv || rv.acquired) return { ok: false, msg: 'Satın alınamaz.' };
+  if (rv.hw) return { ok: false, msg: `${rv.name} bir platform devi; satın alınamaz.` };
   const price = rivalPrice(ctx, rv);
   if (state.cash < price) return { ok: false, msg: 'Yeterli nakit yok.' };
   ledger.post('satin_alma', -price, rv.name);
@@ -198,10 +192,14 @@ export function acquireRival(ctx, id) {
 export function weeklyRivals(ctx) {
   const { state, pack, rng } = ctx;
   const r = pack.rivals;
+  // Yalnızca o yılın en güçlü N şirketi (ve senin iştiraklerin) düzenli oyun çıkarır.
+  const top = new Set([...state.rivals].sort((a, b) => b.rep - a.rep).slice(0, pack.world.activeRivals).map((x) => x.id));
   for (const rv of state.rivals) {
     if (--rv.nextRelease > 0) continue;
     rv.nextRelease = rng.int(...r.releaseWeeks);
-    const score = Math.round(clamp(rng.normal(rv.rep + r.scoreBias, r.scoreSpread), 15, 99));
+    if (!top.has(rv.id) && !rv.acquired) continue;
+    const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + r.scoreBias, r.scoreSpread), 15, 97));
+    rv.drift = clamp((rv.drift || 0) * 0.7 + (score - 70) / 12, -15, 15);
     rv.rep = clamp(rv.rep + (score - 70) / 12, 5, 99);
     rv.games++; rv.lastScore = score;
     const genre = rng.pick(pack.genres).id;
@@ -278,6 +276,20 @@ function awards(ctx) {
     ledger.post('odul', Math.round(a.goty.cash * inflation(ctx) ** 0.5), 'Yılın Oyunu');
     state.awards.push({ year: Math.floor(tableYear(ctx)), name: best.name, type: 'goty' });
     ctx.queue({ id: 'goty', title: '🏆 Yılın Oyunu!', text: `"${best.name}" yılın oyunu seçildi! Sahnede ağladın. Herkes ağladı.`, choices: [{ label: 'Teşekkürler!', effects: { morale: 15 } }] });
+  }
+  else {
+    // Tür ödülü: yılın oyunu olamasan da kendi türünde en iyisiysen.
+    const g = pack.world.genreAward;
+    const won = mine.filter((m) => m.score >= state.charts.filter((c) => !c.mine && c.week > yearStart && c.genre === m.genre).reduce((x, c) => Math.max(x, c.score), 0));
+    if (won.length) {
+      const w = won.reduce((x, y) => (y.score > x.score ? y : x));
+      const gname = pack.genres.find((x) => x.id === w.genre).name;
+      state.prestige = Math.min(pack.prestige.max, state.prestige + g.prestige);
+      state.fans += g.fans;
+      ledger.post('odul', Math.round(g.cash * inflation(ctx) ** 0.5), `En iyi ${gname}`);
+      state.awards.push({ year: Math.floor(tableYear(ctx)), name: w.name, type: 'tur', genre: w.genre });
+      ctx.news(`🥇 "${w.name}" yılın en iyi ${gname.toLowerCase()} oyunu seçildi!`, 'good');
+    }
   }
   const worst = mine.reduce((a2, b) => (b.score < a2.score ? b : a2));
   if (worst.score < a.worstBelow) {
