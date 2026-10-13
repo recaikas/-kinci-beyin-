@@ -480,6 +480,7 @@ export function boot(root, hotData = {}) {
       <div class="proj-head"><div><h2>${esc(gm.name)}</h2><p class="muted small">${PACK.genres.find((x) => x.id === gm.genre).name} · ${gm.year} · ${gm.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ')} · ${gm.price} $</p></div>
         <div class="forecast"><small>Not</small><b class="num">${gm.score}</b></div></div>
       <div class="kv"><span>Kopya</span><b class="num">${fmt(gm.units)}</b><span>Gelir</span><b class="num">${money(gm.revenue)}</b><span>Rafta</span><b>${gm.weeks} hafta${gm.active ? '' : ' (bitti)'}</b><span>Güncelleme</span><b>${gm.patches || 0}/${P.patchMax}</b></div>
+      ${gm.critics?.[0]?.quote ? `<section class="box"><h3>Eleştirmenler</h3><ul class="quotes">${gm.critics.map((k) => `<li><b class="num">${String(k.score).replace('.', ',')}</b><span>${esc(k.name)}: “${esc(k.quote)}”</span></li>`).join('')}</ul>${gm.review?.genreNote ? `<p class="muted small">“${esc(gm.review.genreNote)}”</p>` : ''}</section>` : ''}
       <section class="box"><h3>Haftalık satış (kopya)</h3>${chart('game' + gm.id, gm.hist || [], { labels: wk })}</section>
       <section class="box"><h3>Yayın sonrası</h3>${actions}${port}${exp}</section>`;
   }
@@ -580,8 +581,9 @@ export function boot(root, hotData = {}) {
   function reviewDialog(game, rv, report = []) {
     const verdict = rv.score >= 90 ? 'Başyapıt!' : rv.score >= 75 ? 'Çok iyi' : rv.score >= 60 ? 'Fena değil' : rv.score >= 40 ? 'Vasat' : 'Felaket';
     dialog(`<small class="muted">Eleştirmenler konuştu</small><h2>${esc(game.name)}</h2>
-      <div class="critics">${rv.critics.map((k, i) => `<div class="critic" style="animation-delay:${0.25 + i * 0.35}s"><small>${esc(k.name)}</small><b class="num">${k.score}</b></div>`).join('')}</div>
-      <p class="verdict" style="animation-delay:1.8s"><b class="num">${rv.score}</b> ${verdict}</p>
+      <div class="critics">${rv.critics.map((k, i) => `<div class="critic" style="animation-delay:${0.25 + i * 0.35}s"><small>${esc(k.name)}</small><b class="num">${String(k.score).replace('.', ',')}</b>${k.quote ? `<q>${esc(k.quote)}</q>` : ''}</div>`).join('')}</div>
+      <p class="verdict" style="animation-delay:1.8s"><b class="num">${String(rv.score).replace('.', ',')}</b> ${verdict}</p>
+      ${rv.genreNote ? `<p class="gnote">“${esc(rv.genreNote)}”</p>` : ''}
       <div class="report"><h3>Oyun raporu</h3><ul>${report.map((l) => `<li class="${l.tone}">${esc(l.text)}</li>`).join('')}</ul><p class="muted small">Öğrendiklerin yeni oyun sihirbazında rozet olarak görünür.</p></div>
       <button class="primary block" data-act="close-dialog">Satışları izle</button>`, 'review');
   }

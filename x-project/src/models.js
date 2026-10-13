@@ -1,6 +1,7 @@
 // Takılıp çıkarılan modeller: Productivity, Production, Review, Sales.
 // Hepsi saf fonksiyon; sayılar pack'ten gelir.
 import { lerpTable, logTable, clamp, calendar } from './kernel.js';
+import { CRITICS } from './data/critics.js';
 
 export const tableYear = (ctx) => calendar(ctx.state, ctx.pack).tableYear;
 export const inflation = (ctx, y = tableYear(ctx)) => Math.pow(ctx.pack.economy.inflation, y - ctx.pack.meta.startYear);
@@ -138,10 +139,35 @@ export function review(ctx, project) {
   if (engine && engine.features.some((f) => !ctx.state.usedFeatures[f])) { score += r.newFeatureBonus; notes.push(`Yeni özellik +${r.newFeatureBonus}`); }
   if (score >= r.cap - 0.01) score = r.cap + ctx.rng.range(0, r.randTop);
   score = clamp(score, 1, 100);
-  const critics = ['Piksel Dergisi', 'Joystick Haftalık', 'Oyun Kritik', 'Kartuş Gazetesi'].map((name) => ({
-    name, score: clamp(Math.round(score / 10 + ctx.rng.normal(0, 0.6)), 1, 10),
-  }));
-  return { score: Math.round(score * 10) / 10, parts, hiza, F, bugRate, notes, critics };
+  const critics = criticPanel(ctx, score, project.genre);
+  return { score: Math.round(score * 10) / 10, parts, hiza, F, bugRate, notes, critics, genreNote: genreNote(project.genre, score) };
+}
+
+// Eleştirmen puanı: 5'in altında tam sayı, üstünde 0,2'lik adım. Her eleştirmen kendi kademesinden farklı bir yorum seçer.
+export function quantizeCritic(v) {
+  v = clamp(v, 1, 10);
+  return v < 5 ? Math.max(1, Math.round(v)) : Math.round(v * 5) / 5;
+}
+export function criticBand(v) {
+  let band = CRITICS.bands[0];
+  for (const b of CRITICS.bands) if (v + 1e-9 >= b[0]) band = b;
+  return band;
+}
+function criticPanel(ctx, score, genre) {
+  const used = new Set();
+  return CRITICS.outlets.map((name) => {
+    const v = quantizeCritic(score / 10 + ctx.rng.normal(0, 0.45));
+    const lines = criticBand(v)[1];
+    let i = Math.floor(ctx.rng.next() * lines.length);
+    for (let k = 0; k < lines.length && used.has(lines[i]); k++) i = (i + 1) % lines.length;
+    used.add(lines[i]);
+    return { name, score: v, quote: lines[i] };
+  });
+}
+export function genreNote(genre, score) {
+  const list = CRITICS.genre[genre];
+  if (!list) return '';
+  return list[score < 30 ? 0 : score < 50 ? 1 : score < 70 ? 2 : score < 86 ? 3 : 4];
 }
 
 // --- Sales

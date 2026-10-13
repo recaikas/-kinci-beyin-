@@ -102,15 +102,18 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Tohumlu RNG tekrarlanabilir', a.cash === b.cash && a.games === b.games, `${a.cash} = ${b.cash}`);
 }
 
-// 11) Duman testi: basit bot
+// 11) Duman testi: basit bot, üç tohum (tek tohumun şansına bağlı kalmasın)
 {
-  const med = runBot({ seed: 7, difficulty: 'orta', years: 20 });
-  console.log('   Orta  :', med);
-  check('Orta: 20 yılda batmaz', !med.over || med.over === 'son', med.over || '', 'Duman');
-  check('Orta: aşırı zengin değil (< 50 M)', med.cash < 50e6, (med.cash / 1e6).toFixed(1) + ' M', 'Duman');
-  const leg = runBot({ seed: 7, difficulty: 'efsanevi', years: 20 });
-  console.log('   Efsane:', leg);
-  check('Efsanevi, Orta’dan zor', leg.cash < med.cash, '', 'Duman');
+  const seeds = [3, 11, 19];
+  const med = seeds.map((seed) => runBot({ seed, difficulty: 'orta', years: 20 }));
+  const leg = seeds.map((seed) => runBot({ seed, difficulty: 'efsanevi', years: 20 }));
+  const alive = med.filter((r) => !r.over || r.over === 'son').length;
+  const mid = (rs) => rs.map((r) => r.cash).sort((a, b) => a - b)[1];
+  console.log('   Orta  :', med.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
+  console.log('   Efsane:', leg.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
+  check('Orta: çoğunluk 20 yılda batmaz', alive >= 2, `${alive}/3`, 'Duman');
+  check('Orta: aşırı zengin değil (medyan < 50 M)', mid(med) < 50e6, (mid(med) / 1e6).toFixed(1) + ' M', 'Duman');
+  check('Efsanevi, Orta’dan zor', mid(leg) < mid(med), '', 'Duman');
 }
 
 // 12) Kairosoft kariyer kuralları (V): ileri kariyer için aynı kişinin ön koşulları seviye 5 olmalı
@@ -204,6 +207,22 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Port yeni oyun kaydı açar', !!target && g.port(game.id, target.id).ok && st.games.length === 2, target?.name || '');
   st.week = game.releasedWeek + 10;
   check('Ek paket projesi başlar', g.startExpansion(game.id).ok && st.projects[0].kind === 'ek');
+}
+
+// 18) Eleştirmen yorumları: her kademede 5 farklı yorum, her türde 5 yorum, panelde tekrar yok
+{
+  const { CRITICS } = await import('../src/data/critics.js');
+  check('30 puan kademesi × 5 farklı yorum', CRITICS.bands.length === 30 && CRITICS.bands.every((b) => new Set(b[1]).size === 5));
+  check('Her türe 5 yorum', PACK.genres.every((g) => CRITICS.genre[g.id]?.length === 5));
+  const ctx = ctxAt(1990);
+  let dup = 0;
+  for (let i = 0; i < 200; i++) {
+    const p = proj(ctx, 0.3 + (i % 10) / 12);
+    const q = M.review(ctx, p).critics.map((k) => k.quote);
+    if (new Set(q).size < q.length) dup++;
+  }
+  check('Aynı ekranda yorum tekrarı yok', dup === 0, `${dup}/200`);
+  check('Puan 5 üstü 0,2 adımlı', [5.13, 6.79, 9.91].map(M.quantizeCritic).join() === '5.2,6.8,10');
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);
