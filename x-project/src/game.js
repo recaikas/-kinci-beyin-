@@ -207,6 +207,15 @@ export function makeGame(state, pack = PACK) {
       return { ok: true };
     },
     moveStaff: (id, roomId) => Staff.moveStaff(ctx, id, roomId),
+    // Destek odasını bir projeye ata (null = tüm projeler)
+    setRoomTarget(id, pid) {
+      const r = state.rooms.find((x) => x.id === id);
+      if (!r || !pack.rooms.targetable.includes(r.type)) return { ok: false, msg: 'Bu oda projeye atanamaz.' };
+      if (pid && !state.projects.some((p) => p.id === pid)) return { ok: false, msg: 'Proje yok.' };
+      r.target = pid || null;
+      return { ok: true };
+    },
+    playerReport: (id) => Know.playerReport(ctx, id),
     levelUp: (id) => Staff.levelUp(ctx, id),
     changeCareer: (id, cid) => Staff.changeCareer(ctx, id, cid),
     outsource: (pid, i) => Prod.outsource(ctx, pid, i),

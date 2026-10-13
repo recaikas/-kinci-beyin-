@@ -1,7 +1,7 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp } from '../kernel.js';
 import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty } from '../models.js';
-import { roomOf } from './staff.js';
+import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 
 export function publishersAvailable(ctx) {
@@ -34,10 +34,10 @@ export function release(ctx, { projectId, publisherId, price }) {
   const game = {
     id: pj.id, name: pj.name, genre: pj.genre, sub: pj.sub, topic: pj.topic, audience: pj.audience, platforms: pj.platforms,
     size: pj.size, score: rv.score, critics: rv.critics, review: rv, price, hype: pj.hype, ipId: ip.id, ipValue: ipValueAtRelease,
-    publisherId: pub ? pub.id : null, publisherPower: pub ? pub.power : selfPublishPower(ctx), royalty: pub ? pub.royalty : null,
+    publisherId: pub ? pub.id : null, publisherPower: pub ? pub.power : Math.min(100, selfPublishPower(ctx) + (hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0)), royalty: pub ? pub.royalty : null,
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
-    expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate,
+    expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
   };
   game.peak = peakWeekly(ctx, game);
   if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
@@ -51,7 +51,7 @@ export function release(ctx, { projectId, publisherId, price }) {
   // Hayran
   const f = pack.fans;
   const dFans = rv.score >= f.threshold ? (rv.score - f.threshold) * f.perPointAbove * Math.max(1, inflation(ctx) ** 0.5)
-    : rv.score < f.lossBelow ? -(f.lossBelow - rv.score) * f.lossPerPoint : 0;
+    : rv.score < f.lossBelow ? -(f.lossBelow - rv.score) * f.lossPerPoint * (hasRoom(ctx, 'musteri') ? pack.rooms.supportLossCut : 1) : 0;
   state.fans = Math.max(0, Math.round(state.fans + dFans));
   // Prestij
   if (rv.score >= pack.prestige.scoreForUp) state.prestige = Math.min(pack.prestige.max, state.prestige + 1);
@@ -128,6 +128,9 @@ export function weeklySales(ctx) {
     if (g.mmo) g.subs += units * pack.mmo.subPerUnit;
     if (rev) { ledger.post('satis', Math.round(rev), g.name); total += rev; }
   }
+  // Müşteri destek: satıştaki oyunlar için hayran kazanımı
+  const live = state.games.filter((g) => g.active).length;
+  if (live) for (const { w } of weeklyOutput(ctx, (r) => r.type === 'musteri')) state.fans += Math.round(w * pack.rooms.supportFansK * Math.sqrt(live));
   state.salesHist.push({ w: state.week, u: state.games.reduce((a, g) => a + (g.active ? g.lastWeek : 0), 0), r: Math.round(total) });
   if (state.salesHist.length > 156) state.salesHist.shift();
   bus.fire('salesCalculated', total);

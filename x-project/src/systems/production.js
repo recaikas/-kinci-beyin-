@@ -42,6 +42,9 @@ export function weeklyProject(ctx) {
   for (const pj of state.projects) if (!state.rooms.some((r) => r.id === pj.roomId)) pj.roomId = freeDevRooms(ctx)[0]?.id ?? null;
   for (const r of state.rooms) if (r.mode === 'destek' && !state.projects.some((p) => p.id === r.target)) { r.mode = 'otomatik'; r.target = null; }
   const inDev = state.projects.filter((p) => p.status === 'dev');
+  // Destek odası hedefi (MGT): atanmış projeye ya da (atanmamışsa) uygun tüm projelere eşit bölünür.
+  for (const r of state.rooms) if (r.target && r.type !== 'gelistirme' && !state.projects.some((p) => p.id === r.target)) r.target = null;
+  const share = (room, pj, pool) => (room.target ? (room.target === pj.id ? 1 : 0) : pool.includes(pj) ? 1 / pool.length : 0);
   for (const pj of state.projects) {
     const crew = weeklyOutput(ctx, worksOn(pj));
     if (pj.status === 'dev') {
@@ -63,10 +66,14 @@ export function weeklyProject(ctx) {
       // Uzman odalar: geliştirmedeki projelere eşit bölünür, yalnızca kendi disiplinine.
       for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'grafik' || r.type === 'ses')) {
         const d = room.type === 'grafik' ? 'gfx' : 'ses';
-        const pts = (w * rm.expertMult * careerOf(ctx, p).aff[d]) / inDev.length;
+        const k = share(room, pj, inDev);
+        if (!k) continue;
+        const pts = w * rm.expertMult * careerOf(ctx, p).aff[d] * k;
         pj.points[d] += pts;
         pj.bugs += pts * bugK(p) * 0.5;
       }
+      // Pazarlama odası: her hafta hype
+      for (const { w, room } of weeklyOutput(ctx, (r) => r.type === 'pazarlama')) pj.hype = Math.min(pack.hype.max, pj.hype + w * rm.marketingHypeK * share(room, pj, state.projects));
       if (crew.length) pj.week++;
       pj.hype = Math.max(0, pj.hype - pack.hype.decayDev);
       if (pj.week >= pj.totalWeeks) {
@@ -78,9 +85,10 @@ export function weeklyProject(ctx) {
       for (const { p, w } of crew) pj.bugs = Math.max(0, pj.bugs - debugRate(p, w));
     }
     // QA: tüm projelere bölünür; hata temizler, oynanışı cilalar.
-    for (const { p, w } of weeklyOutput(ctx, (r) => r.type === 'qa')) {
-      pj.bugs = Math.max(0, pj.bugs - (debugRate(p, w) * rm.qaBugK) / state.projects.length);
-      pj.points.oyn += (w * rm.qaPolish) / state.projects.length;
+    for (const { p, w, room } of weeklyOutput(ctx, (r) => r.type === 'qa')) {
+      const k = share(room, pj, state.projects);
+      pj.bugs = Math.max(0, pj.bugs - debugRate(p, w) * rm.qaBugK * k);
+      pj.points.oyn += w * rm.qaPolish * k;
     }
   }
 }

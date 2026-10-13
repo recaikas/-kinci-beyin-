@@ -16,7 +16,9 @@ const STATUS = { hasta: 'Hasta', tukenmis: 'Tükenmiş', egitim: 'Eğitimde' };
 const SPEEDS = [1, 2, 4, 8];
 const kaosLabel = (k) => (k < 30 ? 'Sakin' : k < 55 ? 'Gergin' : k < 80 ? 'Kaotik' : 'Cehennem');
 const store = (fn) => { try { return fn(window.localStorage); } catch { return null; } };
-const MENU = [['gelistir', 'Geliştir'], ['personel', 'Personel'], ['ofis', 'Ofis'], ['arge', 'Ar-Ge'], ['pazar', 'Pazar'], ['finans', 'Finans'], ['gunluk', 'Günlük']];
+const MENU = [['bilgisayar', 'Bilgisayar'], ['gunluk', 'Günlük']];
+const WIN_NAMES = { bilgisayar: 'Bilgisayar', oda: 'Oda', insaat: 'Oda kur', reklam: 'Reklam ver', gelistir: 'Geliştir', personel: 'Personel', ofis: 'Ofis ve binalar', arge: 'Ar-Ge', pazar: 'Pazar', finans: 'Finans', gunluk: 'Günlük' };
+const ICON_OF = { oda: 'ofis', insaat: 'ofis', reklam: 'pazar' };
 const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']] };
 // Liste sırası değişimi: ▲ yükseldi, ▼ düştü, YENİ ilk hafta.
 const move = (g) => (g.prev == null ? '<i class="new">YENİ</i>' : g.rank < g.prev ? `<i class="up">▲${g.prev - g.rank}</i>` : g.rank > g.prev ? `<i class="down">▼${g.rank - g.prev}</i>` : '<i>–</i>');
@@ -28,8 +30,8 @@ export function boot(root, hotData = {}) {
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
-  const el = { market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
-  const draw = makeRenderer(el.canvas);
+  const el = { bnav: $('#bnav'), market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
+  const R = makeRenderer(el.canvas);
   const G = () => app.game;
   const ctx = () => app.game.ctx;
   // Yalnızca içerik değiştiyse yeniden çiz: yarım kalan tıklamalar kaybolmasın.
@@ -85,12 +87,13 @@ export function boot(root, hotData = {}) {
   }
   function loop() {
     app.frame++;
-    if (G()) draw(G().state, PACK, app.frame);
+    if (G()) R.draw(G().state, PACK, app.frame, { building: curBuilding().id });
     requestAnimationFrame(loop);
   }
   function render() {
     renderHud();
     renderMarket();
+    renderBnav();
     renderMenu();
     if (app.win) {
       const a = document.activeElement;
@@ -162,26 +165,58 @@ export function boot(root, hotData = {}) {
     app.sub.pazar = 'oyunlar'; app.selGame = +b.dataset.mgame; openWin('pazar');
   });
 
-  // --- alt menü: düğmeler bir kez kurulur; rozet ve seçili durum yerinde güncellenir.
-  const icons = Object.fromEntries(MENU.map(([id]) => [id, menuIcon(id)]));
+  // --- alt menü (az düğme): Bilgisayar ve Günlük. Diğer her şey patronun bilgisayarından ya da odaya dokunarak.
+  const icons = Object.fromEntries(Object.keys(WIN_NAMES).map((id) => [id, menuIcon(ICON_OF[id] || id)]));
   function renderMenu() {
     const s = G()?.state;
     if (!s) return;
     if (!el.menu.children.length) el.menu.innerHTML = MENU.map(([id, name]) => `<button data-open="${id}"><img src="${icons[id]}" alt=""><span>${name}</span><em class="badge" hidden></em></button>`).join('');
     const unread = Math.max(0, s.news.length - app.seenNews);
-    const badge = { gunluk: unread ? String(Math.min(unread, 99)) : '', gelistir: s.projects.some((p) => p.status === 'debug') ? '!' : '', personel: s.staff.some((p) => p.status === 'tukenmis') ? '!' : '' };
+    const alert = s.projects.some((p) => p.status === 'debug') || s.staff.some((p) => p.status === 'tukenmis');
+    const badge = { gunluk: unread ? String(Math.min(unread, 99)) : '', bilgisayar: alert ? '!' : '' };
     for (const b of el.menu.children) {
       const id = b.dataset.open, em = b.querySelector('.badge');
-      b.classList.toggle('on', app.win === id);
+      b.classList.toggle('on', app.win === id || (id === 'bilgisayar' && app.win && app.win !== 'gunluk'));
       em.hidden = !badge[id];
       if (em.textContent !== (badge[id] || '')) em.textContent = badge[id] || '';
     }
   }
 
+  // --- binalar (MGT): sahnede kaydırarak ya da oklarla geçilir
+  const buildings = () => {
+    const s = G().state;
+    if (s.office.tier === 1) return [PACK.buildings[0]];
+    return PACK.buildings.filter((b) => !b.minTier || s.office.tier >= b.minTier);
+  };
+  const curBuilding = () => { const list = buildings(); app.bIdx = Math.min(app.bIdx || 0, list.length - 1); return list[app.bIdx]; };
+  function renderBnav() {
+    if (!G()) return setHTML(el.bnav, '');
+    const list = buildings();
+    if (list.length < 2) return setHTML(el.bnav, '');
+    const b = curBuilding();
+    setHTML(el.bnav, `<button data-act="bprev" aria-label="Önceki bina">◀</button><span class="bname">${esc(b.name)}<small>${list.map((x, i) => `<i class="${i === app.bIdx ? 'on' : ''}"></i>`).join('')}</small></span><button data-act="bnext" aria-label="Sonraki bina">▶</button>`);
+  }
+  const goBuilding = (d) => { const n = buildings().length; app.bIdx = ((app.bIdx || 0) + d + n) % n; renderBnav(); };
+  // Sahneye dokunma: kısa dokunuş = odaya/kişiye tıklama, yatay sürükleme = bina değiştirme
+  let down = null;
+  el.canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+  el.canvas.addEventListener('pointerup', (e) => {
+    if (!down || !G()) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y; down = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return goBuilding(dx < 0 ? 1 : -1);
+    const r = el.canvas.getBoundingClientRect();
+    const h = R.hit((e.clientX - r.left) * (el.canvas.width / r.width), (e.clientY - r.top) * (el.canvas.height / r.height));
+    if (!h) return;
+    if (h.kind === 'boss') return openWin('bilgisayar');
+    if (h.kind === 'slot') { app.buildFor = h.building; return openWin('insaat'); }
+    if (h.kind === 'locked') return openWin('ofis');
+    app.room = h.room || h.id; openWin('oda');
+  });
+
   // --- pencereler
-  function openWin(id) {
+  function openWin(id, fromHub = false) {
     if (!app.win) app.wasRunning = app.running;
-    app.win = id; app.confirm = null;
+    app.fromHub = fromHub; app.win = id; app.confirm = null;
     if (id === 'gunluk') app.seenNews = G().state.news.length;
     el.win.hidden = false;
     play(false);
@@ -195,15 +230,90 @@ export function boot(root, hotData = {}) {
   }
   function renderWindow() {
     if (!app.win || !G()) return;
-    const id = app.win, name = MENU.find((m) => m[0] === id)[1];
+    const id = app.win;
     const subs = SUBS[id];
     const sub = app.sub[id] || subs?.[0][0];
-    const fn = { gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews }[id];
-    el.winTitle.innerHTML = `<img src="${icons[id]}" alt=""> ${name}`;
+    const fn = { bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews }[id];
+    const title = id === 'oda' ? (() => { const r = G().state.rooms.find((x) => x.id === app.room); return r ? Staff.roomType(ctx(), r.type).name : 'Oda'; })() : WIN_NAMES[id];
+    setHTML(el.winTitle, `${app.fromHub && id !== 'bilgisayar' ? '<button class="back" data-act="hub" aria-label="Bilgisayara dön">◀</button>' : ''}<img src="${icons[id] || icons.bilgisayar}" alt=""> ${esc(title)}`);
     const tabs = subs ? `<div class="seg" role="tablist">${subs.map(([k, n]) => `<button role="tab" data-sub="${k}" aria-selected="${sub === k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
     const top = el.winBody.scrollTop;
     setHTML(el.winBody, tabs + fn(sub));
     el.winBody.scrollTop = top;
+  }
+
+  // ---------- BİLGİSAYAR (patronun masası): tüm yönetim buradan
+  function winHub() {
+    const s = G().state, c = ctx();
+    const ready = s.projects.filter((p) => p.status === 'debug').length;
+    const tile = (id, label, sub, extra = '') => `<button class="hubtile" data-hub="${id}" ${sub ? `data-hubsub="${sub}"` : ''}><img src="${icons[ICON_OF[id] ? id : id] || icons.bilgisayar}" alt=""><b>${label}</b>${extra ? `<small>${extra}</small>` : ''}</button>`;
+    return `<p class="muted small">Patronun bilgisayarı. Odalara sahnede dokunarak da iş verebilirsin; binalar arasında kaydırarak geç.</p>
+      <div class="hub">
+        ${tile('gelistir', 'Yeni oyun geliştir', 'oyun', `${s.projects.length} proje${ready ? ` · ${ready} hazır` : ''}`)}
+        ${tile('gelistir', 'Ek iş bul', 'sozlesme', s.contract ? 'sözleşme sürüyor' : `${s.contractOffers.length} teklif`)}
+        ${tile('personel', 'Personel bul', '', `${s.staff.length}/${Staff.seats(c)} koltuk`)}
+        ${tile('reklam', 'Reklam ver', '', s.projects.length ? `${s.projects.length} proje` : 'proje yok')}
+        ${tile('arge', 'Araştırma', 'arastirma', s.research.current ? 'sürüyor' : `${Math.floor(s.research.rp)} RP`)}
+        ${tile('pazar', 'Satışlar', 'oyunlar', `${s.games.filter((g) => g.active).length} oyun satışta`)}
+        ${tile('pazar', 'Satış listesi', 'liste')}
+        ${tile('finans', 'Finans', '', money(s.cash))}
+        ${tile('ofis', 'Ofis ve binalar', '', Eco.office(c).name)}
+        ${tile('arge', 'Motor ve konsol', 'motor')}
+      </div>`;
+  }
+  // Reklam: her proje için kampanya düğmeleri (Geliştir penceresinin pazarlama kısmının kısayolu)
+  function winAds() {
+    const s = G().state, c = ctx();
+    if (!s.projects.length) return '<p class="muted">Reklam verilecek proje yok. Önce yeni bir oyun başlat.</p>';
+    return s.projects.map((pj) => `<section class="box"><div class="head"><h3>${esc(pj.name)}</h3><span class="pill">Hype ${Math.round(pj.hype)}</span></div>
+      <div class="btns">${PACK.hype.campaigns.filter((x) => !x.minYear || M.tableYear(c) >= x.minYear).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pj.id}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('')}</div></section>`).join('')
+      + `<p class="muted small">Pazarlama ve yayın odası projelere her hafta kendiliğinden hype üretir.</p>`;
+  }
+
+  // ---------- ODA (sahnede odaya dokununca): görev, hedef proje, kişiler, odaya özel işler
+  function targetSelect(r) {
+    const s = G().state;
+    if (!PACK.rooms.targetable.includes(r.type)) return '';
+    return `<label class="field">Hangi projede çalışsın?<select id="tg-${r.id}" data-act="target" data-id="${r.id}"><option value="">Tüm projeler (eşit bölünür)</option>${s.projects.map((p) => `<option value="${p.id}" ${r.target === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>`;
+  }
+  function devModeSelect(r) {
+    const s = G().state;
+    const own = s.projects.find((p) => p.roomId === r.id);
+    const opts = Object.entries(PACK.rooms.modes).filter(([k]) => k !== 'destek').map(([k, v]) => `<option value="${k}" ${r.mode === k ? 'selected' : ''}>${v}</option>`).join('')
+      + (own ? '' : s.projects.map((p) => `<option value="destek:${p.id}" ${r.mode === 'destek' && r.target === p.id ? 'selected' : ''}>Destek: ${esc(p.name)}</option>`).join(''));
+    return `<p class="muted small">${own ? `Projesi: <b>${esc(own.name)}</b>` : r.mode === 'destek' ? 'Başka bir projeye destek veriyor.' : 'Şu an projesi yok.'}</p><label class="field">Görev<select id="md-${r.id}" data-act="mode" data-id="${r.id}">${opts}</select></label>`;
+  }
+  function winRoom() {
+    const g = G(), s = g.state, c = ctx();
+    const r = s.rooms.find((x) => x.id === app.room);
+    if (!r) return '<p class="muted">Oda yok.</p>';
+    const t = Staff.roomType(c, r.type), people = Staff.membersOf(c, r), cap = Staff.roomSeats(c);
+    let work = '';
+    if (r.type === 'gelistirme') {
+      const own = s.projects.find((p) => p.roomId === r.id);
+      work = devModeSelect(r) + `<div class="btns">${own ? `<button class="primary" data-act="open-proj" data-pid="${own.id}">Projeyi aç</button>` : r.mode !== 'sozlesme' && r.mode !== 'destek' ? `<button class="primary" data-act="new-in-room" data-id="${r.id}">Bu odada yeni oyun</button>` : ''}<button data-act="goto" data-id="gelistir" data-sub="sozlesme">Ek iş bul</button></div>`;
+    } else if (r.type === 'arastirma') work = `<div class="btns"><button class="primary" data-act="goto" data-id="arge" data-sub="arastirma">Araştırma listesi</button><span class="muted small">${Math.floor(s.research.rp)} RP</span></div>`;
+    else if (r.type === 'donanim') work = `<div class="btns"><button class="primary" data-act="goto" data-id="arge" data-sub="konsol">Konsol yap</button></div>`;
+    else if (r.type === 'pazarlama') work = targetSelect(r) + winAds();
+    else if (r.type === 'musteri') {
+      const list = s.games.slice(-8).reverse().map((gm) => `<div class="row-item"><div><b>${esc(gm.name)}</b><small>${gm.playerReport ? 'rapor hazır' : gm.active && gm.weeks < PACK.playerReport.minWeeks ? `${PACK.playerReport.minWeeks - gm.weeks} hf sonra` : 'rapor çıkarılabilir'}</small></div><button data-act="report" data-id="${gm.id}" ${gm.active && gm.weeks < PACK.playerReport.minWeeks ? 'disabled' : ''}>${gm.playerReport ? 'Raporu gör' : 'Rapor çıkar · bedava'}</button></div>`).join('');
+      work = `<p class="muted small">Müşteri destek ekibi oyuncu raporlarını bedavaya hazırlar.</p>${list || '<p class="muted">Henüz oyun yok.</p>'}`;
+    } else work = targetSelect(r);
+    const hire = people.length < cap ? `<details class="box"><summary><h3>Bu odaya işe al · ${cap - people.length} boş koltuk</h3></summary>${s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill}</small></div><button data-act="hire-here" data-id="${p.id}" data-room="${r.id}">${money(p.salary)}/ay</button></div>`).join('') || '<p class="muted">Bu ay başvuru yok.</p>'}</details>` : '';
+    return `<p class="muted small">${t.desc}</p><section class="box">${work}</section>
+      <div class="head"><h3>Çalışanlar</h3><span class="pill">${people.length}/${cap}</span></div>
+      <div class="people">${people.map(personRow).join('') || '<p class="muted small">Boş oda. Personel penceresinden birini buraya taşı ya da aşağıdan işe al.</p>'}</div>${hire}
+      ${s.rooms.length > 1 ? `<div class="foot"><button class="ghost danger small" data-act="demolish" data-id="${r.id}">${app.confirm === 'dem' + r.id ? 'Emin misin?' : 'Odayı sök'}</button></div>` : ''}`;
+  }
+  // Boş alana dokununca: o binaya uygun odalar
+  function winBuild() {
+    const s = G().state, c = ctx();
+    const b = PACK.buildings.find((x) => x.id === app.buildFor) || PACK.buildings[0];
+    const free = Staff.slots(c) - s.rooms.length;
+    return `<p class="muted small">${esc(b.name)} için oda kur. Boş alan: ${free}.</p><div class="tiles">${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => {
+      const lock = t.research && !s.research.done[t.research] ? 'araştır' : t.office && s.office.tier < t.office ? PACK.offices[t.office - 1].name : '';
+      return `<button class="tile" data-act="build" data-id="${t.id}" ${lock || free <= 0 ? 'disabled' : ''} title="${esc(t.desc)}">${t.name}<small>${lock || money(t.cost * M.inflation(c) ** 0.5)}</small></button>`;
+    }).join('')}</div>${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => `<p class="small"><b>${t.name}:</b> <span class="muted">${t.desc}</span></p>`).join('')}`;
   }
 
   // ---------- GELİŞTİR: proje listesi, sihirbaz (bilgi rozetli), proje ayrıntısı
@@ -386,7 +496,7 @@ export function boot(root, hotData = {}) {
         + (own ? '' : s.projects.map((p) => `<option value="destek:${p.id}" ${r.mode === 'destek' && r.target === p.id ? 'selected' : ''}>Destek: ${esc(p.name)}</option>`).join(''));
       const mode = r.type === 'gelistirme' ? `<p class="muted small">${own ? `Projesi: <b>${esc(own.name)}</b>` : r.mode === 'destek' ? 'Başka projeye destek veriyor' : 'Projesi yok'}</p><select id="md-${r.id}" data-act="mode" data-id="${r.id}" aria-label="Oda modu">${modeOpts}</select>` : '';
       return `<section class="box room r-${r.type}"><div class="head"><h3>${t.name}</h3><span class="pill">${people.length}/${cap}</span></div>
-        <p class="muted small">${t.desc}</p>${mode}
+        <p class="muted small">${t.desc}</p>${mode}${PACK.rooms.targetable.includes(r.type) ? targetSelect(r) : ''}
         <p class="names">${people.map((p) => `<span class="spec s-${p.spec}">${esc(p.name.split(' ')[0])}</span>`).join('') || '<span class="muted small">Boş</span>'}</p>
         ${s.rooms.length > 1 ? `<div class="foot"><button class="ghost danger small" data-act="demolish" data-id="${r.id}">${app.confirm === 'dem' + r.id ? 'Emin misin?' : 'Sök'}</button></div>` : ''}</section>`;
     }).join('');
@@ -512,6 +622,8 @@ export function boot(root, hotData = {}) {
       </div>
       <p class="muted small">Rafta ${gm.weeks} hafta${gm.active ? '' : ' (bitti)'} · güncelleme ${gm.patches || 0}/${P.patchMax} · ${gm.publisherId ? `yayıncı: ${esc(PACK.publishers.find((x) => x.id === gm.publisherId)?.name || '')}, pay %${Math.round((gm.royalty || 0) * 100)}` : 'kendi yayının'}</p>
       ${gm.critics?.[0]?.quote ? `<section class="box"><h3>Eleştirmenler</h3><ul class="quotes">${gm.critics.map((k) => `<li><b class="num">${String(k.score).replace('.', ',')}</b><span>${esc(k.name)}: “${esc(k.quote)}”</span></li>`).join('')}</ul>${gm.review?.genreNote ? `<p class="muted small">“${esc(gm.review.genreNote)}”</p>` : ''}</section>` : ''}
+      <section class="box"><h3>Oyuncu raporu</h3>${gm.playerReport ? `<ul class="plist-r">${gm.playerReport.map((l) => `<li class="${l.tone}">${esc(l.text)}</li>`).join('')}</ul><p class="muted small">Öğrenilen görev önemleri faz pencerelerinde rozet olarak görünür.</p>`
+        : `<div class="foot"><span class="muted small">Oyuncular neyi sevdi, neyi sevmedi? Görev bazında ne geliştirmen gerektiğini söyler.${gm.active && gm.weeks < PACK.playerReport.minWeeks ? ` ${PACK.playerReport.minWeeks - gm.weeks} hafta sonra hazırlanabilir.` : ''}</span><button data-act="report" data-id="${gm.id}" ${gm.active && gm.weeks < PACK.playerReport.minWeeks ? 'disabled' : ''}>Rapor çıkar · ${Know.reportCost(c) ? money(Know.reportCost(c)) : 'bedava'}</button></div>`}</section>
       <section class="box"><h3>Haftalık satış (kopya)</h3>${chart('game' + gm.id, gm.hist || [], { labels: wk, kind: 'bar', barCls: 'sky' })}</section>
       <section class="box"><h3>Haftalık gelir</h3>${chart('rev' + gm.id, gm.revHist || [], { labels: wk.slice(-(gm.revHist || []).length), fmtv: money, color: 'var(--mint)' })}</section>
       <section class="box"><h3>Platformlara göre</h3><div class="split-bars">${Object.entries(gm.sold || {}).sort((a, b) => b[1] - a[1]).map(([pid, u]) => `<div><span>${esc(M.platformById(c, pid)?.name || pid)}</span>${bar(gm.units ? (u / gm.units) * 100 : 0, 'prog')}<b class="num">${fmt(u)}</b></div>`).join('')}</div></section>
@@ -595,8 +707,8 @@ export function boot(root, hotData = {}) {
     app.phaseSeen[pj.id] = pj.phase; app.dlgPid = pj.id;
     const ids = PACK.missions.map((m, i) => i).filter((i) => PACK.missions[i].phase === pj.phase);
     dialog(`<small class="muted">${esc(pj.name)} · ${genre.name}</small><h2>${PACK.production.phaseNames[pj.phase]}</h2>
-      <p class="small">Ekibin zamanını bu fazın üç görevine dağıt. ◆ işaretli görevler bu tür için kritik.</p>
-      <div class="phase-sliders">${ids.map((i) => `<label class="slider"><span>${PACK.missions[i].name}${genre.mission[i] === 1 ? ' <i>◆</i>' : ''}</span>
+      <p class="small">Ekibin zamanını bu fazın üç görevine dağıt. Rozetler oyuncu raporlarından öğrendiğin önemi gösterir; ? henüz bilinmiyor.</p>
+      <div class="phase-sliders">${ids.map((i) => `<label class="slider"><span>${PACK.missions[i].name} ${(() => { const w = Know.known(ctx()).mission(pj.genre, i); return w == null ? '<em class="kn">?</em>' : badgeOf(Math.round(w * 10)); })()}</span>
         <input type="range" min="0" max="100" step="5" id="alloc-${i}" data-alloc="${i}" value="${pj.alloc[i]}"><b class="num" id="pct-${i}"></b></label>`).join('')}</div>
       <button class="primary block" data-act="close-dialog">Devam</button>`, 'phase');
     updatePhasePct();
@@ -655,7 +767,8 @@ export function boot(root, hotData = {}) {
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
     const g = G();
-    if (b.dataset.open) return app.win === b.dataset.open ? closeWin() : openWin(b.dataset.open);
+    if (b.dataset.open) return app.win && (app.win === b.dataset.open || (b.dataset.open === 'bilgisayar' && app.win !== 'gunluk')) ? closeWin() : openWin(b.dataset.open, false);
+    if (b.dataset.hub) { if (b.dataset.hubsub) app.sub[b.dataset.hub] = b.dataset.hubsub; if (b.dataset.hub === 'gelistir') { app.sel = null; app.wizOn = b.dataset.hubsub === 'oyun' && !G().state.projects.length; } app.selGame = null; app.win = b.dataset.hub; app.fromHub = true; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
     if (b.dataset.sub) { app.sub[app.win] = b.dataset.sub; el.winBody.scrollTop = 0; return renderWindow(); }
     if (b.dataset.pick) { app.draft[b.dataset.pick] = b.dataset.id; if (b.dataset.pick === 'genre' && app.draft.sub === b.dataset.id) app.draft.sub = ''; return renderWindow(); }
     if (b.dataset.choice !== undefined) { g.resolve(+b.dataset.choice); save(); return closeDialog(); }
@@ -663,6 +776,14 @@ export function boot(root, hotData = {}) {
     const twice = (key, fn) => { if (app.confirm === key) { app.confirm = null; return run(fn()); } app.confirm = key; return render(); };
     switch (act) {
       case 'close-win': return closeWin();
+      case 'hub': app.win = 'bilgisayar'; app.fromHub = false; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'bprev': return goBuilding(-1);
+      case 'bnext': return goBuilding(1);
+      case 'goto': if (b.dataset.sub) app.sub[id] = b.dataset.sub; if (id === 'gelistir') { app.sel = null; app.wizOn = false; } app.win = id; app.fromHub = false; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'open-proj': app.win = 'gelistir'; app.sub.gelistir = 'oyun'; app.sel = pid; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'new-in-room': app.win = 'gelistir'; app.sub.gelistir = 'oyun'; app.sel = null; app.wizOn = true; app.wiz = 1; app.draft = { ...defaultDraft(), roomId: id }; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'hire-here': { const res = g.hire(+id); if (res.ok) { const p = g.state.staff[g.state.staff.length - 1]; g.moveStaff(p.id, +b.dataset.room); } return run(res); }
+      case 'report': { const gm = g.state.games.find((x) => x.id === +id); const res = g.playerReport(+id); if (!res.ok) return run(res); app.win = 'pazar'; app.sub.pazar = 'oyunlar'; app.selGame = gm.id; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
       case 'close-dialog': return closeDialog();
       case 'begin': {
         const v = (q) => root.querySelector(q).value;
@@ -734,6 +855,7 @@ export function boot(root, hotData = {}) {
     const id = +t.dataset.id;
     if (t.dataset.act === 'move') { t.blur(); return run(g.moveStaff(id, +t.value)); }
     if (t.dataset.act === 'mode') { t.blur(); return run(g.setRoomMode(id, t.value)); }
+    if (t.dataset.act === 'target') { t.blur(); return run(g.setRoomTarget(id, t.value ? +t.value : null)); }
     if (t.dataset.act === 'train' && t.value) { t.blur(); return run(g.train(id, t.value)); }
     if (t.dataset.act === 'career' && t.value) { t.blur(); return run(g.changeCareer(id, t.value)); }
   });

@@ -225,5 +225,42 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Puan 5 üstü 0,2 adımlı', [5.13, 6.79, 9.91].map(M.quantizeCritic).join() === '5.2,6.8,10');
 }
 
+// 19) MGT: destek odası hedefi, pazarlama hype'ı, müşteri destek hayranı, oyuncu raporu bilgisi
+{
+  const g = newGame({ seed: 21, difficulty: 'kolay' });
+  const st = g.state;
+  st.cash = 1e8; st.office.tier = 3; st.research.done.oda_uzman = 1;
+  g.buildRoom('gelistirme'); g.buildRoom('grafik'); g.buildRoom('pazarlama');
+  const put = (career, roomIdx) => { const p = Staff.makePerson(g.ctx, { career, level: 0, skill: 60 }); p.room = st.rooms[roomIdx].id; p.founder = true; st.staff.push(p); return p; };
+  put('yazar', 1); put('tasarimci', 2); put('yazar', 3);
+  const base = { genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' };
+  const A = g.startProject({ ...base, name: 'A', roomId: st.rooms[0].id }).project;
+  const B = g.startProject({ ...base, name: 'B', roomId: st.rooms[1].id }).project;
+  const gfxRoom = st.rooms[2], mkt = st.rooms[3];
+  check('Grafik stüdyosu projeye atanır', g.setRoomTarget(gfxRoom.id, B.id).ok);
+  const a0 = A.points.gfx, b0 = B.points.gfx; Prod.weeklyProject(g.ctx);
+  check('Atanan proje grafik alır, diğeri stüdyodan almaz', B.points.gfx - b0 > (A.points.gfx - a0) * 3, `${(B.points.gfx - b0).toFixed(1)} / ${(A.points.gfx - a0).toFixed(1)}`);
+  g.setRoomTarget(mkt.id, A.id);
+  const h0 = A.hype; Prod.weeklyProject(g.ctx);
+  check('Pazarlama odası hype üretir', A.hype > h0 - PACK.hype.decayDev + 0.5, `${h0.toFixed(1)} → ${A.hype.toFixed(1)}`);
+  check('Geliştirme odası projeye atanamaz (hedef)', !g.setRoomTarget(st.rooms[0].id, A.id).ok);
+}
+{
+  const g = newGame({ seed: 22, difficulty: 'kolay' });
+  const st = g.state;
+  st.cash = 1e7; st.research.done.tur_rpg = 1;
+  g.startProject({ name: 'R', genre: 'rpg', topic: 'fantezi', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
+  while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
+  const game = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 }).game;
+  check('Rapor 4 haftadan önce çıkmaz', !g.playerReport(game.id).ok);
+  for (let i = 0; i < 5; i++) { st.pending = []; g.tick(); }
+  const rep = g.playerReport(game.id);
+  check('Oyuncu raporu görev önemini öğretir', rep.ok && Know.known(g.ctx).mission('rpg', 2) === 1, rep.lines?.length + ' satır');
+  st.office.tier = 2; st.cash = 1e7; g.buildRoom('musteri');
+  const s2 = Staff.makePerson(g.ctx, { skill: 60 }); s2.room = st.rooms[1].id; s2.founder = true; st.staff.push(s2);
+  const f0 = st.fans; for (let i = 0; i < 2; i++) { st.pending = []; g.tick(); }
+  check('Müşteri destek hayran kazandırır', game.active ? st.fans > f0 : true, `${f0} → ${st.fans}`);
+}
+
 console.log(`\n${pass} geçti, ${fail} kaldı.`);
 process.exit(fail ? 1 : 0);

@@ -233,13 +233,30 @@ export const PACK = {
       { id: 'arastirma', name: 'Araştırma odası', cost: 30000, floor: '#73653f', desc: 'Araştırma puanı üretir.' },
       { id: 'mola', name: 'Mola odası', cost: 15000, floor: '#734a5a', desc: 'Buradakiler hızla dinlenir; varlığı herkesin stresini azaltır.' },
       { id: 'donanim', name: 'Donanım laboratuvarı', cost: 500000, research: 'donanim_lab', office: 3, floor: '#4a4a5a', desc: 'Kendi konsolunu yapar. Donanım mühendisi gerekir.' },
+      { id: 'pazarlama', name: 'Pazarlama ve yayın', cost: 35000, office: 2, floor: '#735a3f', desc: 'Projelere her hafta hype üretir; kendi yayınında oyunun gücünü artırır.' },
+      { id: 'musteri', name: 'Müşteri destek', cost: 25000, office: 2, floor: '#3f6773', desc: 'Satıştaki oyunlar için hayran kazandırır, kötü not ve hata kaynaklı hayran kaybını azaltır, oyuncu raporlarını bedavaya çıkarır.' },
     ],
     modes: { otomatik: 'Kendi oyunu, yoksa sözleşme', oyun: 'Yalnızca kendi oyunu', sozlesme: 'Yalnızca sözleşme', destek: 'Başka projeye destek' },
     expertMult: 2.4, // P (şartname: uzman odada çarpan 2,4)
+    // Destek odaları belirli bir projeye atanabilir (MGT), atanmamışsa tüm projelere bölünür.
+    targetable: ['grafik', 'ses', 'qa', 'pazarlama'],
+    marketingHypeK: 0.12, selfPublishBonus: 15, // P
+    supportFansK: 6, supportLossCut: 0.5, // P: kişi-hafta üretimi başına hayran, kötü not kaybını yarıya indirir
     qaBugK: 0.9, qaPolish: 0.2,
     restRoomStress: -0.6, restRoomMorale: 0.05,
     demolishRefund: 0.25,
   },
+
+  // Binalar (MGT esinli): odalar türüne göre ayrı binalarda durur; sahnede kaydırarak geçilir.
+  buildings: [
+    { id: 'ana', name: 'Ana ofis', types: ['gelistirme', 'mola'] },
+    { id: 'studyo', name: 'Stüdyolar', types: ['grafik', 'ses'], minTier: 2 },
+    { id: 'arge', name: 'Ar-Ge binası', types: ['arastirma', 'donanim'], minTier: 2 },
+    { id: 'yayin', name: 'Yayın ve destek', types: ['qa', 'pazarlama', 'musteri'], minTier: 2 },
+  ],
+
+  // Oyuncu raporu (GDT esinli): oyuncular neyi beğendi; görev önemleri bilgi olarak birikir (P).
+  playerReport: { _tag: 'P', cost: 6000, minWeeks: 4, highAlloc: 0.4, lowAlloc: 0.22, priceHigh: 1.3, priceLow: 0.6, hypeGap: 25 },
 
   // Kariyerler (Game Dev Story, V yapısı; çarpanlar P). + = 1,0 · ++ = 1,2 · +++ = 1,4
   careers: [

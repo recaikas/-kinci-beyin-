@@ -8,7 +8,7 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 90 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 101 kalibrasyon ve tutarlılık kontrolü
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -30,6 +30,10 @@ Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.ran
 
 Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi. Üstte ince bir HUD ve GDT tarzı proje sayacı (disiplin puanları + hata), altta ikonlu menü var. Yönetim panelleri sahnenin üstünde pencere olarak açılır; pencere açıkken oyun durur. Yeni oyun 3 adımlı bir sihirbazla başlar (fikir → platform → onay), her fazın başında zaman dağılımı sorulur, yayında eleştirmen ekranı gelir. Sahne 3/4 perspektifle çizilir: duvar kalınlıkları, gölgeler, gün-gece ışığı, oda tipine göre mobilya, çalışanların kafasından yükselen puan baloncukları.
 
+### Kontroller (MGT/GDT tarzı)
+
+Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, personel, reklam, araştırma, satışlar ve finans patronun bilgisayarından (taçlı kurucuya dokun ya da Bilgisayar düğmesi) açılır. Sahnede bir odaya dokunmak o odanın penceresini açar: görev, hedef proje, çalışanlar, odaya işe alım. Boş alana dokunmak oda kurar, kilitli alana dokunmak taşınma seçeneklerini açar. Binalar (Ana ofis, Stüdyolar, Ar-Ge, Yayın ve destek) arasında sahneyi yatay kaydırarak ya da oklarla geçilir.
+
 ## İçerik
 
 - 6 tür, 38 konu, 20 platform (1976–2032), 8 yayıncı, 5 oyun boyutu (MMO dahil)
@@ -47,6 +51,8 @@ Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi
 - **Yayın sonrası**: güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket
 - **Satış listesi (MGT)**: rakip oyunlar da satar; her hafta en çok satan 10 oyun, sıra değişimi ▲▼, en iyi sıra. Sahnede satıştaki oyunların kartları, üst çubukta en çok satan oyun
 - **Grafikler**: stüdyonun haftalık geliri, oyun başına haftalık satış, aylık kasa, yıllık kâr/zarar
+- **Oda görevleri (MGT)**: grafik, ses, QA ve pazarlama odaları belirli bir projeye atanır ya da tüm projelere bölünür. Yeni odalar: Pazarlama ve yayın (her hafta hype, kendi yayında güç), Müşteri destek (hayran, bedava oyuncu raporu)
+- **Oyuncu raporu (GDT)**: satıştan 4 hafta sonra; oyuncuların hangi görevi sevip sevmediği, kitle, fiyat, hata, motor ve beklenti yorumu. Görev önemleri faz pencerelerinde rozet olur
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…

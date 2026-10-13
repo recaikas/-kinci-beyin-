@@ -4,6 +4,7 @@
 import { slots, roomSeats, membersOf, roomBusy } from '../systems/staff.js';
 
 const WALL = { 1: ['#7a7288', '#665f75', '#8e86a0'], 2: ['#f4c4d0', '#dca2b4', '#fde0e8'], 3: ['#b4e8d4', '#8fcfb6', '#d4f6e8'], 4: ['#cfc2f6', '#ab9ce0', '#e4dcff'] };
+const BWALL = { studyo: ['#f6c6e0', '#e0a3c4', '#ffe0f0'], arge: ['#b8e0e8', '#93c6d2', '#d8f2f8'], yayin: ['#f6dcb0', '#e0bf8c', '#fff0d4'] };
 const FLOOR = { 1: ['#55506a', '#4d4860'], 2: ['#b9835f', '#a97553'], 3: ['#cdb68f', '#bea781'], 4: ['#9a94b6', '#8d87a8'] };
 const DISC_COLOR = { oyn: '#ff8fc7', gfx: '#7fd0f5', ses: '#c3a6ff', tek: '#8fe89a' };
 const SCREEN = ['#8fbf7a', '#9cc4ea', '#a8ecff', '#d4b8ff', '#ffc4ec'];
@@ -17,6 +18,7 @@ const ICON = {
   ses: ['..xxx', '..x.x', '..x..', 'xxx..', 'xxx..'], qa: ['x.x.x', '.xxx.', 'xxxxx', '.xxx.', 'x.x.x'],
   arastirma: ['.xxx.', '..x..', '.xxx.', 'xxxxx', 'xxxxx'], mola: ['.....', 'x...x', 'xxxxx', 'xxxxx', 'x...x'],
   donanim: ['x.x.x', 'xxxxx', 'xx.xx', 'xxxxx', 'x.x.x'],
+  pazarlama: ['....x', '..xxx', 'xxxxx', '..xxx', '....x'], musteri: ['.xxx.', 'x...x', 'x...x', 'xx.xx', '.....'],
 };
 const ICON_COLOR = { heart: '#ff6fa8', drop: '#5fb8ff', skull: '#5a4a6a', cloud: '#7a7a8f', fire: '#ff8a3d', zzz: '#8f86c9', book: '#d9a03f', plus: '#ff5a5a' };
 
@@ -30,6 +32,7 @@ const shade = (h, f) => mix(h, f < 1 ? '#000000' : '#ffffff', Math.abs(1 - f));
 export function makeRenderer(canvas) {
   const g = canvas.getContext('2d');
   const bubbles = [];
+  let hits = []; // tıklama alanları: oda, kişi, patron masası, boş alan
   const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
   const icon = (name, x, y, color) => {
     const rows = ICON[name];
@@ -121,11 +124,14 @@ export function makeRenderer(canvas) {
     if (type === 'qa') { px(x + 4, y + 2, 12, 9, '#fff3c4'); icon('qa', x + 7, y + 4, '#d9534f'); }
     if (type === 'arastirma') { px(x + 4, y + 1, 16, 10, '#7a5640'); for (let i = 0; i < 6; i++) px(x + 5 + i * 2.5, y + 2 + (i % 2), 2, 4, ['#ff8fc7', '#8fd3f2', '#ffd36f', '#8fe89a'][i % 4]); for (let i = 0; i < 6; i++) px(x + 5 + i * 2.5, y + 7, 2, 3, ['#c3a6ff', '#ff8a3d', '#8fd3f2'][i % 3]); }
     if (type === 'mola') { px(x + 4, y + 2, 14, 9, '#2a2030'); px(x + 5, y + 3, 12, 7, frame % 60 < 30 ? '#7fd0f5' : '#8fe89a'); px(w + x - 10, y + 1, 6, 10, '#3a7a52'); px(w + x - 9, y + 2, 4, 3, '#ffd36f'); }
+    if (type === 'pazarlama') { px(x + 4, y + 2, 10, 9, '#fff'); px(x + 5, y + 3, 8, 3, '#ff8fc7'); px(x + 5, y + 7, 5, 1, '#2a2030'); px(x + 16, y + 2, 10, 9, '#fff'); px(x + 17, y + 3, 8, 3, '#7fd0f5'); }
+    if (type === 'musteri') { px(x + 4, y + 2, 18, 9, '#2a2030'); for (let i = 0; i < 4; i++) px(x + 6 + i * 4, y + 4 + ((frame / 20 + i) % 3 | 0), 2, 2, '#8ff0c4'); }
     if (type === 'donanim') { px(x + 4, y + 2, 14, 8, '#3e7a52'); for (let i = 0; i < 4; i++) px(x + 6 + i * 3, y + 4, 1, 4, '#ffd36f'); px(x + 20, y + 3, 4, 7, '#888'); }
   }
   function plant(x, y) { shadow(x + 4, y + 13, 5, 2); px(x + 1, y + 8, 6, 5, '#b8683e'); px(x + 1, y + 8, 6, 1, '#d0804e'); px(x + 2, y + 2, 4, 6, '#4fa860'); px(x, y + 4, 3, 3, '#5fbf70'); px(x + 5, y + 3, 3, 4, '#3f9050'); }
 
   function room(rx, ry, rw, rh, r, members, cap, frame, state, pack, busy, night) {
+    hits.push({ kind: 'room', id: r.id, x: rx, y: ry, w: rw, h: rh });
     const t = pack.rooms.types.find((x) => x.id === r.type);
     const wallH = 13;
     // arka duvar (derinlik)
@@ -155,6 +161,7 @@ export function makeRenderer(canvas) {
       g.save(); g.translate(Math.round(cx), Math.round(cy)); g.scale(z, z);
       if (r.type === 'mola') couch(0, 0, p, frame); else workstation(0, 0, p, frame, state, r.type, busy, night);
       g.restore();
+      if (p) hits.push({ kind: p.founder ? 'boss' : 'person', id: p.id, room: r.id, x: cx, y: cy - 6, w: 26 * z, h: 30 * z });
       if (p) {
         emote(p, cx + 6 * z, cy - 8, frame, state, r.type === 'mola');
         if (busy && p.status === 'ok' && r.type !== 'mola' && (frame + p.id * 37) % Math.max(30, 110 - p.skill) === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack);
@@ -180,7 +187,7 @@ export function makeRenderer(canvas) {
       }
     }
     const bug = disc && (p.trait === 'hatamakinesi' || state.crunch) && bubbles.length % 4 === 0;
-    const color = bug ? '#ff5a6e' : disc ? DISC_COLOR[disc] : r.type === 'arastirma' ? '#ffd36f' : r.type === 'qa' ? '#8ff0c4' : '#b0b0c8';
+    const color = bug ? '#ff5a6e' : disc ? DISC_COLOR[disc] : r.type === 'arastirma' || r.type === 'pazarlama' ? '#ffd36f' : r.type === 'qa' || r.type === 'musteri' ? '#8ff0c4' : '#b0b0c8';
     bubbles.push({ x, y, color, bug, life: 70 });
     if (bubbles.length > 80) bubbles.shift();
   }
@@ -197,25 +204,36 @@ export function makeRenderer(canvas) {
     for (let i = bubbles.length - 1; i >= 0; i--) if (bubbles[i].life <= 0) bubbles.splice(i, 1);
   }
 
-  function emptySlot(rx, ry, rw, rh, frame) {
+  function emptySlot(rx, ry, rw, rh, frame, building) {
+    hits.push({ kind: 'slot', building, x: rx, y: ry, w: rw, h: rh });
     px(rx, ry, rw, rh, 'rgba(20,14,30,0.35)');
     for (let x = 0; x < rw; x += 6) { px(rx + x, ry, 3, 1, '#8f86a8'); px(rx + x, ry + rh - 1, 3, 1, '#8f86a8'); }
     for (let y = 0; y < rh; y += 6) { px(rx, ry + y, 1, 3, '#8f86a8'); px(rx + rw - 1, ry + y, 1, 3, '#8f86a8'); }
     if (frame % 80 < 50) { px(rx + rw / 2 - 4, ry + rh / 2, 9, 1, '#8f86a8'); px(rx + rw / 2, ry + rh / 2 - 4, 1, 9, '#8f86a8'); }
   }
 
+  function lockedSlot(rx, ry, rw, rh) {
+    hits.push({ kind: 'locked', x: rx, y: ry, w: rw, h: rh });
+    px(rx, ry, rw, rh, 'rgba(10,6,20,0.45)');
+    for (let i = -rh; i < rw; i += 10) for (let k = 0; k < rh; k += 2) { const xx = rx + i + k; if (xx >= rx && xx < rx + rw) px(xx, ry + k, 1, 1, 'rgba(143,134,168,0.35)'); }
+    const cx = rx + rw / 2 - 5, cy = ry + rh / 2 - 6;
+    px(cx + 2, cy, 6, 2, '#8f86a8'); px(cx + 1, cy + 2, 2, 4, '#8f86a8'); px(cx + 7, cy + 2, 2, 4, '#8f86a8'); px(cx, cy + 6, 10, 7, '#8f86a8'); px(cx + 4, cy + 8, 2, 3, '#2a2238');
+  }
+
   // Gün içi ışık döngüsü (yalnızca görsel): 0 gündüz … 1 gece
   const nightness = (frame) => { const t = (frame % 3600) / 3600; return Math.max(0, Math.min(1, (Math.cos(t * Math.PI * 2) * -1.4 + 0.2))); };
 
-  return function draw(state, pack, frame) {
+  function draw(state, pack, frame, view = {}) {
+    hits = [];
     const W = canvas.width, H = canvas.height;
+    const bld = pack.buildings.find((b) => b.id === view.building) || pack.buildings[0];
     const ctx = { state, pack };
     const tier = state.office.tier;
     const kaos = state.kaos;
     const [t1, t2, t3] = pack.chaos.visualThresholds;
     const night = nightness(frame);
     seed = 7 + tier * 13 + (state.office.floors || 0) + state.rooms.length;
-    const [wall, wallDark, wallLight] = WALL[tier];
+    const [wall, wallDark, wallLight] = tier > 1 && BWALL[bld.id] ? BWALL[bld.id] : WALL[tier];
     const wallH = Math.round(H * (tier === 1 ? 0.3 : 0.17));
 
     // arka duvar
@@ -255,13 +273,20 @@ export function makeRenderer(canvas) {
       const z = Math.max(2, Math.min(4, Math.floor(Math.min(W / 90, (H - wallH) / 40))));
       const cx = Math.round(W / 2 - 13 * z), cy = Math.round(wallH + (H - wallH - 30 * z) / 2);
       const busy = roomBusy(ctx, r);
+      hits.push({ kind: 'room', id: r.id, x: 0, y: wallH, w: W, h: H - wallH });
       g.save(); g.translate(cx, cy); g.scale(z, z); workstation(0, 0, p, frame, state, 'gelistirme', busy, night > 0.4); g.restore();
+      if (p) hits.push({ kind: 'boss', id: p.id, room: r.id, x: cx, y: cy - 10, w: 26 * z, h: 32 * z });
       if (p) { emote(p, cx + 6 * z, cy - 10, frame, state, false); if (busy && p.status === 'ok' && frame % 50 === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack); }
       plant(W - 30, H - 26);
       // tavan lambası
       px(W / 2 - 1, 0, 2, wallH * 0.4, '#2a2030'); px(W / 2 - 6, wallH * 0.4, 12, 4, '#ffd36f');
     } else {
-      const total = slots(ctx), cap = roomSeats(ctx);
+      // Bu binadaki odalar + boş alan varsa bir "+" yeri (MGT: binalar arasında kaydırılır)
+      const list = state.rooms.filter((r) => bld.types.includes(r.type));
+      const free = slots(ctx) - state.rooms.length;
+      // Boş alan yoksa ve bina seyrekse "kilitli" yer: daha büyük ofise taşınma ipucu
+      const extra = free > 0 ? 'free' : list.length < 2 ? 'locked' : null;
+      const total = list.length + (extra ? 1 : 0), cap = roomSeats(ctx);
       const portrait = H > W;
       const cols = portrait ? (total <= 2 ? 1 : 2) : total <= 2 ? 2 : total <= 4 ? 2 : total <= 9 ? 3 : 4;
       const rows = Math.ceil(total / cols);
@@ -269,9 +294,10 @@ export function makeRenderer(canvas) {
       const rw = Math.floor((W - 8 - gap * (cols - 1)) / cols), rh = Math.floor((H - top - 6 - gap * (rows - 1)) / rows);
       for (let i = 0; i < total; i++) {
         const x = 4 + (i % cols) * (rw + gap), y = top + Math.floor(i / cols) * (rh + gap);
-        const r = state.rooms[i];
+        const r = list[i];
         if (r) room(x, y, rw, rh, r, membersOf(ctx, r), cap, frame, state, pack, roomBusy(ctx, r), night > 0.4);
-        else emptySlot(x, y, rw, rh, frame);
+        else if (extra === 'free') emptySlot(x, y, rw, rh, frame, bld.id);
+        else lockedSlot(x, y, rw, rh);
       }
     }
 
@@ -301,11 +327,17 @@ export function makeRenderer(canvas) {
     const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(8,4,16,0.35)');
     g.fillStyle = v; g.fillRect(0, 0, W, H);
-  };
+  }
+  function hit(x, y) {
+    for (let i = hits.length - 1; i >= 0; i--) { const h = hits[i]; if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h; }
+    return null;
+  }
+  return { draw, hit };
 }
 
 // Menü simgeleri: 7×7 piksel haritaları, data URL'ye çevrilir.
 const MENU = {
+  bilgisayar: ['xxxxxxx', 'x.....x', 'x.xx..x', 'x.....x', 'xxxxxxx', '...x...', '.xxxxx.'],
   gelistir: ['.......', '.xxxxx.', 'x.x...x', 'xxx.x.x', 'x.x...x', '.xxxxx.', '.......'],
   personel: ['..xxx..', '..xxx..', '...x...', '.xxxxx.', 'x.xxx.x', '..x.x..', '..x.x..'],
   ofis: ['...x...', '..xxx..', '.xxxxx.', 'xxxxxxx', '.x...x.', '.x.x.x.', '.xxxxx.'],

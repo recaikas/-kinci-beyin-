@@ -1,6 +1,7 @@
 // Oyun raporu ve bilgi birikimi (GDT esinli): her yayından sonra konu×tür, konu×kitle, platform×tür uyumu
 // ve zaman dağılımı dersleri öğrenilir; sihirbaz bu bilgiyi gösterir. Uyum değerleri 6–10 (GDT ölçeği, V).
-import { discShares } from '../models.js';
+import { discShares, inflation, engineFactor } from '../models.js';
+import { hasRoom } from './staff.js';
 
 const LABEL = { 10: ['+++', 'Harika'], 9: ['++', 'İyi'], 8: ['+', 'Fena değil'], 7: ['−', 'Kötü'], 6: ['−−', 'Berbat'] };
 export const rating = (v) => LABEL[Math.max(6, Math.min(10, Math.round(v)))];
@@ -17,6 +18,7 @@ export function known(ctx) {
     topicAud: (t, a) => k[`ta|${t}|${a}`],
     platGenre: (p, g) => k[`pg|${p}|${g}`],
     genreFocus: (g) => k[`gf|${g}`],
+    mission: (g, i) => k[`gm|${g}|${i}`], // görev önemi (GDT ağırlığı 0,6–1,0) oyuncu raporuyla öğrenilir
   };
 }
 
@@ -54,4 +56,55 @@ export function learn(ctx, pj, rv) {
   for (const n of rv.notes) if (/Alt tür|tekrar|Eskimiş|Küçük boyut/.test(n)) lines.push({ tone: 'bad', text: n });
   ctx.bus.fire('gameReport', { project: pj, lines });
   return lines;
+}
+
+// Oyuncu raporu (GDT esinli): oyuncuların neyi sevip neyi sevmediği. Görev önemleri bilgi olarak kalır.
+export function reportCost(ctx) {
+  return hasRoom(ctx, 'musteri') ? 0 : Math.round(ctx.pack.playerReport.cost * inflation(ctx) ** 0.5);
+}
+export function playerReport(ctx, id) {
+  const { state, pack, ledger, rng } = ctx;
+  const R = pack.playerReport;
+  const g = state.games.find((x) => x.id === id);
+  if (!g) return { ok: false, msg: 'Oyun yok.' };
+  if (g.playerReport) return { ok: true, lines: g.playerReport };
+  if (g.active && g.weeks < R.minWeeks) return { ok: false, msg: `Oyuncuların fikir oluşturması için ${R.minWeeks} hafta satışta kalmalı.` };
+  if (!g.alloc) return { ok: false, msg: 'Bu oyun için yeterli veri yok.' };
+  const cost = reportCost(ctx);
+  if (state.cash < cost) return { ok: false, msg: `Rapor ${cost.toLocaleString('tr-TR')} $.` };
+  if (cost) ledger.post('arastirma', -cost, `Oyuncu raporu: ${g.name}`);
+  const genre = pack.genres.find((x) => x.id === g.genre);
+  const k = state.knowledge;
+  const lines = [];
+  // Görevler: faz içindeki pay ile türün görev önemi karşılaştırılır.
+  for (let ph = 0; ph < 3; ph++) {
+    const ids = pack.missions.map((m, i) => i).filter((i) => pack.missions[i].phase === ph);
+    const sum = ids.reduce((a, i) => a + g.alloc[i], 0) || 1;
+    for (const i of ids) {
+      const m = pack.missions[i], wgt = genre.mission[i], share = g.alloc[i] / sum;
+      k[`gm|${g.genre}|${i}`] = wgt;
+      if (wgt >= 1 && share >= R.highAlloc) lines.push({ tone: 'good', text: `Oyuncular ${m.name.toLowerCase()} kısmına bayıldı. ${genre.name} için kritik ve iyi yatırım yapmışsın.` });
+      else if (wgt >= 1 && share < R.lowAlloc) lines.push({ tone: 'bad', text: `${m.name} zayıf bulundu. ${genre.name} oyuncuları buna çok önem veriyor.` });
+      else if (wgt <= 0.7 && share >= R.highAlloc) lines.push({ tone: 'bad', text: `${m.name} için harcanan emek fark edilmedi; ${genre.name} oyuncuları pek önemsemiyor.` });
+    }
+  }
+  // Kitle, fiyat, hata, motor, beklenti
+  const t = pack.topics.find((x) => x[0] === g.topic), ai = pack.audiences.findIndex((a) => a.id === g.audience);
+  const best = pack.audiences.map((a, i) => [a, t[3][i]]).sort((a, b) => b[1] - a[1])[0];
+  if (best[0].id !== g.audience && best[1] > t[3][ai]) lines.push({ tone: 'info', text: `${t[1]} konusu en çok ${best[0].name.toLowerCase()} kitlede tuttu; bir dahaki sefere onları hedefle.` });
+  const ref = pack.sales.priceRef * (g.platforms.some((id) => pack.platforms.find((p) => p.id === id)?.priceRef) ? 0.3 : 1) * inflation(ctx) ** 0.4;
+  if (g.price > ref * R.priceHigh) lines.push({ tone: 'bad', text: `Fiyat pahalı bulundu (${g.price} $). Satış daha hızlı düştü.` });
+  else if (g.price < ref * R.priceLow) lines.push({ tone: 'info', text: `Oyuncular fiyatı çok uygun buldu; biraz daha pahalı da satardı.` });
+  if ((g.bugRate || 0) * pack.review.bugMult > 2) lines.push({ tone: 'bad', text: 'Forumlar hata şikâyetiyle dolu. Güncelleme çıkar ya da bir dahakine QA odası kullan.' });
+  const eng = state.engines.find((e) => e.id === g.engineId);
+  if (engineFactor(ctx, eng) < 1) lines.push({ tone: 'bad', text: 'Teknik açıdan dönemin gerisinde bulundu. Daha yeni bir motor gerek.' });
+  if (g.hype - (g.score - 50) > R.hypeGap) lines.push({ tone: 'bad', text: 'Reklam beklentiyi çok yükseltti; oyun karşılayamayınca hayal kırıklığı oldu.' });
+  else if (g.score >= 80 && g.hype < 20) lines.push({ tone: 'info', text: 'Oyunu sevenler çok ama kimse duymamış. Daha çok pazarlama satışları katlardı.' });
+  if (!lines.some((l) => l.tone === 'good')) lines.push({ tone: 'info', text: 'Oyuncular dikkat çekici bir güçlü yan bulamadı.' });
+  const fan = ['"Gece 4\'e kadar oynadım, işe geç kaldım."', '"Kedim bile izledi."', '"Devamı ne zaman?!"', '"Para iadesi istiyorum, ama yine de oynuyorum."', '"Kardeşimle kavga ettik, kontrolcü bende kalacak."', '"Bu fiyata bu kadar hata olmaz."', '"Müziği hâlâ kafamda."', '"Sonunu beğenmedim ama 3 kez bitirdim."'];
+  lines.push({ tone: 'quote', text: `Bir oyuncu: ${rng.pick(fan)}` });
+  g.playerReport = lines;
+  ctx.bus.fire('playerReport', { game: g, lines });
+  ctx.news(`📋 "${g.name}" için oyuncu raporu hazır.`, 'info');
+  return { ok: true, lines };
 }

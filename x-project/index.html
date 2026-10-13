@@ -162,6 +162,22 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .disc { display: grid; grid-template-columns: 70px 1fr 46px; gap: 6px; align-items: center; font-size: var(--s-1); }
 .disc b { text-align: right; }
 
+/* bina geçişi ve bilgisayar menüsü */
+#bnav { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; z-index: 3; }
+#bnav button { min-width: 34px; height: 30px; padding: 0 8px; }
+.bname { display: grid; justify-items: center; padding: 3px 12px; background: color-mix(in srgb, var(--panel) 90%, transparent); border: 2px solid var(--line); font-family: var(--font-display); font-size: var(--s-1); white-space: nowrap; }
+.bname small { display: flex; gap: 4px; margin-top: 2px; }
+.bname i { width: 6px; height: 6px; background: var(--line); } .bname i.on { background: var(--candy); }
+#scene { cursor: pointer; touch-action: pan-y; }
+.hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.hubtile { display: grid; justify-items: start; gap: 4px; padding: 12px; text-align: left; min-height: 92px; }
+.hubtile img { width: 28px; height: 28px; image-rendering: pixelated; }
+.hubtile small { color: var(--ink-2); font-size: var(--s-1); }
+.window > header .back { margin-right: 6px; padding: 0 8px; }
+.plist-r { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--s-1); }
+.plist-r .good { color: var(--mint); } .plist-r .bad { color: #ffb3bd; } .plist-r .quote { color: var(--ink-2); font-style: italic; list-style: none; margin-left: -18px; }
+.slider .kn { margin-left: 4px; }
+
 /* MGT tarzı satış kartları (sahne üstü) */
 #market { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 3; max-width: calc(100% - 20px); flex-wrap: wrap; }
 .mcard { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; gap: 1px 8px; align-items: center; width: 190px; padding: 6px 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow); }
@@ -292,7 +308,8 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
   .time button { height: 34px; min-width: 40px; }
   .stat b { font-size: 1.2rem; }
   #menu { justify-content: flex-start; gap: 4px; padding-left: 8px; padding-right: 8px; }
-  #menu button { flex: 1 1 0; min-width: 0; padding: 5px 2px; font-size: 0.62rem; }
+  #menu button { flex: 0 1 120px; min-width: 0; padding: 5px 2px; font-size: 0.7rem; }
+  #menu { justify-content: center; }
   #menu button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   #menu img { width: 21px; height: 21px; }
   #win { padding: 0; place-items: end stretch; }
@@ -313,6 +330,7 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
     <canvas id="scene" aria-label="Stüdyonun piksel görünümü"></canvas>
     <div id="notes" aria-live="polite"></div>
     <div id="market" aria-label="Satıştaki oyunlar"></div>
+    <div id="bnav" aria-label="Binalar"></div>
   </div>
   <nav id="menu" aria-label="Menü"></nav>
 </div>

@@ -185,8 +185,9 @@ export function roomBusy(ctx, room) {
       const own = s.projects.some((p) => p.roomId === room.id);
       return (room.mode !== 'sozlesme' && own) || (!!s.contract && (room.mode === 'sozlesme' || (room.mode === 'otomatik' && !own)));
     }
-    case 'grafik': case 'ses': return s.projects.some((p) => p.status === 'dev');
-    case 'qa': return s.projects.length > 0;
+    case 'grafik': case 'ses': return room.target ? s.projects.some((p) => p.id === room.target && p.status === 'dev') : s.projects.some((p) => p.status === 'dev');
+    case 'qa': case 'pazarlama': return room.target ? s.projects.some((p) => p.id === room.target) : s.projects.length > 0;
+    case 'musteri': return s.games.some((g) => g.active);
     case 'arastirma': return true;
     case 'donanim': return !!(s.consoleJob);
     default: return false;
