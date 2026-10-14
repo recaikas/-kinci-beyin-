@@ -113,9 +113,12 @@ export function boot(root, hotData = {}) {
       if (pj.status === 'debug' && !app.readySeen[pj.id]) return readyDialog(pj);
     }
   }
+  // Animasyon sayacı yalnız zaman akarken ilerler: duraklatınca (ya da pencere açıkken) ofis donar.
   function loop() {
-    app.frame++;
-    if (G()) R.draw(G().state, PACK, app.frame, { building: curBuilding().id });
+    const paused = !app.running || !!blocked();
+    if (!paused) app.frame++;
+    el.stage?.classList.toggle('paused', !!G() && paused && !app.win);
+    if (G()) R.draw(G().state, PACK, app.frame, { building: curBuilding().id, paused });
     requestAnimationFrame(loop);
   }
   function render() {

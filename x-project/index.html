@@ -230,6 +230,13 @@ h3.sub { margin: 10px 0 4px; font-size: var(--s-1); color: var(--ink-2); }
 .split-bars .mine span { color: var(--candy); } .split-bars .dim { opacity: 0.55; }
 .chart rect.sky { fill: var(--sky); }
 @media (max-width: 900px) { #market { right: 4px; top: 46px; bottom: 6px; width: 190px; } #market.closed { bottom: auto; } }
+/* Dar ekranda bildirimler satış panelinin üstüne binmesin: panel açıkken onun solunda kalır, kapalıyken başlığının altına iner */
+@media (max-width: 900px) {
+  #stage:has(#market:not(.closed)) #notes { width: calc(100% - 214px); left: 8px; }
+  #stage:has(#market.closed) #notes { top: 92px; left: 8px; width: calc(100% - 16px); }
+}
+/* Duraklatılınca sahne donar; altta küçük bir şerit bunu söyler */
+#stage.paused::after { content: 'DURAKLATILDI'; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 2; padding: 4px 12px; font-family: var(--font-display); font-size: var(--s-1); letter-spacing: 0.15em; color: var(--ink); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow); pointer-events: none; }
 
 /* projeler, bilgi rozetleri, rapor, grafikler */
 .plist { display: grid; gap: 8px; }

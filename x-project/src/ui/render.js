@@ -33,6 +33,7 @@ const shade = (h, f) => mix(h, f < 1 ? '#000000' : '#ffffff', Math.abs(1 - f));
 export function makeRenderer(canvas) {
   const g = canvas.getContext('2d');
   const bubbles = [];
+  let paused = false; // zaman durunca sahne donar: balon çıkmaz, balonlar yerinde kalır
   let hits = []; // tıklama alanları: oda, kişi, patron masası, boş alan
   const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
   const icon = (name, x, y, color) => {
@@ -182,7 +183,7 @@ export function makeRenderer(canvas) {
       if (p) hits.push({ kind: p.founder ? 'boss' : 'person', id: p.id, room: r.id, x: cx, y: cy - 6, w: 26 * z, h: 30 * z });
       if (p) {
         emote(p, cx + 6 * z, cy - 8, frame, state, r.type === 'mola');
-        if (busy && p.status === 'ok' && r.type !== 'mola' && (frame + p.id * 37) % Math.max(30, 110 - p.skill) === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack);
+        if (!paused && busy && p.status === 'ok' && r.type !== 'mola' && (frame + p.id * 37) % Math.max(30, 110 - p.skill) === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack);
       }
     }
     if (rw > 60 && r.type !== 'mola') plant(rx + 2, ry + rh - 15);
@@ -212,7 +213,7 @@ export function makeRenderer(canvas) {
   }
   function drawBubbles() {
     for (const b of bubbles) {
-      b.life--; b.y -= 0.35; b.x += Math.sin(b.life / 8) * 0.15;
+      if (!paused) { b.life--; b.y -= 0.35; b.x += Math.sin(b.life / 8) * 0.15; }
       if (b.life <= 0) continue;
       g.globalAlpha = Math.min(1, b.life / 25);
       px(b.x - 3, b.y - 2, 7, 5, b.color); px(b.x - 2, b.y - 3, 5, 7, b.color);
@@ -243,6 +244,7 @@ export function makeRenderer(canvas) {
   const nightness = (frame) => { const t = (frame % 3600) / 3600; return Math.max(0, Math.min(1, (Math.cos(t * Math.PI * 2) * -1.4 + 0.2))); };
 
   function draw(state, pack, frame, view = {}) {
+    paused = !!view.paused;
     hits = [];
     const W = canvas.width, H = canvas.height;
     const bld = pack.buildings.find((b) => b.id === view.building) || pack.buildings[0];
@@ -296,7 +298,7 @@ export function makeRenderer(canvas) {
       hits.push({ kind: 'room', id: r.id, x: 0, y: wallH, w: W, h: H - wallH });
       g.save(); g.translate(cx, cy); g.scale(z, z); workstation(0, 0, p, frame, state, 'gelistirme', busy, night > 0.4); g.restore();
       if (p) hits.push({ kind: 'boss', id: p.id, room: r.id, x: cx, y: cy - 10, w: 26 * z, h: 32 * z });
-      if (p) { emote(p, cx + 6 * z, cy - 10, frame, state, false); if (busy && p.status === 'ok' && frame % 50 === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack); }
+      if (p) { emote(p, cx + 6 * z, cy - 10, frame, state, false); if (!paused && busy && p.status === 'ok' && frame % 50 === 0) spawnBubble(cx + 9 * z, cy, r, p, state, pack); }
       plant(W - 30, H - 26);
       // tavan lambası
       px(W / 2 - 1, 0, 2, wallH * 0.4, '#2a2030'); px(W / 2 - 6, wallH * 0.4, 12, 4, '#ffd36f');
@@ -335,7 +337,7 @@ export function makeRenderer(canvas) {
     drawBubbles();
     // gece karartması (monitör ışıkları zaten 'lighter' ile parlıyor)
     if (night > 0.05) { g.fillStyle = `rgba(18,12,48,${0.32 * night})`; g.fillRect(0, 0, W, H); }
-    if (kaos > t2 && (frame % 90 < 6 || (kaos > t3 && frame % 37 < 3))) { g.fillStyle = 'rgba(10,6,20,0.45)'; g.fillRect(0, 0, W, H); }
+    if (kaos > t2 && !paused && (frame % 90 < 6 || (kaos > t3 && frame % 37 < 3))) { g.fillStyle = 'rgba(10,6,20,0.45)'; g.fillRect(0, 0, W, H); }
     if (kaos > t3) {
       const a = (Math.sin(frame / 6) + 1) / 2;
       g.fillStyle = `rgba(255,40,60,${0.08 + a * 0.12})`; g.fillRect(0, 0, W, H);
