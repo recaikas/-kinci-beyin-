@@ -16,6 +16,8 @@ import { make as make_win_market } from './win_market.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
+import { make as make_system } from './system.js';
+import { makeAudio } from './audio.js';
 
 
 export function boot(root, hotData = {}) {
@@ -28,7 +30,11 @@ export function boot(root, hotData = {}) {
   const el = { bnav: $('#bnav'), market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
   const R = makeRenderer(el.canvas);
   // Ortak bağlam: pencere modülleri (src/ui/win_*.js, dialogs.js, chart.js) buradan okur ve fonksiyonlarını buraya ekler.
-  const u = { app, el, root, R, G: () => app.game, ctx: () => app.game.ctx };
+  const u = { app, el, root, R, G: () => app.game, ctx: () => app.game.ctx, audio: makeAudio() };
+  const audio = u.audio;
+  // Tarayıcı kuralı: ses ancak ilk dokunuştan sonra açılabilir
+  root.addEventListener('pointerdown', () => audio.unlock());
+  document.addEventListener('keydown', () => audio.unlock());
   const closeDialog = (...a) => u.closeDialog(...a);
   const consoleDraft = (...a) => u.consoleDraft(...a);
   const dialog = (...a) => u.dialog(...a);
@@ -50,6 +56,8 @@ export function boot(root, hotData = {}) {
   const winRoom = (...a) => u.winRoom(...a);
   const winStaff = (...a) => u.winStaff(...a);
   const winWorld = (...a) => u.winWorld(...a);
+  const winSettings = (...a) => u.winSettings(...a);
+  const tutorial = (...a) => u.tutorial(...a);
   const G = () => app.game;
   const ctx = () => app.game.ctx;
   // Yalnızca içerik değiştiyse yeniden çiz: yarım kalan tıklamalar kaybolmasın.
@@ -77,8 +85,9 @@ export function boot(root, hotData = {}) {
     el.notes.prepend(n);
     while (el.notes.children.length > 3) el.notes.lastChild.remove();
     setTimeout(() => { n.classList.add('out'); setTimeout(() => n.remove(), 400); }, 4500);
+    audio.play({ good: 'good', bad: 'bad', warn: 'warn', tarih: 'news' }[type] || 'news');
   }
-  const run = (res) => { if (res && res.ok === false) note(res.msg, 'bad'); render(); return res; };
+  const run = (res) => { if (res && res.ok === false) note(res.msg, 'bad'); else if (res && res.ok) audio.play('coin'); render(); return res; };
 
   // --- zaman
   function play(on) {
@@ -87,13 +96,14 @@ export function boot(root, hotData = {}) {
     if (on) app.timer = setInterval(step, PACK.meta.msPerWeek[app.speed]);
     renderHud();
   }
-  const blocked = () => app.win || app.dialog || !el.modal.hidden;
+  const blocked = () => app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.();
   function step() {
     const g = G();
     if (!g || blocked()) return;
     if (g.state.pending.length || g.state.gameOver) return showEvent();
     const before = g.state.news[0];
     g.tick();
+    audio.setEra(M.tableYear(g.ctx), g.state.kaos);
     if (g.state.week % 4 === 0) save();
     for (const n of g.state.news) { if (n === before) break; if (n.type !== 'info') note(n.t, n.type); }
     render();
@@ -123,7 +133,7 @@ export function boot(root, hotData = {}) {
   // --- HUD: iskelet bir kez kurulur, her hafta yalnızca alanlar güncellenir.
   function renderHud() {
     const g = G();
-    if (!g) return setHTML(el.hud, '');
+    if (!g) { el.hud.innerHTML = ''; el.hud._html = ''; return; }
     const s = g.state, cal = g.cal(), c = ctx();
     if (!el.hud.querySelector('[data-f=cash]')) el.hud.innerHTML = `
       <div class="brand"><b data-f="name"></b><small data-f="date"></small></div>
@@ -133,7 +143,7 @@ export function boot(root, hotData = {}) {
         <div class="stat"><small>Hayran</small><b class="num" data-f="fans"></b></div>
         <div class="stat kaos" data-f="kaosbox"><small data-f="kaoslabel"></small><b class="num" data-f="kaos"></b><span class="bar kbar"><i data-f="kaosbar"></i></span></div>
       </div>
-      <div class="time"><button data-act="play" data-f="play"></button><button data-act="speed" data-f="speed" aria-label="Hız"></button></div>`;
+      <div class="time"><button data-act="play" data-f="play"></button><button data-act="speed" data-f="speed" aria-label="Hız"></button><button data-act="sound" data-f="sound" aria-label="Ses"></button></div>`;
     const f = (k) => el.hud.querySelector(`[data-f=${k}]`);
     const set = (k, v) => { const n = f(k); if (n.textContent !== v) n.textContent = v; };
     const k = Math.round(s.kaos), stars = Math.round(M.studioStars(c));
@@ -146,6 +156,7 @@ export function boot(root, hotData = {}) {
     f('kaosbar').style.width = `${pct(k)}%`;
     set('play', app.running ? '❚❚' : '▶'); f('play').className = app.running ? '' : 'primary'; f('play').setAttribute('aria-label', app.running ? 'Durdur' : 'Oynat');
     set('speed', `${app.speed}×`);
+    set('sound', { on: '🔊', sfx: '🔉', off: '🔇' }[audio.state()]); f('sound').title = { on: 'Ses ve müzik açık', sfx: 'Yalnız efektler', off: 'Sessiz' }[audio.state()];
     // proje sayacı (GDT): yapı yalnızca proje değişince kurulur
     const pj = s.projects[0], slot = f('proj');
     const best = !pj && s.games.filter((g) => g.active && g.rank).sort((a, b) => a.rank - b.rank)[0];
@@ -278,7 +289,7 @@ export function boot(root, hotData = {}) {
     const id = app.win;
     const subs = SUBS[id];
     const sub = app.sub[id] || subs?.[0][0];
-    const fn = { dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews }[id];
+    const fn = { dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews, ayarlar: winSettings }[id];
     const title = id === 'oda' ? (() => { const r = G().state.rooms.find((x) => x.id === app.room); return r ? Staff.roomType(ctx(), r.type).name : 'Oda'; })() : WIN_NAMES[id];
     setHTML(el.winTitle, `${app.fromHub && id !== 'bilgisayar' ? '<button class="back" data-act="hub" aria-label="Bilgisayara dön">◀</button>' : ''}<img src="${icons[id] || icons.bilgisayar}" alt=""> ${esc(title)}`);
     const tabs = subs ? `<div class="seg" role="tablist">${subs.map(([k, n]) => `<button role="tab" data-sub="${k}" aria-selected="${sub === k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
@@ -295,7 +306,10 @@ export function boot(root, hotData = {}) {
     fit(); render();
     play(true);
     if (game.state.pending.length) return showEvent();
-    if (!game.state.projects.length && !game.state.games.length) { app.sub.gelistir = 'oyun'; app.wizOn = true; openWin('gelistir'); }
+    const fresh = !game.state.projects.length && !game.state.games.length;
+    const wizard = () => { app.sub.gelistir = 'oyun'; app.wizOn = true; openWin('gelistir'); };
+    if (fresh && !u.tutorialSeen()) return tutorial(() => { app.wasRunning = true; wizard(); });
+    if (fresh) wizard();
   }
 
   Object.assign(u, { setHTML, save, fit, note, run, play, step, loop, render, renderHud, signed, profitSpark, panelOpen, renderMarket, renderMenu, buildings, curBuilding, renderBnav, goBuilding, openWin, closeWin, renderWindow, start });
@@ -309,6 +323,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
+  Object.assign(u, make_system(u));
 
   // --- etkileşim
   root.addEventListener('click', (e) => {
@@ -317,6 +332,7 @@ export function boot(root, hotData = {}) {
     if (row) { app.selGame = +row.dataset.game; el.winBody.scrollTop = 0; return renderWindow(); }
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
+    audio.play('click');
     const g = G();
     if (b.dataset.open) return app.win && (app.win === b.dataset.open || (b.dataset.open === 'bilgisayar' && app.win !== 'gunluk')) ? closeWin() : openWin(b.dataset.open, false);
     if (b.dataset.hub) { if (b.dataset.hubsub) app.sub[b.dataset.hub] = b.dataset.hubsub; if (b.dataset.hub === 'gelistir') { app.sel = null; app.wizOn = b.dataset.hubsub === 'oyun' && !G().state.projects.length; } app.selGame = null; app.win = b.dataset.hub; app.fromHub = true; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
@@ -327,6 +343,15 @@ export function boot(root, hotData = {}) {
     const twice = (key, fn) => { if (app.confirm === key) { app.confirm = null; return run(fn()); } app.confirm = key; return render(); };
     switch (act) {
       case 'close-win': return closeWin();
+      case 'sound': audio.unlock(); audio.cycle(); return renderHud();
+      case 'tut-next': return u.tutNext();
+      case 'tut-skip': return u.tutNext(true);
+      case 'tutorial': closeWin(); return tutorial();
+      case 'slot-save': return store((st) => st.getItem(id)) ? twice('save' + id, () => u.saveSlot(id)) : run(u.saveSlot(id));
+      case 'slot-load': if (app.win) closeWin(); return run(u.loadSlot(id));
+      case 'slot-del': return twice('del' + id, () => u.deleteSlot(id));
+      case 'export': return u.exportSave();
+      case 'mainmenu': return twice('menu', () => { save(); play(false); app.win = null; el.win.hidden = true; setHTML(el.winBody, ''); app.game = null; render(); setupScreen(); return { ok: true }; });
       case 'hub': app.win = 'bilgisayar'; app.fromHub = false; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
       case 'bprev': return goBuilding(-1);
       case 'bnext': return goBuilding(1);
@@ -412,6 +437,7 @@ export function boot(root, hotData = {}) {
   });
   root.addEventListener('change', (e) => {
     const t = e.target, g = G();
+    if (t.dataset.import && t.files?.[0]) { u.importSave(t.files[0]); t.value = ''; return; }
     if (!g) return;
     if (t.dataset.draft) { app.draft[t.dataset.draft] = t.value; if (t.dataset.draft !== 'name') { t.blur(); renderWindow(); } return; }
     if (t.dataset.region) { const set = new Set(app.draft.regions); t.checked ? set.add(t.dataset.region) : set.delete(t.dataset.region); app.draft.regions = [...set]; return; }
@@ -430,11 +456,13 @@ export function boot(root, hotData = {}) {
   root.addEventListener('input', (e) => {
     const t = e.target;
     if (t.dataset.alloc !== undefined) { G().setAlloc(app.dlgPid, +t.dataset.alloc, +t.value); updatePhasePct(); }
+    if (t.dataset.vol) { audio.set(t.dataset.vol, +t.value / 100); const b = t.parentElement.querySelector('b'); if (b) b.textContent = t.value; renderHud(); }
     if (t.dataset.draft === 'name') app.draft.name = t.value;
     if (t.dataset.con === 'seriesName') app.consoleDraft.seriesName = t.value;
   });
   document.addEventListener('keydown', (e) => {
     if (!G()) return;
+    if (e.key === 'Escape' && u.tutorialOpen()) return u.tutNext(true);
     if (e.key === 'Escape' && app.win) return closeWin();
     if (e.key === ' ' && !blocked() && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName || '')) { e.preventDefault(); play(!app.running); }
   });

@@ -25,6 +25,7 @@ export function make(u) {
         ${tile('ofis', 'Ofis ve binalar', '', Eco.office(c).name)}
         ${tile('arge', 'Donanım ve konsol', 'konsol', s.consoleJob ? 'yapım sürüyor' : `${(s.consoleSeries || []).length} aile`)}
         ${tile('arge', 'Motor', 'motor')}
+        ${tile('ayarlar', 'Ayarlar ve kayıt', '', 'ses, yuvalar')}
         ${tile('dunya', 'Oyun dünyası', 'yil', `${Math.floor(M.tableYear(c))} · ${s.rivals.length} şirket`)}
         ${tile('finans', 'Şirket ve borsa', 'sirket', Co.company(s).listed ? `hisse ${Co.company(s).price} $` : 'halka arz')}
       </div>`;

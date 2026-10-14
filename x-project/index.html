@@ -343,6 +343,16 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
   .slider { grid-template-columns: 96px 1fr 40px; } .critics { grid-template-columns: repeat(2, 1fr); }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
 }
+
+/* öğretici: hedefin etrafı aydınlık, gerisi karartılmış; kart hedefin altında ya da üstünde */
+#tut { position: fixed; inset: 0; z-index: 50; }
+#tut .tut-dim { position: absolute; inset: 0; background: rgba(8, 5, 14, 0.62); }
+#tut .tut-hole { position: absolute; border: 3px solid var(--candy); box-shadow: 0 0 0 9999px rgba(8, 5, 14, 0.62); pointer-events: none; transition: all 0.15s steps(3); }
+#tut .tut-card { position: absolute; width: min(340px, calc(100vw - 24px)); background: var(--panel); border: 3px solid var(--candy); box-shadow: 4px 4px 0 var(--shadow); padding: 12px 14px; display: grid; gap: 6px; }
+#tut .tut-card p { font-size: var(--s0); }
+.filebtn { position: relative; display: inline-grid; place-items: center; padding: 6px 12px; border: 2px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.filebtn.small { font-size: var(--s-1); margin: 6px 0; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 
