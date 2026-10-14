@@ -51,7 +51,7 @@ export function goPublic(ctx, pct) {
   return { ok: true, cash };
 }
 // Faaliyet gelirleri (satış, donanım, lisans, jeton, abonelik, sözleşme…) her hafta toplanır; çeyrek bu birikimdir.
-const REVENUE = ['satis', 'konsol', 'konsol_lisans', 'jeton', 'abonelik', 'lisans', 'sozlesme', 'istirak', 'yayinci'];
+const REVENUE = ['satis', 'oyun_ici', 'dlc', 'erken_erisim', 'abonelik_servisi', 'konsol', 'konsol_lisans', 'jeton', 'abonelik', 'lisans', 'sozlesme', 'istirak', 'yayinci'];
 export function trackRevenue(ctx, { category, amount }) {
   if (amount > 0 && REVENUE.includes(category)) { const co = company(ctx.state); co.qAcc = (co.qAcc || 0) + amount; }
 }

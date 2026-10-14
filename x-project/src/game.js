@@ -15,6 +15,7 @@ import * as World from './systems/world.js';
 import * as People from './systems/people.js';
 import * as Co from './systems/company.js';
 import * as War from './systems/war.js';
+import * as Modern from './systems/modern.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -105,6 +106,7 @@ export function makeGame(state, pack = PACK) {
       Con.weeklyConsole(ctx);
       // satış
       Market.weeklySales(ctx);
+      Modern.weeklyModern(ctx);
       Market.weeklyTrend(ctx);
       World.weeklyWorld(ctx);
       Market.weeklyRivals(ctx);
@@ -186,6 +188,9 @@ export function makeGame(state, pack = PACK) {
       ledger.post('pazarlama', -cc, `${c.name}: ${pj.name}`);
       pj.cost = (pj.cost || 0) + cc;
       pj.hype = clamp(pj.hype + c.hype, 0, pack.hype.max);
+      // Fenomenler: büyük tur viral olabilir ya da oyunu gömebilir
+      if (c.viral && rng.chance(c.viral.p)) { pj.hype = clamp(pj.hype + c.viral.hype, 0, pack.hype.max); state.fans += c.viral.fans; ctx.news(`🔥 "${pj.name}" fenomen turunda viral oldu!`, 'good'); }
+      else if (c.flop && rng.chance(c.flop.p)) { pj.hype = clamp(pj.hype + c.flop.hype, 0, pack.hype.max); ctx.news(`🥶 Bir mega fenomen "${pj.name}" için "sıkıcı" dedi. Kampanya geri tepti.`, 'bad'); }
       return { ok: true };
     },
     // --- Yayın sonrası
@@ -239,6 +244,12 @@ export function makeGame(state, pack = PACK) {
     localize: (pid, rid) => Prod.localize(ctx, pid, rid),
     startConsole: (d) => Con.startConsole(ctx, d),
     exclusiveDeal: (id) => War.exclusiveDeal(ctx, id),
+    // --- Modern dönem
+    releaseDLC: (id) => Modern.releaseDLC(ctx, id),
+    seasonPass: (id) => Modern.seasonPass(ctx, id),
+    streamKeys: (id) => Modern.streamKeys(ctx, id),
+    earlyAccess: (pid) => Modern.startEA(ctx, pid),
+    crowdfund: (pid) => Modern.crowdfund(ctx, pid),
 
     // --- Sözleşme, araştırma, motor
     acceptContract: (id) => Prod.acceptContract(ctx, id),
@@ -274,4 +285,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern };

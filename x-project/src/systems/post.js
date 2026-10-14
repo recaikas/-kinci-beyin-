@@ -28,6 +28,7 @@ export function priceDrop(ctx, id) {
   const g = state.games.find((x) => x.id === id);
   const p = P(ctx);
   if (!g || !g.active) return { ok: false, msg: 'Yalnızca satıştaki oyunun fiyatı düşer.' };
+  if (g.model === 'f2p') return { ok: false, msg: 'Ücretsiz oyunun fiyatı yok.' };
   const next = Math.max(p.priceFloor, Math.round(g.price * (1 - p.priceDropPct)));
   if (next >= g.price) return { ok: false, msg: 'Fiyat zaten en altta.' };
   const k = Math.pow(g.price / next, ctx.pack.sales.priceExp);
@@ -61,7 +62,10 @@ export function port(ctx, id, pid) {
     hype: P(ctx).portHype, releasedWeek: state.week, weeks: 0, active: true, sold: { [pid]: 0 }, units: 0, revenue: 0, lastWeek: 0,
     hist: [], revHist: [], profitHist: [], rankHist: [], patches: 0, portOf: g.id, subs: 0, mmo: false, devCost: cost, postCost: 0, rank: null, bestRank: null,
   };
+  if (copy.model === 'f2p') { copy.price = ctx.pack.sales.priceRef; copy.players = 0; }
   copy.peak = peakWeekly(ctx, copy);
+  if (copy.model === 'f2p') copy.price = 0;
+  copy.regionSold = {}; copy.dlcs = 0; copy.dlcQueue = []; copy.pass = false; copy.passDue = null; copy.service = null;
   for (const k in copy.peak) copy.peak[k] *= P(ctx).portSales;
   g.ports = (g.ports || 0) + 1;
   state.games.push(copy);

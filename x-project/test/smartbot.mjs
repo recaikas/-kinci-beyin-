@@ -11,10 +11,11 @@ import * as Staff from '../src/systems/staff.js';
 import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
 import * as War from '../src/systems/war.js';
+import * as Modern from '../src/systems/modern.js';
 
 const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
   'f_kaydirma', 'oz_yayin', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
-  'f_online', 'f_shader', 'motor_lisans', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
+  'f_online', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
 
 export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false } = {}) {
@@ -205,10 +206,18 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
           const pubs = publishersAvailable(ctx).filter((p) => state.fans >= p.minFans).sort((a, b) => b.power * b.royalty - a.power * a.royalty);
           const selfP = M.selfPublishPower(ctx);
           const self = state.research.done.oz_yayin && (!pubs[0] || selfP >= pubs[0].power * 0.7);
-          const res = g.release({ projectId: pj.id, publisherId: self ? null : pubs[0]?.id, price: Math.max(10, Math.round(20 * infl() ** 0.4)) });
+          // Modern dönem: mobil/küçük oyunu ücretsiz yap; zayıf oyunu abonelik servisine sat
+          const f2p = Modern.f2pAllowed(ctx) && pj.platforms.some((id) => M.platformById(ctx, id)?.kind === 'mobil');
+          const pv = g.previewReview(pj.id).score;
+          const offer = !f2p && pv < 72 ? Modern.serviceOffers(ctx, pj, pv).sort((a, b) => b.pay - a.pay)[0] : null;
+          const res = g.release({ projectId: pj.id, publisherId: self || f2p ? null : pubs[0]?.id, price: Math.max(10, Math.round(20 * infl() ** 0.4)), model: f2p ? 'f2p' : 'satis', monet: 'dengeli', service: offer?.id || null });
           if (res.ok && res.game.score >= 85 && stats.firstHit == null) stats.firstHit = Math.floor(y);
         }
-      } else if (!pj.campaigned && pj.week > pj.totalWeeks / 2) {
+      } else if (pj.status === 'dev') {
+        if (Modern.eaAllowed(ctx, pj) && pack.sizes.find((z) => z.id === pj.size).target >= 1) g.earlyAccess(pj.id);
+        if (Modern.crowdAllowed(ctx, pj) && runway() < 24) g.crowdfund(pj.id);
+      }
+      if (pj.status === 'dev' && !pj.campaigned && pj.week > pj.totalWeeks / 2) {
         const camps = pack.hype.campaigns.filter((x) => (!x.research || state.research.done[x.research]) && (!x.minYear || y >= x.minYear));
         const best = [...camps].reverse().find((x) => x.cost * infl() ** 0.7 * 8 < state.cash - burn() * 6);
         if (best) pj.campaigned = g.campaign(pj.id, best.id).ok;
@@ -259,6 +268,9 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         if (!(cand && cand.skills.donanim >= pack.console.hwSkillMin && g.moveStaff(cand.id, lab.id).ok)) hireFor(lab.id, (p) => (p.skills?.donanim || 0) >= pack.console.hwSkillMin);
       }
       if (lab) consolePlan();
+      // Yayın sonrası: iyi oyunlara indirilebilir içerik (en fazla 2) ve yayıncı anahtarları
+      for (const gm of state.games.filter((x) => x.active && x.score >= 75 && (x.dlcs || 0) < 2 && x.weeks > 8)) if (Modern.dlcAllowed(ctx, gm) && state.cash > Modern.dlcCost(ctx, gm) * 6 + burn() * 6) g.releaseDLC(gm.id);
+      for (const gm of state.games.filter((x) => x.active && x.score >= 70 && x.weeks < 6 && !x.streamed)) if (M.tableYear(ctx) >= pack.modern.stream.year && state.cash > Modern.streamCost(ctx, gm) * 10 + burn() * 6) g.streamKeys(gm.id);
       // Konsol savaşı: zenginken özel oyun anlaşması
       for (const k of state.consoles.filter((x) => x.launched && !x.retired && !x.ended)) if (state.cash > War.dealCost(ctx) * 10 + burn() * 12) g.exclusiveDeal(k.id);
       // Ofis ve istasyonlar

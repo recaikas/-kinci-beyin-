@@ -189,7 +189,7 @@ export function boot(root, hotData = {}) {
         <span class="row"><small>Maliyet</small><b class="num">${money(cost)}</b></span>
         <span class="row"><small>Gelir</small><b class="num">${money(g.revenue)}</b></span>
         <span class="row"><small>Kâr</small><b class="num ${profit < 0 ? 'neg' : 'pos'}">${signed(profit)}</b></span>
-        <span class="row"><small>Bu hafta</small><b class="num">${fmt(g.lastWeek)} kopya</b></span>${profitSpark((g.profitHist || []).slice(-40))}</button>`;
+        <span class="row"><small>${g.model === 'f2p' ? 'Aktif oyuncu' : 'Bu hafta'}</small><b class="num">${g.model === 'f2p' ? fmt(g.players || 0) : `${fmt(g.lastWeek)} kopya`}</b></span>${profitSpark((g.profitHist || []).slice(-40))}</button>`;
     }).join('');
     const dev = s.projects.map((pj) => `<div class="mcard dev"><span class="rk">⚙</span><span class="nm">${esc(pj.name)}</span><span class="wk">${pj.status === 'dev' ? `${pj.week}/${pj.totalWeeks} hf` : 'yayına hazır'}</span>
       <span class="row"><small>Maliyet şimdiye dek</small><b class="num neg">${money(pj.cost || 0)}</b></span></div>`).join('');
@@ -363,7 +363,8 @@ export function boot(root, hotData = {}) {
       case 'phase': { const pj = g.projectById(pid); if (!pj) return; if (app.win) { const r = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = r; } return phaseDialog(pj); }
       case 'go-release': app.dialog = null; el.modal.hidden = true; app.sub.gelistir = 'oyun'; app.sel = pid; openWin('gelistir'); app.wasRunning = app.wasRunningD; app.wasRunningD = false; return;
       case 'release': {
-        const res = g.release({ projectId: pid, publisherId: root.querySelector('#r-pub').value || null, price: Math.max(1, +root.querySelector('#r-price').value || 20) });
+        const v = (q) => root.querySelector(q)?.value;
+        const res = g.release({ projectId: pid, publisherId: v('#r-model') === 'f2p' ? null : v('#r-pub') || null, price: Math.max(1, +v('#r-price') || 20), model: v('#r-model') || 'satis', monet: v('#r-monet') || 'dengeli', service: v('#r-svc') || null });
         if (!res.ok) return run(res);
         app.sel = null;
         const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true;
@@ -375,6 +376,11 @@ export function boot(root, hotData = {}) {
       case 'outsource': return run(g.outsource(pid, +id));
       case 'localize': return run(g.localize(pid, id));
       case 'deal': return run(g.exclusiveDeal(id));
+      case 'ea': return run(g.earlyAccess(pid));
+      case 'crowd': return run(g.crowdfund(pid));
+      case 'dlc': return run(g.releaseDLC(+id));
+      case 'pass': return run(g.seasonPass(+id));
+      case 'stream': return run(g.streamKeys(+id));
       case 'patch': return run(g.patch(+id));
       case 'pricedrop': return run(g.priceDrop(+id));
       case 'port': return run(g.port(+id, root.querySelector('#port-sel').value));

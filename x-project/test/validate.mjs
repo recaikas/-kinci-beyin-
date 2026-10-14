@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern } from '../src/game.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
@@ -495,6 +495,63 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   War.monthlyWar(ctx);
   check('Payı yüksek konsol karşısında zayıf rakip donanımdan çekilir', Object.keys(st.platformEnd || {}).length > 0, JSON.stringify(st.platformEnd));
   Object.assign(PACK.war, old);
+}
+
+// 30) Modern dönem: ücretsiz oyun, indirilebilir içerik, sezon kartı, erken erişim, kitle fonlama, abonelik servisi, yayıncılar
+{
+  const mk = (seed) => {
+    const g = newGame({ seed, difficulty: 'kolay', length: 50 });
+    const st = g.state;
+    st.week = (2015 - 1976) * 48; st.cash = 1e9; st.fans = 300000; st.stationTier = 4; st.office.tier = 3;
+    for (const id of ['oz_yayin', 'ia_satis', 'dlc', 'sezon_karti', 'erken_erisim', 'boyut_orta', 'tur_rpg']) st.research.done[id] = 1;
+    for (let i = 0; i < 6; i++) { const p = Staff.makePerson(g.ctx, { skill: 80 }); p.room = st.rooms[0].id; p.founder = true; st.staff.push(p); }
+    return g;
+  };
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  // Kaliteli bir oyun: geliştirme bitince puanlar 2,2 katına çıkarılır (not ~75–80), hata sıfırlanır
+  const ship = (g, o) => { const pj = g.startProject({ name: o.name || 'M', genre: 'casual', topic: 'kedi', audience: 'herkes', platforms: o.platforms || ['afon'], size: 'kucuk' }).project; while (g.state.projects[0]?.status === 'dev') tick(g, 1); for (const k in pj.points) pj.points[k] *= 2.2; pj.bugs = 0; return g.release({ projectId: pj.id, publisherId: null, price: 5, ...o.rel }); };
+  // F2P
+  const a = mk(50), fr = ship(a, { rel: { model: 'f2p', monet: 'dengeli' } });
+  check('Ücretsiz oyun yayınlanır', fr.ok && fr.game.model === 'f2p' && fr.game.price === 0, fr.msg || '');
+  tick(a, 20);
+  check('Ücretsiz oyunun fiyatı düşürülmez', !a.priceDrop(fr.game.id).ok);
+  a.state.stationTier = 4; const pr2 = a.port(fr.game.id, 'pc'); const cp = a.state.games.at(-1);
+  check('Ücretsiz oyun uyarlanabilir, satış hesabı sonlu', pr2.ok && cp.model === 'f2p' && Object.values(cp.peak).every(Number.isFinite), pr2.msg || '');
+  check('Ücretsiz oyunda oyuncu birikir ve gelir gelir', fr.game.players > 10000 && fr.game.revenue > 0, `${Math.round(fr.game.players)} oyuncu · ${Math.round(fr.game.revenue)} $`);
+  const b = mk(50), ag = ship(b, { rel: { model: 'f2p', monet: 'agresif' } });
+  check('Agresif para kazanma notu düşürür', ag.review.score < fr.review.score, `${ag.review.score} < ${fr.review.score}`);
+  tick(b, 20);
+  check('Agresif daha çok kazandırır', ag.game.revenue > fr.game.revenue, `${Math.round(ag.game.revenue)} > ${Math.round(fr.game.revenue)}`);
+  const c = mk(50), pr = ship(c, {}); tick(c, 20);
+  check('Mobilde ücretsiz oyun, ücretli sürümden çok kazandırır', fr.game.revenue > pr.game.revenue, `${Math.round(fr.game.revenue)} > ${Math.round(pr.game.revenue)}`);
+  // DLC ve sezon kartı
+  const d = mk(51), dg = ship(d, { platforms: ['pc'], rel: { price: 30 } }).game;
+  const r0 = dg.revenue; tick(d, 2);
+  check('İndirilebilir içerik çıkar', d.releaseDLC(dg.id).ok && dg.dlcs === 1);
+  const r1 = dg.revenue; tick(d, 4);
+  check('İçerik geliri haftalara yayılır', dg.dlcQueue.length > 0 || dg.revenue > r1, '');
+  check('Sezon kartı önden gelir getirir', d.seasonPass(dg.id).ok && dg.passDue > 0);
+  const f0 = d.state.fans; d.state.week = dg.passDue; tick(d, 2);
+  check('Sözü tutulmayan sezon kartı hayran kaybettirir', d.state.fans < f0 && !dg.passDue);
+  // Erken erişim
+  const e = mk(52);
+  const pj = e.startProject({ name: 'EA', genre: 'casual', topic: 'kedi', audience: 'herkes', platforms: ['pc'], size: 'kucuk' }).project;
+  check('Erken erişim başta açılamaz', !e.earlyAccess(pj.id).ok);
+  while (pj.week < pj.totalWeeks * 0.4) tick(e, 1);
+  check('Erken erişim açılır', e.earlyAccess(pj.id).ok);
+  const ea0 = e.state.ledger.total.erken_erisim || 0; tick(e, 3);
+  check('Erken erişim satış getirir', (e.state.ledger.total.erken_erisim || 0) > ea0);
+  // Kitle fonlama ve abonelik servisi
+  const k = mk(53);
+  const kp = k.startProject({ name: 'KF', genre: 'casual', topic: 'kedi', audience: 'herkes', platforms: ['pc'], size: 'kucuk' }).project;
+  const cr = k.crowdfund(kp.id);
+  check('Kitle fonlama para getirir, bir kez', cr.ok && cr.amt > 0 && !k.crowdfund(kp.id).ok, cr.amt + ' $');
+  const sv = mk(54); sv.state.week = (2019 - 1976) * 48;
+  const sr = ship(sv, { platforms: ['pc'], rel: { price: 30, service: 'pasos' } });
+  check('Abonelik servisi önden öder', sr.ok && sr.game.service && (sv.state.ledger.total.abonelik_servisi || 0) > 0, sr.msg || '');
+  // Yayıncı anahtarları yalnız o oyunu etkiler
+  const y = mk(55), yg = ship(y, { platforms: ['pc'], rel: { price: 30 } }).game;
+  check('Yayıncı anahtarları yalnız o oyunu etkiler', y.streamKeys(yg.id).ok && y.state.gameMods.at(-1).gameId === yg.id);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

@@ -1,5 +1,5 @@
 // Pazar: oyun ayrıntısı, satış listesi, son çıkanlar, rakipler.
-import { M, Market, Post, Know } from '../game.js';
+import { M, Market, Post, Know, Modern } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, move } from './util.js';
@@ -15,9 +15,15 @@ export function make(u) {
     const targets = Post.portTargets(c, gm);
     const canExp = Post.expansionAllowed(c, gm) && g.freeDevRooms().length;
     const wk = (gm.hist || []).map((_, i, a) => `${gm.weeks - a.length + i + 1}. hafta`);
+    const MX = PACK.modern, ty = M.tableYear(c);
+    const modern = gm.active ? `<div class="btns">
+        ${ty >= MX.dlc.year ? `<button data-act="dlc" data-id="${gm.id}" ${Modern.dlcAllowed(c, gm) ? '' : 'disabled'}>İndirilebilir içerik<small>${Modern.dlcAllowed(c, gm) ? money(Modern.dlcCost(c, gm)) : 'araştır'}</small></button>` : ''}
+        ${ty >= MX.dlc.passYear && gm.model !== 'f2p' ? `<button data-act="pass" data-id="${gm.id}" ${Modern.seasonPassAllowed(c, gm) ? '' : 'disabled'}>Sezon kartı sat<small>${gm.pass ? (gm.passDue ? `${gm.passNeed - (gm.dlcs || 0)} içerik borcun var` : 'satıldı') : `${MX.dlc.passDlcs} içerik sözü`}</small></button>` : ''}
+        ${ty >= MX.stream.year ? `<button data-act="stream" data-id="${gm.id}">Yayıncılara anahtar<small>${money(Modern.streamCost(c, gm))}</small></button>` : ''}
+      </div>` : '';
     const actions = gm.active ? `<div class="btns">
         <button data-act="patch" data-id="${gm.id}" ${gm.patches >= P.patchMax ? 'disabled' : ''}>Güncelleme yayınla<small>${gm.patches >= P.patchMax ? 'sınırda' : money(Post.patchCost(c, gm))}</small></button>
-        <button data-act="pricedrop" data-id="${gm.id}">Fiyatı %${Math.round(P.priceDropPct * 100)} düşür<small>${gm.price} $ → ${Math.max(P.priceFloor, Math.round(gm.price * (1 - P.priceDropPct)))} $</small></button>
+${gm.model === 'f2p' ? '' : `        <button data-act="pricedrop" data-id="${gm.id}">Fiyatı %${Math.round(P.priceDropPct * 100)} düşür<small>${gm.price} $ → ${Math.max(P.priceFloor, Math.round(gm.price * (1 - P.priceDropPct)))} $</small></button>`}
       </div>` : '<p class="muted small">Oyun raflardan kalktı. Port ile yeni platformda yeniden çıkabilir.</p>';
     const port = !gm.expansion && !gm.portOf && targets.length ? `<div class="form"><label class="wide">Başka platforma uyarla (port)<select id="port-sel">${targets.map((p) => `<option value="${p.id}">${esc(p.name)} · ${money(Post.portCost(c, gm, p.id))}</option>`).join('')}</select></label></div>
       <div class="foot"><span class="muted small">Not −${P.portScorePenalty}, satış ×${P.portSales}.</span><button data-act="port" data-id="${gm.id}">Uyarla</button></div>` : '';
@@ -31,6 +37,8 @@ export function make(u) {
         <div><small>Toplam kopya</small><b class="num">${fmt(gm.units)}</b></div>
         <div><small>Toplam gelir</small><b class="num">${money(gm.revenue)}</b></div>
       </div>
+      ${gm.model === 'f2p' ? `<p class="small">🆓 Ücretsiz oyun · ${esc(Modern.monetById(c, gm.monet).name)} · aktif oyuncu <b class="num">${fmt(gm.players || 0)}</b> · bu hafta ${money(gm.revHist?.at(-1) || 0)}</p>` : ''}
+      ${gm.service ? `<p class="small">📦 ${esc(gm.service)} kataloğunda</p>` : ''}${gm.dlcs ? `<p class="small">🧩 ${gm.dlcs} indirilebilir içerik${gm.pass ? ' · sezon kartı' : ''}</p>` : ''}
       <p class="muted small">Rafta ${gm.weeks} hafta${gm.active ? '' : ' (bitti)'} · güncelleme ${gm.patches || 0}/${P.patchMax} · ${gm.publisherId ? `yayıncı: ${esc(gm.publisherName || PACK.publishers.find((x) => x.id === gm.publisherId)?.name || '')}, pay %${Math.round((gm.royalty || 0) * 100)}` : 'kendi yayının'}</p>
       ${gm.critics?.[0]?.quote ? `<section class="box"><h3>Eleştirmenler</h3><ul class="quotes">${gm.critics.map((k) => `<li><b class="num">${String(k.score).replace('.', ',')}</b><span>${esc(k.name)}: “${esc(k.quote)}”</span></li>`).join('')}</ul>${gm.review?.genreNote ? `<p class="muted small">“${esc(gm.review.genreNote)}”</p>` : ''}</section>` : ''}
       <section class="box"><h3>Oyuncu raporu</h3>${gm.playerReport ? `<ul class="plist-r">${gm.playerReport.map((l) => `<li class="${l.tone}">${esc(l.text)}</li>`).join('')}</ul><p class="muted small">Öğrenilen görev önemleri faz pencerelerinde rozet olarak görünür.</p>`
@@ -39,7 +47,7 @@ export function make(u) {
       <section class="box"><h3>Haftalık gelir</h3>${chart('rev' + gm.id, gm.revHist || [], { labels: wk.slice(-(gm.revHist || []).length), fmtv: money, color: 'var(--mint)' })}</section>
       ${gm.regionSold && Object.keys(gm.regionSold).length ? `<section class="box"><h3>Bölgelere göre</h3><div class="split-bars">${PACK.regions.list.map((r) => { const u = gm.regionSold[r.id]; return gm.regions?.includes(r.id) ? `<div><span>${esc(r.name)}</span>${bar(gm.units ? ((u || 0) / gm.units) * 100 : 0, 'prog')}<b class="num">${fmt(u || 0)}</b></div>` : `<div class="dim"><span>${esc(r.name)}</span><span class="muted small">yerelleştirilmedi</span><b></b></div>`; }).join('')}</div></section>` : ''}
       <section class="box"><h3>Platformlara göre</h3><div class="split-bars">${Object.entries(gm.sold || {}).sort((a, b) => b[1] - a[1]).map(([pid, u]) => `<div><span>${esc(M.platformById(c, pid)?.name || pid)}</span>${bar(gm.units ? (u / gm.units) * 100 : 0, 'prog')}<b class="num">${fmt(u)}</b></div>`).join('')}</div></section>
-      <section class="box"><h3>Yayın sonrası</h3>${actions}${port}${exp}</section>`;
+      <section class="box"><h3>Yayın sonrası</h3>${actions}${modern}${port}${exp}</section>`;
   }
   function winMarket(sub) {
     const s = G().state, c = ctx();

@@ -62,6 +62,8 @@ export const PACK = {
   },
 
   sales: {
+    // Kopya başı fiziksel maliyet çarpanı (kutu, disk, kartuş): mobilde yok; dijital dağıtım yaygınlaştıkça düşer (P)
+    unitCostK: { mobil: [[1976, 0], [2030, 0]], pc: [[1976, 1], [2004, 1], [2010, 0.25], [2020, 0.1]], konsol: [[1976, 1], [2008, 1], [2015, 0.6], [2022, 0.35]], el: [[1976, 1], [2011, 1], [2018, 0.5]] },
     _tag: 'P',
     // PDF: B 57000, Pz 0,02→1→8. Bu uygulamada stüdyo çarpanları (Y·St·I) erken dönemi zaten ~×0,1'e indirdiği için
     // yeniden kalibre edildi: garaj 1977 iyi oyun ≈ 300/hafta, 1992 yerleşik hit ≈ 40 bin/hafta (P).
@@ -263,6 +265,34 @@ export const PACK = {
     newGenRival: 0.85, // aynı segmentte son 48 haftada yeni rakip konsol çıktıysa
     thirdPartyK: 0.6, thirdPartyFee: 40000, thirdPartyBoost: 0.02, thirdPartyCap: 40,
     dealCost: 600000, dealMult: 1.35, dealWeeks: 30, dealThirdParty: 3, dealCooldown: 48,
+  },
+
+  // Modern dönem iş modelleri (P).
+  modern: {
+    _tag: 'P',
+    // Ücretsiz oyun: yeni oyuncu = satış eğrisinin playerK katı; gelir = aktif oyuncu × haftalık harcama × seviye
+    f2p: { year: 2008, research: 'ia_satis', playerK: 7, churnWeekly: 0.05, arpuWeek: 0.045, serverPerPlayer: 0.004, minPlayers: 5000, minWeeks: 20, banMult: 0.6,
+      kindK: { mobil: { players: 1, arpu: 1 }, pc: { players: 1.6, arpu: 1.5 }, konsol: { players: 1.2, arpu: 1.3 }, el: { players: 1, arpu: 1 } },
+      monet: [
+        { id: 'hafif', name: 'Hafif (yalnızca kozmetik)', k: 0.55, fansWeekly: 0.6, score: 0 },
+        { id: 'dengeli', name: 'Dengeli', k: 1, fansWeekly: 0, score: 0 },
+        { id: 'agresif', name: 'Agresif (ganimet kutusu, enerji)', k: 1.9, fansWeekly: -0.8, score: -4, fansRelease: -0.03 },
+      ] },
+    // İndirilebilir içerik ve sezon kartı
+    dlc: { year: 2005, research: 'dlc', cost: 60000, attach: 0.14, attachDecay: 0.8, priceShare: 0.3, weeks: 8, weeksBack: 2, f2pAttach: 0.05, f2pPrice: 4,
+      passYear: 2011, passResearch: 'sezon_karti', passAttach: 1.5, passPriceShare: 0.5, passDlcs: 2, passWeeks: 48, passKeptFans: 0.02, passBrokenFans: 0.06 },
+    // Satıştaki oyunun anahtarlarını yayıncılara dağıtmak
+    stream: { year: 2010, cost: 15000, cooldown: 24, baseChance: 0.55, goodMult: 1.35, badMult: 0.9, weeks: 6, fans: 4000 },
+    // Erken erişim
+    ea: { year: 2013, research: 'erken_erisim', minProgress: 0.33, priceShare: 0.7, unitsK: 0.5, bugFix: 0.03, polishWeeks: 8, polishBonus: 2, peakCut: 0.18 },
+    // Kitle fonlama
+    crowd: { from: 2012, to: 2023, minFans: 5000, perFan: 0.8, cap: 2000000, hype: 15, angryBelow: 70, angryFans: 0.08, happyAt: 85, happyFans: 0.05 },
+    // Abonelik servisleri: önden ödeme; satış ×salesMult, hayran +fans
+    services: { salesMult: 0.6, fans: 15000, list: [
+      { id: 'pasos', name: 'X-Kutu Oyun Pasosu', owner: 'mikroyumusak', year: 2017, base: 900000 },
+      { id: 'arti', name: 'Oyunİstasyonu Artı', owner: 'soni', year: 2018, base: 700000 },
+      { id: 'buharpas', name: 'Buhar Arşivi', owner: 'vana', year: 2021, base: 500000 },
+    ] },
   },
 
   // Tarihsel dünya (P): rakipler ve yayıncılar history.js'ten; her yıl 10 hit, her ay bir olay.
@@ -509,7 +539,9 @@ export const PACK = {
       { id: 'flyer', name: 'Fotokopi el ilanı', cost: 2000, hype: 6, research: null },
       { id: 'dergi', name: 'Dergi reklamı', cost: 15000, hype: 14, research: 'pazarlama_kucuk' },
       { id: 'tv', name: 'TV kampanyası', cost: 150000, hype: 35, research: 'pazarlama_buyuk' },
-      { id: 'influencer', name: 'Influencer turu', cost: 90000, hype: 28, research: 'pazarlama_buyuk', minYear: 2010 },
+      { id: 'yayinci_k', name: 'Küçük yayıncılar', cost: 8000, hype: 8, research: null, minYear: 2009 },
+      { id: 'yayinci_o', name: 'Orta ölçekli fenomenler', cost: 40000, hype: 18, research: 'pazarlama_kucuk', minYear: 2011 },
+      { id: 'influencer', name: 'Mega fenomen turu', cost: 200000, hype: 30, research: 'pazarlama_buyuk', minYear: 2014, viral: { p: 0.25, hype: 30, fans: 20000 }, flop: { p: 0.15, hype: -15 } },
     ],
   },
 
@@ -602,6 +634,10 @@ export const PACK = {
     { id: 'hw_yz', name: 'Donanım: Yapay zekâ hızlandırıcı', rp: 480, cost: 35000000, weeks: 22, year: 2024, requires: 'hw_soc', hw: true },
     { id: 'yerel_jp', name: 'Japonca yerelleştirme', rp: 30, cost: 30000, weeks: 4, year: 1981 },
     { id: 'yerel_dunya', name: 'Dünya pazarları (çok dilli sürüm)', rp: 60, cost: 80000, weeks: 6, year: 1993 },
+    { id: 'dlc', name: 'İndirilebilir içerik', rp: 60, cost: 80000, weeks: 6, year: 2005 },
+    { id: 'ia_satis', name: 'Ücretsiz oyun ve oyun içi satış', rp: 120, cost: 200000, weeks: 8, year: 2008 },
+    { id: 'sezon_karti', name: 'Sezon kartı', rp: 60, cost: 100000, weeks: 5, year: 2011, requires: 'dlc' },
+    { id: 'erken_erisim', name: 'Erken erişim', rp: 80, cost: 120000, weeks: 6, year: 2013 },
     { id: 'uzaktan', name: 'Uzaktan çalışma altyapısı', rp: 50, cost: 30000, weeks: 4, year: 2019 },
     // Motor özellikleri: v seviyesi → RP/süre/maliyet/motor puanı researchV'den gelir.
     { id: 'f_metin', name: 'Motor: Metin arayüzü', v: 1, year: 1976, engine: true },

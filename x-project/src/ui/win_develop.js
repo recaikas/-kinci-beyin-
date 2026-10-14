@@ -1,5 +1,5 @@
 // Geliştir: proje listesi, yeni oyun sihirbazı, proje ayrıntısı, sözleşmeler.
-import { M, Prod, Market, Staff, Know } from '../game.js';
+import { M, Prod, Market, Staff, Know, Modern } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
@@ -106,7 +106,12 @@ export function make(u) {
       release = `<section class="box hl"><h3>Yayına hazır</h3><div class="form">
         <label class="wide">Yayıncı<select id="r-pub">${pubs.map((p) => `<option value="${p.id}" ${s.fans < p.minFans ? 'disabled' : ''}>${esc(p.name)} · güç ${p.power} · pay %${Math.round(p.royalty * 100)}${s.fans < p.minFans ? ` (${fmt(p.minFans)} hayran)` : ''}</option>`).join('')}
           ${s.research.done.oz_yayin ? `<option value="">Kendi yayınım · güç ${Math.round(M.selfPublishPower(c))}</option>` : ''}</select></label>
-        <label>Fiyat ($)<input id="r-price" type="number" min="1" max="120" value="${Math.max(10, Math.round(20 * M.inflation(c) ** 0.4))}"></label></div>
+        <label>Fiyat ($)<input id="r-price" type="number" min="1" max="120" value="${Math.max(10, Math.round(20 * M.inflation(c) ** 0.4))}"></label>
+        ${Modern.f2pAllowed(c) ? `<label>İş modeli<select id="r-model"><option value="satis">Satış (ücretli)</option><option value="f2p">Ücretsiz + oyun içi satış</option></select></label>
+          <label>Para kazanma<select id="r-monet">${PACK.modern.f2p.monet.map((m) => `<option value="${m.id}" ${m.id === 'dengeli' ? 'selected' : ''}>${esc(m.name)}${m.score ? ` (not ${m.score})` : ''}</option>`).join('')}</select></label>` : ''}
+        ${(() => { const offers = Modern.serviceOffers(c, pj, G().previewReview(pid).score); return offers.length ? `<label class="wide">Abonelik servisi<select id="r-svc"><option value="">Servise girme</option>${offers.map((o) => `<option value="${o.id}">${esc(o.name)} · önden ${money(o.pay)} · satış ×${PACK.modern.services.salesMult}</option>`).join('')}</select></label>` : ''; })()}</div>
+        ${pj.ea ? `<p class="small">🧪 Erken erişimde ${pj.ea.weeks} hafta: ${fmt(pj.ea.units)} kopya, ${money(pj.ea.revenue)}.${pj.ea.weeks >= PACK.modern.ea.polishWeeks ? ` Not +${PACK.modern.ea.polishBonus}.` : ''} İlk satışlar %${Math.round(PACK.modern.ea.peakCut * 100)} az olur.</p>` : ''}
+        ${pj.crowd ? `<p class="small">💰 Destekçiler ${money(pj.crowd)} verdi; not ${PACK.modern.crowd.angryBelow}'in altında kalırsa öfkelenirler.</p>` : ''}
         <div class="foot"><span class="muted small">${fmt(pj.bugs)} hata kaldı. Beklemek hataları azaltır, maaş yer.</span><button class="primary big" data-act="release" data-pid="${pid}">Yayınla</button></div></section>`;
     }
     return `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div>
@@ -118,6 +123,9 @@ export function make(u) {
         ${pj.status === 'dev' ? `<div class="foot"><button data-act="phase" data-pid="${pid}">Zaman dağılımını ayarla</button></div>` : ''}</section>
       <section class="box"><h3>Bölgeler</h3><div class="btns">${PACK.regions.list.map((r) => { const on = (pj.regions || []).includes(r.id), st = Prod.regionStatus(c, r.id); return on ? `<span class="pill">✓ ${esc(r.short)}</span>` : `<button data-act="localize" data-pid="${pid}" data-id="${r.id}" ${st.ok ? '' : 'disabled'}>${esc(r.short)}<small>${st.ok ? money(Prod.locCost(c, r.id, pj.size)) : st.why}</small></button>`; }).join('')}</div></section>
       <section class="box"><h3>Pazarlama</h3><div class="btns">${camps}</div></section>
+      ${pj.status === 'dev' && (Modern.eaAllowed(c, pj) || pj.ea || Modern.crowdAllowed(c, pj) || pj.crowd || M.tableYear(c) >= PACK.modern.ea.year) ? `<section class="box"><h3>Erken erişim ve fonlama</h3>
+        <div class="foot"><span class="muted small">${pj.ea ? `Erken erişimde ${pj.ea.weeks} hafta · ${fmt(pj.ea.units)} kopya · ${money(pj.ea.revenue)}` : 'Projenin üçte biri bitince yarım oyunu satışa aç: para ve geri bildirim (hata azalır, not artar), ama tam çıkışta ilk satışlar azalır.'}</span>${pj.ea ? '' : `<button data-act="ea" data-pid="${pid}" ${Modern.eaAllowed(c, pj) ? '' : 'disabled'}>Erken erişime aç</button>`}</div>
+        ${M.tableYear(c) >= PACK.modern.crowd.from && M.tableYear(c) < PACK.modern.crowd.to ? `<div class="foot"><span class="muted small">${pj.crowd ? `Kitle fonlamada ${money(pj.crowd)} toplandı.` : `Kitle fonlama: hayranlarından önden para (~${money(Modern.crowdAmount(c, pj))}). Not düşük çıkarsa destekçiler öfkelenir.`}</span>${pj.crowd ? '' : `<button data-act="crowd" data-pid="${pid}" ${Modern.crowdAllowed(c, pj) ? '' : 'disabled'}>Kampanya aç</button>`}</div>` : ''}</section>` : ''}
       <section class="box"><h3>Baskı</h3><div class="foot"><span class="muted small">Crunch tüm stüdyoya uygulanır: +%40 üretim; stres, hata ve skandal riski patlar.</span><button data-act="crunch" class="${s.crunch ? 'danger on' : ''}">${s.crunch ? 'Crunch\'ı bitir' : 'Crunch başlat'}</button></div></section>
       <details class="box"><summary><h3>Dış kaynak</h3></summary><p class="muted small">Tek seferlik ücretle anında puan. Pahalılaştıkça getirisi azalır.</p>${outs}</details>
       <div class="foot"><button class="ghost danger" data-act="cancel" data-pid="${pid}">${app.confirm === 'cancel' + pid ? 'Emin misin? Tekrar bas' : 'Projeyi iptal et'}</button></div>`;

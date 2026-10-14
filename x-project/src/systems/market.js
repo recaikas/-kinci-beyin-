@@ -1,13 +1,14 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
-import { clamp } from '../kernel.js';
+import { clamp, lerpTable } from '../kernel.js';
 import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
 import { publishersAvailable, initWorld } from './world.js';
+import * as Modern from './modern.js';
 export { publishersAvailable };
 
-export function release(ctx, { projectId, publisherId, price }) {
+export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null }) {
   const { state, pack, ledger, bus } = ctx;
   const pj = state.projects.find((p) => p.id === (projectId ?? state.projects.find((x) => x.status === 'debug')?.id));
   if (!pj || pj.status !== 'debug') return { ok: false, msg: 'Yayınlanacak hazır proje yok.' };
@@ -18,8 +19,19 @@ export function release(ctx, { projectId, publisherId, price }) {
     if (state.fans < pub.minFans) return { ok: false, msg: `${pub.name} en az ${pub.minFans} hayran istiyor.` };
   } else if (!state.research.done.oz_yayin) return { ok: false, msg: 'Kendi yayının için araştırma gerekli.' };
 
+  // Modern iş modelleri: ücretsiz oyun kendi yayınınla, abonelik servisi yılı gelince
+  const MX = pack.modern;
+  if (model === 'f2p' && !Modern.f2pAllowed(ctx)) return { ok: false, msg: 'Ücretsiz oyun için 2008+, "oyun içi satış" araştırması ve kendi yayının gerekli.' };
+  if (model === 'f2p' && pub) return { ok: false, msg: 'Ücretsiz oyunu kendin yayınlamalısın.' };
+  const svc = service ? MX.services.list.find((o) => o.id === service) : null;
+  if (service && (!svc || tableYear(ctx) < svc.year)) return { ok: false, msg: 'Bu abonelik servisi henüz yok.' };
+  if (svc && model === 'f2p') return { ok: false, msg: 'Ücretsiz oyun servise girmez.' };
+
   bus.fire('beforeGameReview', pj);
   const rv = review(ctx, pj);
+  const m = Modern.monetById(ctx, monet);
+  if (model === 'f2p' && m.score) { rv.score = Math.max(1, Math.round((rv.score + m.score) * 10) / 10); rv.notes.push(`Agresif para kazanma ${m.score}`); }
+  const ea = Modern.eaOnRelease(ctx, pj, rv);
   bus.fire('afterGameReview', { project: pj, review: rv });
 
   // IP (ek paket temel oyunun IP'sini kullanır, IP değerini değiştirmez)
@@ -38,8 +50,21 @@ export function release(ctx, { projectId, publisherId, price }) {
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
     devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [], regions: [...(pj.regions || ALL_REGIONS(ctx))], regionSold: {},
   };
+  if (model === 'f2p') { game.model = 'f2p'; game.monet = m.id; game.players = 0; game.price = pack.sales.priceRef; }
   game.peak = peakWeekly(ctx, game);
+  if (model === 'f2p') game.price = 0;
   if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
+  if (ea) { for (const k in game.peak) game.peak[k] *= ea.peakMult; game.eaUnits = pj.ea.units; }
+  if (svc) {
+    const pay = Modern.serviceOffers(ctx, pj, rv.score).find((o) => o.id === svc.id).pay;
+    for (const k in game.peak) game.peak[k] *= MX.services.salesMult;
+    game.service = svc.name;
+    ledger.post('abonelik_servisi', pay, `${svc.name}: ${pj.name}`);
+    game.revenue += pay;
+    state.fans += Math.round(MX.services.fans * inflation(ctx) ** 0.3);
+  }
+  if (model === 'f2p' && m.fansRelease) state.fans = Math.round(state.fans * (1 + m.fansRelease));
+  Modern.crowdOnRelease(ctx, pj, rv.score);
   game.regionSplit = regionSplitOf(ctx, game);
   for (const id of game.platforms) game.sold[id] = 0;
 
@@ -82,6 +107,12 @@ export function release(ctx, { projectId, publisherId, price }) {
   return { ok: true, game, review: rv, report };
 }
 
+// Kopya başı fiziksel maliyet çarpanı (platform türüne ve döneme göre)
+export function unitCostK(ctx, p) {
+  const t = ctx.pack.sales.unitCostK[p.kind] || ctx.pack.sales.unitCostK.konsol;
+  return lerpTable(t, tableYear(ctx));
+}
+
 // Satışın bölgelere dağılımı (platform zirveleriyle ağırlıklı); arayüzde bölge çubukları için.
 export function regionSplitOf(ctx, game) {
   const tot = {};
@@ -100,7 +131,7 @@ function weekMult(ctx, game) {
   const { state, pack } = ctx;
   const s = pack.sales;
   let m = eraMult(ctx, 'salesMult');
-  for (const mod of state.gameMods) if (mod.untilWeek > state.week) m *= mod.mult;
+  for (const mod of state.gameMods) if (mod.untilWeek > state.week && (!mod.gameId || mod.gameId === game.id)) m *= mod.mult;
   const month = Math.floor((state.week % 48) / 4) + 1;
   if (month === s.christmasMonth) m *= s.christmasMult;
   if (state.trend && (state.trend.genre === game.genre || state.trend.topic === game.topic)) m *= s.trendMult;
@@ -119,30 +150,39 @@ export function weeklySales(ctx) {
   let total = 0;
   for (const g of state.games) {
     if (!g.active) continue;
+    const f2p = g.model === 'f2p';
     const curve = weekCurve(ctx, g.weeks, g.pirated);
-    if (curve < s.stopAt) {
+    if (!f2p && curve < s.stopAt) {
       g.active = false;
       ctx.news(`📉 "${g.name}" raflardan kalktı. Toplam ${g.units.toLocaleString('tr-TR')} kopya.`, 'info');
       continue;
     }
+    if (f2p && g.weeks > pack.modern.f2p.minWeeks && (g.players || 0) < pack.modern.f2p.minPlayers) {
+      g.active = false;
+      ctx.news(`🔌 "${g.name}" sunucuları kapandı. Toplam ${g.units.toLocaleString('tr-TR')} oyuncu denedi.`, 'info');
+      continue;
+    }
     const mult = weekMult(ctx, g);
     let units = 0, rev = 0;
+    const newBy = {};
     for (const id of g.platforms) {
       const p = platformById(ctx, id);
       const cap = s.capShare * platformBase(ctx, p) * 1e6;
       let u = Math.round(g.peak[id] * curve * mult);
       u = Math.max(0, Math.min(u, cap - g.sold[id]));
       g.sold[id] += u; units += u;
+      if (f2p) { newBy[p.kind] = (newBy[p.kind] || 0) + u; continue; }
       const price = gamePrice(ctx, g, p);
-      rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * inflation(ctx) ** 0.5);
+      rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5);
     }
+    if (f2p) rev = Modern.weeklyF2P(ctx, g, newBy).rev;
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);
     (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
     (g.profitHist ||= []).push(Math.round(g.revenue - (g.devCost || 0) - (g.postCost || 0))); if (g.profitHist.length > 104) g.profitHist.shift();
     (g.hist ||= []).push(units); if (g.hist.length > 104) g.hist.shift();
     if (g.mmo) g.subs += units * pack.mmo.subPerUnit;
-    if (rev) { ledger.post('satis', Math.round(rev), g.name); total += rev; }
+    if (rev) { ledger.post(f2p ? 'oyun_ici' : 'satis', Math.round(rev), g.name); total += rev; }
   }
   // Müşteri destek: satıştaki oyunlar için hayran kazanımı
   const live = state.games.filter((g) => g.active).length;
