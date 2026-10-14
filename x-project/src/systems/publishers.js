@@ -114,12 +114,19 @@ export function door(ctx, pub) {
 }
 
 // ---------- Değerlendirme yardımcıları
+// Erken sunuşta yayıncı yarım demoya ve stüdyonun geçmişine birlikte bakar (fazlar farklı disiplinlere çalıştığı için
+// yarım projeden düz uzatma yanıltır).
 export function trueEstimate(ctx, pj) {
   const fake = { ...ctx, rng: makeRng({ rng: 7 }) };
   if (pj.status === 'dev') {
     const k = pj.totalWeeks / Math.max(1, pj.week), pts = {};
-    for (const d in pj.points) pts[d] = pj.points[d] * k;
-    return review(fake, { ...pj, points: pts, bugs: pj.bugs * k * 0.6 }).score;
+    const tot = Object.values(pj.points).reduce((a, b) => a + b, 0) * k, g = ctx.pack.genres.find((x) => x.id === pj.genre);
+    const wsum = Object.values(g.disc).reduce((a, b) => a + b, 0) || 1;
+    for (const d in pj.points) pts[d] = Math.max(pj.points[d] * k, tot * (g.disc[d] || 0) / wsum);
+    const demo = review(fake, { ...pj, points: pts, bugs: pj.bugs * k * 0.6 }).score;
+    const past = ctx.state.games.filter((x) => !x.portOf).slice(-3);
+    const track = past.length ? past.reduce((a, x) => a + x.score, 0) / past.length : demo;
+    return Math.round((0.5 * demo + 0.5 * track) * 10) / 10;
   }
   return review(fake, pj).score;
 }

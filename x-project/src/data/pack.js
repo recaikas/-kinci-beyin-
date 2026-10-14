@@ -345,7 +345,7 @@ export const PACK = {
   // Yayıncılar (Konu B, P). Pay yayıncı netinin yüzdesi (net = perakendenin %55'i); avans telifle geri ödenir.
   publishing: {
     _tag: 'P',
-    net: 0.55, payBase: 18, payPowerK: 0.06, payMin: 5, payMax: 30, earlyPay: -4, tierPay: [0, 2, 4, 6],
+    net: 0.55, payBase: 20, payPowerK: 0.06, payMin: 5, payMax: 30, earlyPay: -4, tierPay: [0, 2, 4, 6],
     hitPay: 4, hitAt: 1.5, kozMax: 3, rightsPay: 3, distPay: 70, distPower: 0.6, multiPay: 1,
     buyoutShare: 0.6, advWeeks: 12, lifeWeeks: 100, fund: [1.0, 1.1], milestones: [0.3, 0.3, 0.4], dueSlack: 6, lateWithdraw: 8, withdrawRepay: 0.5,
     thresholdA: 20, thresholdK: 0.55, need: 3, jitter: 3,

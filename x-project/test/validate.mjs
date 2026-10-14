@@ -634,7 +634,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Eşikler: Mantar ~40 (kumarbaz), Ataro ~68', Math.round(Pub.threshold(c, mantar)) === 40 && Math.round(Pub.threshold(c, ataro)) === 68);
   let payOk = true;
   for (const y of [1976, 1990, 2005, 2025]) for (const p of at(y)) for (const r of [-40, 0, 25, 50, 90]) { st.pub.rel[p.id] = r; const v = Math.round(Pub.basePay(c, p)); if (v + 3 + 6 > 40 || v < -10) payOk = false; st.pub.rel[p.id] = 0; }
-  check('Pay formülü: yeni stüdyoya netin %12–15\'i', (() => { const v = Pub.basePay(c, mantar); return v >= 12 && v <= 16; })() && payOk, Pub.basePay(c, mantar).toFixed(1));
+  check('Pay formülü: yeni stüdyoya netin %14–17\'si (fiyatın ~%8–9\'u)', (() => { const a = Pub.basePay(c, mantar), b = Pub.basePay(c, ataro); return a >= 14 && a <= 17.5 && b >= 12 && b < a; })() && payOk, `${Pub.basePay(c, mantar).toFixed(1)} / ${Pub.basePay(c, ataro).toFixed(1)}`);
   const pj = g.startProject({ name: 'Garaj', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
   tick(g, 3);
   check('Erken anlaşma Ortak olmadan açılmaz', !Pub.canPitch(c, pj, mantar, 'erken').ok);
