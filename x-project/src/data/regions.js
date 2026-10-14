@@ -28,7 +28,7 @@ export const REGIONS = [
     pref: [0.9, 1.0, 1.45, 0.85, 0.8, 1.1], topics: { fantezi: 1.25, robot: 1.3, ninja: 1.25, hayvan: 1.3, okul: 1.2, kedi: 1.2, muzik: 1.15 },
     price: 1.1, piracy: [[1976, 0.05], [2025, 0.03]], eng: [[1976, 0.08], [2000, 0.1], [2025, 0.15]], locBase: 9000,
     season: [1.6, 0.8, 0.85, 0.9, 1.15, 0.85, 0.9, 1.0, 0.95, 0.9, 1.0, 1.5],
-    pay: [[1976, 1.0], [2025, 1.0]], rent: 1.3, skills: { grafik: 1.15, ses: 1.1 },
+    pay: [[1976, 1.0], [2025, 1.0]], rent: 1.3, skills: { grafik: 1.15, ses: 1.1 }, startK: 0.9,
     host: 'Editör Tanaka-san', press: 'Haftalık Piko Piko',
     soul: 'Kalite takıntısı, kuyruklar, el konsolu trenlerde. Yeni yılda çocuklar harçlıklarıyla oyun alır; yabancı oyuna kibar ama mesafeli. Korsan neredeyse yok, sabır çok.' },
   { id: 'tr', name: 'Türkiye', short: 'Türkiye', flag: '🧿', lang: 'tr', langName: 'Türkçe',
@@ -36,7 +36,8 @@ export const REGIONS = [
     pref: [1.15, 0.95, 0.95, 0.95, 1.1, 1.1], topics: { futbol: 1.5, tarih: 1.25, mafya: 1.15, spor: 1.15, yaris: 1.1, askeri: 1.05 },
     price: 0.45, piracy: [[1976, 0.6], [1986, 0.8], [2000, 0.6], [2012, 0.35], [2025, 0.2]], eng: [[1976, 0.35], [2000, 0.5], [2025, 0.65]], locBase: 3000,
     season: [1.2, 0.85, 0.85, 1.0, 0.95, 1.15, 1.0, 0.95, 0.9, 0.95, 0.95, 1.05],
-    pay: [[1976, 0.35], [2000, 0.45], [2025, 0.55]], rent: 0.35, skills: { oyn: 1.1 },
+    pay: [[1976, 0.45], [2000, 0.55], [2025, 0.7]], rent: 0.45, skills: { oyn: 1.1 },
+    importK: [[1976, 1.8], [1990, 1.5], [2005, 1.2], [2025, 1.05]], startK: 0.6, // geliştirme kitleri gümrükte, sermaye lirayla
     host: 'Kasetçi Cemil Abi', press: 'Kaset & Disket Dergisi',
     soul: 'Küçük ama sadık, gürültülü ve esprili. Atari salonları, kaset takası, dergi ekleri, internet kafeler, sonra cepler. Bayram harçlığı oyuna gider; kur dalgalanınca herkes dolar konuşur.' },
   { id: 'latam', name: 'Latin Amerika', short: 'Latin Am.', flag: '🌵', lang: 'es', langName: 'İspanyolca/Portekizce',
@@ -70,8 +71,8 @@ export const OWNER_BIAS = {
 export const HOMES = [
   { id: 'na', title: 'Kuzey Amerika · garaj', feel: 'Kolay başlangıç', text: 'En büyük pazar evinin önünde. Salon makineleri, Kırmızı Mantar mahallede. 1983 çöküşü en sert burada vurur.' },
   { id: 'eu', title: 'Avrupa · çatı katı', feel: 'Orta', text: 'Maaşlar biraz ucuz, ev bilgisayarı patlaması 1982\'de kapında. 1976\'da yerel yayıncı az; posta siparişi erken açılır, İngilizce sürüm Amerika\'ya da gider.' },
-  { id: 'jp', title: 'Japonya · apartman dairesi', feel: 'Zorca', text: '1990\'larda dünyanın merkezi olacak bir pazar ama dışarı açılmak zor: Japonca oyun dışarıda yalnız ithal hayranlara satar. Kira pahalı, kalite çıtası yüksek.' },
-  { id: 'tr', title: 'Türkiye · dükkân arkası', feel: 'En zor, en ucuz', text: 'İç pazar minicik, korsan her yerde; ama maaş ve kira çok ucuz. İhracat şart: posta siparişi, Avrupalı dağıtıcılar ve bol çay. Kur krizleri hem kurtarır hem batırır.' },
+  { id: 'jp', title: 'Japonya · apartman dairesi', feel: 'Zor', text: '1990\'larda dünyanın merkezi olacak bir pazar ama dışarı açılmak zor: Japonca bir RPG çevrilmeden dışarıda satmaz; aksiyon oyunu ise dil bilmeden de oynanır. Kira pahalı, kalite çıtası yüksek.' },
+  { id: 'tr', title: 'Türkiye · dükkân arkası', feel: 'Zor ama en ucuz', text: 'İç pazar minicik, korsan her yerde; ama maaş ve kira çok ucuz. İhracat şart: posta siparişi, Avrupalı dağıtıcılar ve bol çay. Kur krizleri hem kurtarır hem batırır.' },
 ];
 
 // Dağıtım ağı seviyeleri (kendi yayınında bir bölgeye erişim)

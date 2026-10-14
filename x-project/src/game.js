@@ -24,7 +24,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
   return {
     version: 3, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
-    companyName, founderName, founderSpec, cash: 0, startCash: diff.startCash,
+    companyName, founderName, founderSpec, cash: 0, startCash: Math.round(diff.startCash * (Regions.R(home)?.startK ?? 1)),
     ledger: { byYear: {}, total: {}, recent: [] },
     office: { tier: 1, floors: 0 }, rooms: [], consoles: [], consoleJob: null, stationTier: 0, stationDown: 0, rentMult: 1,
     staff: [], applicants: [], nextId: 1,

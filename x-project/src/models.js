@@ -14,6 +14,7 @@ export function homePay(ctx) {
   for (const f of st.fxMods || []) if (f.rid === r?.id && f.pay && f.until > st.week) k *= f.v;
   return k;
 }
+export const homeImport = (ctx) => { const r = REGION_DATA.find((x) => x.id === (ctx.state.home || 'na')); return r?.importK ? lerpTable(r.importK, tableYear(ctx)) : 1; };
 export const homeRent = (ctx) => REGION_DATA.find((x) => x.id === (ctx.state.home || 'na'))?.rent ?? 1;
 export const salaryFor = (ctx, skill) => Math.round(ctx.pack.economy.salaryPerSkill * skill * inflation(ctx) * homePay(ctx));
 

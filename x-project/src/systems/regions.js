@@ -63,11 +63,13 @@ export function distReach(ctx, rid, plats = []) {
   if (y >= 2014 || (y >= 2008 && kinds.some((k) => DIGITAL_KINDS.includes(k)))) v = Math.max(v, NET_LEVELS[2].reach); // dijital mağaza
   return v;
 }
-export function langReach(ctx, rid, loc = {}) {
+// Çevirisiz erişim: İngilizce oyun dünyada kısmen anlaşılır; diğer dillerde yalnız az metinli oyun (aksiyon, casual) geçer.
+export function langReach(ctx, rid, loc = {}, genre = null) {
   if (isNative(ctx, rid)) return 1;
   const lv = loc?.[rid] || 0;
   if (lv >= 1) return LOC_LEVELS[lv].mult;
-  return studioLang(ctx) === 'en' ? lerpTable(R(rid).eng, Y(ctx)) : 0.05;
+  const text = genre ? clamp(1.3 - 0.5 * (TEXT_LOAD[genre] ?? 1), 0.25, 1) : 1;
+  return (studioLang(ctx) === 'en' ? lerpTable(R(rid).eng, Y(ctx)) : 0.35) * text;
 }
 export const pubCov = (pub, rid) => (!pub?.region ? 0.5 : pub.region[0] === rid ? 1 : pub.region.includes(rid) ? 0.7 : 0.3);
 export function regionFans(ctx, rid) { return Math.round((ctx.state.fans || 0) * (ctx.state.fanMix?.[rid] || 0)); }
@@ -109,10 +111,10 @@ export function computeReach(ctx, g, { pub = null, deal = null } = {}) {
     if (deal && covered) {
       inDeal[rid] = true;
       const cov = deal.bargain ? 0.5 : pubCov(pub, rid);
-      const lang = pub?.region?.includes(rid) || deal.bargain ? 1 : langReach(ctx, rid, loc);
+      const lang = pub?.region?.includes(rid) || deal.bargain ? 1 : langReach(ctx, rid, loc, g.genre);
       k = cov * lang * pubY(ctx, deal.bargain ? deal.power : pub?.power ?? deal.power ?? 50) * (rid === home(ctx) ? 1.15 : 1);
     } else if (!deal || hasOwn) {
-      k = distReach(ctx, rid, g.platforms || []) * selfY(ctx, regionPower(ctx, rid)) * langReach(ctx, rid, loc);
+      k = distReach(ctx, rid, g.platforms || []) * selfY(ctx, regionPower(ctx, rid)) * langReach(ctx, rid, loc, g.genre);
     } else k = NET_LEVELS[0].reach * 0.3;
     k *= ratingK(ctx, g, rid, loc) * pirK(ctx, g, rid) * topicK(g, rid) * (g.badLoc?.[rid] || 1);
     out[rid] = Math.round(k * 10000) / 10000;

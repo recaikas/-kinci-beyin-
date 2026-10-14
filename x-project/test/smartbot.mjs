@@ -20,8 +20,8 @@ const GAME_RESEARCH = ['ihracat', 'alt_tur', 'f_metin', 'motor_ozel', 'f_sprite'
   'f_online', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
 
-export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false } = {}) {
-  const g = newGame({ seed, difficulty, length });
+export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false, home = 'na' } = {}) {
+  const g = newGame({ seed, difficulty, length, home });
   const { state, pack, ctx } = g;
   const stats = { pub: { self: 0, pub: 0, tek: 0, kelepir: 0, early: 0, byDecade: {} }, peakStaff: 0, consoles: 0, consoleSold: 0, ipo: null, loans: 0, contracts: 0, bankruptYear: null, firstHit: null, peakCash: 0 };
   let n = 0;
@@ -131,23 +131,29 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
   // teklifleri bekle (değişiklik isteğini kabul, iki teklifte açık artırma, olasılık %60+ ise pay iste), en değerlisini imzala.
   // Hiç teklif gelmezse ve beklemek pahalıysa kelepir satış.
   const Ycur = (pw) => pack.sales.yA + pack.sales.yB * pw / 100;
-  function selfValue() {
-    if (!state.research.done.oz_yayin) return -1;
-    const sp = Math.min(100, M.selfPublishPower(ctx) + (Staff.hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0));
-    return (pack.sales.selfA + pack.sales.selfB * (sp / 100) ** 2) * (1 - pack.sales.retailCut - 0.08);
+  // Konu C: değerler bölgesel erişimle hesaplanır (pazar payı × tür ilgisi × o bölgedeki erişim)
+  const GENERIC = { genre: 'aksiyon', platforms: ['pc'], loc: {} };
+  function reachValue(pj, opts) {
+    const w = M.regionShares(ctx), gi = pack.genres.findIndex((x) => x.id === pj.genre);
+    const reach = Regions.computeReach(ctx, { ...pj, loc: pj.loc || {} }, opts).reach;
+    return Regions.IDS.reduce((a, r) => a + (w[r] || 0) * (Regions.R(r).pref[gi] ?? 1) * reach[r], 0);
   }
-  const pubValue = (pub, pay) => Ycur(pub.power) * pack.publishing.net * pay / 100;
+  function selfValue(pj = GENERIC) {
+    if (!state.research.done.oz_yayin) return -1;
+    return reachValue({ ...pj, selfPub: true }, {}) * (1 - pack.sales.retailCut - 0.08);
+  }
+  const pubValue = (pub, pay, pj = GENERIC) => reachValue(pj, { pub: { power: pub.power, region: pub.region }, deal: { pubId: pub.id || 'x', power: pub.power, regions: null } }) * pack.publishing.net * pay / 100;
   function pubPlan(pj, late) {
     const s = Pub.pubState(state);
     if (pj.deal) return pj.deal.pubId;
     if (pj.selfChosen) return null;
-    const sv = selfValue();
+    const sv = selfValue(pj);
     const ipR = pj.sequelOf != null ? state.ips.find((x) => x.id === pj.sequelOf) : null;
     const locked = s.multi?.left > 0 || !!ipR?.rightsPub;
     const est = Pub.trueEstimate(ctx, pj);
     const scored = Pub.list(ctx).filter((p) => Pub.canPitch(ctx, pj, p).ok)
-      .map((p) => { const pr = Pub.preview(ctx, p, pj); const pAcc = 1 / (1 + Math.exp(-(est - pr.E) / 5)); return { p, v: pubValue(p, pr.pay), ev: pubValue(p, pr.pay) * pAcc }; }).sort((a, b) => b.ev - a.ev);
-    const bestV = Math.max(0, ...Pub.list(ctx).filter((p) => Pub.door(ctx, p).open).map((p) => pubValue(p, Pub.preview(ctx, p).pay)));
+      .map((p) => { const pr = Pub.preview(ctx, p, pj); const pAcc = 1 / (1 + Math.exp(-(est - pr.E) / 5)); return { p, v: pubValue(p, pr.pay, pj), ev: pubValue(p, pr.pay, pj) * pAcc }; }).sort((a, b) => b.ev - a.ev);
+    const bestV = Math.max(0, ...Pub.list(ctx).filter((p) => Pub.door(ctx, p).open).map((p) => pubValue(p, Pub.preview(ctx, p).pay, pj)));
     // Teklifler: değişikliği kabul, iki teklifte açık artırma, olasılığı yüksekse haklar ya da pay
     for (const o of s.offers.filter((x) => x.pid === pj.id && x.kind === 'degisiklik')) g.acceptChange(o.id, o.change !== 'kitle');
     const full = s.offers.filter((o) => o.pid === pj.id && o.kind === 'tam');
@@ -162,7 +168,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     if (live.length && (!pending.length || late || live.some((o) => o.expires - state.week <= 1))) {
       const val = (o) => (o.kind === 'tek' ? o.buyout : o.expUnits * o.price * pack.publishing.net * o.pay / 100 * (o.dist ? 1.6 : 1)) * (o.rights === 'yayinci' ? 0.85 : 1);
       const best = [...live].sort((a, b) => val(b) - val(a))[0];
-      if (!locked && sv > 0 && best.kind === 'tek' && sv >= pubValue(Pub.byId(ctx, best.pubId) || { power: 50 }, 12) * 0.8) { for (const o of live) g.declineOffer(o.id); pj.selfChosen = true; return null; }
+      if (!locked && sv > 0 && best.kind === 'tek' && sv >= pubValue(Pub.byId(ctx, best.pubId) || { power: 50 }, 12, pj) * 0.8) { for (const o of live) g.declineOffer(o.id); pj.selfChosen = true; return null; }
       if (g.signOffer(best.id).ok) return best.pubId;
     }
     if (pending.length || live.length) return 'wait';

@@ -1,6 +1,6 @@
 // Üretim: oyun projesi (3 faz × 3 görev), uzman odalar, QA, hata ayıklama, dış kaynak, sözleşme, araştırma, motor.
 import { clamp, lerpTable } from '../kernel.js';
-import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL } from '../models.js';
+import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL, homePay, homeImport } from '../models.js';
 import { weeklyOutput } from './staff.js';
 import { consumeHypeBank } from './charts.js';
 import * as Regions from './regions.js';
@@ -38,7 +38,7 @@ export function projectCost(ctx, o) {
     const p = platformById(ctx, id);
     if (p) cost += p.licence + p.devCost * size.devCost;
   }
-  return Math.round(cost * (o.kind === 'ek' ? ctx.pack.post.expansionCost : 1));
+  return Math.round(cost * (o.kind === 'ek' ? ctx.pack.post.expansionCost : 1) * homeImport(ctx)); // ithal geliştirme kiti (Konu C)
 }
 
 export const projectOfRoom = (state, room) => state.projects.find((p) => p.roomId === room.id) || null;
@@ -149,7 +149,8 @@ export function genContracts(ctx) {
   const c = pack.contracts;
   const h = H(ctx);
   const cap = devCapacity(ctx);
-  const perPoint = c.rewardPerPoint * Math.pow(inflation(ctx) * 40 / h, c.rewardExp ?? 0.5) * (c.lateK ? lerpTable(c.lateK, tableYear(ctx)) : 1);
+  // Sözleşmeli işler yerel müşterilerden: ödeme ana bölgenin ücret düzeyine göre (Konu C)
+  const perPoint = c.rewardPerPoint * Math.pow(inflation(ctx) * 40 / h, c.rewardExp ?? 0.5) * (c.lateK ? lerpTable(c.lateK, tableYear(ctx)) : 1) * Math.pow(homePay(ctx), 0.8);
   state.contractOffers = Array.from({ length: c.offers }, (_, i) => {
     const tier = c.tiers[i % c.tiers.length];
     const weeks = rng.int(c.weeksMin, c.weeksMax);
