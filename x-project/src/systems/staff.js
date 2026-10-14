@@ -273,6 +273,7 @@ export function weeklyStaff(ctx) {
     else {
       const r = rng.pick(state.rivals.filter((x) => !x.acquired)) || { name: 'bir rakip' };
       ctx.news(`🦈 ${p.name}, ${r.name} stüdyosuna transfer oldu.`, 'bad');
+      ctx.bus.fire('staffTransfer', { person: p, rival: r });
       if (r.rep !== undefined) r.rep = clamp(r.rep + 1, 1, 100);
     }
     for (const o of state.staff) o.morale = clamp(o.morale - 3, 0, 100);

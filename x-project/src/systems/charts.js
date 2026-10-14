@@ -268,7 +268,7 @@ function applyReward(ctx, g, r) {
   if (r.fansOfUnits) state.fans += Math.round((g.units || 0) * r.fansOfUnits);
   if (r.morale) for (const p of state.staff) p.morale = clamp(p.morale + r.morale, 0, 100);
   const m = mkt(state);
-  if (r.pubRel && g.publisherId) m.pubRel[g.publisherId] = (m.pubRel[g.publisherId] || 0) + r.pubRel;
+  if (r.pubRel && g.deal && !g.deal.bargain) ctx.bus.fire('pubRel', { id: g.deal.pubId, v: r.pubRel, memo: r.memo ? r.memo.replace('#', g.name) : null });
   if (r.hypeBank) m.hypeBank = Math.min(30, m.hypeBank + r.hypeBank);
   if (r.genreRep) m.genreRep[g.genre] = (m.genreRep[g.genre] || 0) + r.genreRep;
   if (r.prestige) state.prestige = Math.min(ctx.pack.prestige.max, state.prestige + r.prestige);
@@ -319,7 +319,7 @@ export function weeklyCharts(ctx) {
       const R = c.rewards;
       if (g.weeks === 1) ctx.news(`📊 "${g.name}" satış listesine #${g.rank.toLocaleString('tr-TR')}'den girdi (${m.total.toLocaleString('tr-TR')} oyun arasında).`, g.rank <= c.lists.top ? 'good' : 'info');
       if (g.rank <= c.lists.show) reward(ctx, g, 'top40', () => { applyReward(ctx, g, R.top40); if (g.rank > c.lists.top) ctx.news(`📈 "${g.name}" ilk ${c.lists.show}'a girdi (#${g.rank}).`, 'good'); });
-      if (g.rank <= c.lists.top) reward(ctx, g, 'top10', () => { applyReward(ctx, g, R.top10); ctx.news(`🔟 "${g.name}" satış listesinde ilk 10'da (#${g.rank})! Hayranlar ve ekip coştu.`, 'good'); });
+      if (g.rank <= c.lists.top) reward(ctx, g, 'top10', () => { applyReward(ctx, g, R.top10); ctx.bus.fire('gameTop10', g); ctx.news(`🔟 "${g.name}" satış listesinde ilk 10'da (#${g.rank})! Hayranlar ve ekip coştu.`, 'good'); });
       if (g.rank === 1) reward(ctx, g, 'no1', () => { applyReward(ctx, g, R.no1); ctx.news(`👑 "${g.name}" listenin zirvesinde! Dergi kapakları senin; bir sonraki oyunun merakla bekleniyor.`, 'good'); });
       if (g.gRank === 1) reward(ctx, g, 'genre1', () => { applyReward(ctx, g, R.genre1); ctx.news(`🏅 "${g.name}" ${pack.genres.find((x) => x.id === g.genre).name.toLowerCase()} listesinde #1.`, 'good'); });
       if (g.top10Run >= R.classicRun) reward(ctx, g, 'classic', () => { g.dif.q += R.classicQ; ctx.news(`💎 "${g.name}" ${R.classicRun} haftadır ilk 10'da: artık bir klasik. Ağızdan ağıza yayılıyor.`, 'good'); });
@@ -515,7 +515,7 @@ export function bulkBuy(ctx, id) {
   g.bulk = true; g.chartBoost = (g.chartBoost || 0) + n;
   if (ctx.rng.chance(b.scandal)) {
     ctx.state.fans = Math.round(ctx.state.fans * (1 - b.scandalFans)); ctx.state.kaos = Math.min(100, ctx.state.kaos + b.scandalKaos);
-    if (g.publisherId) { const m = mkt(ctx.state); m.pubRel[g.publisherId] = (m.pubRel[g.publisherId] || 0) - 10; }
+    if (g.deal && !g.deal.bargain) ctx.bus.fire('pubRel', { id: g.deal.pubId, v: ctx.pack.publishing.rel.scandal, memo: `"${g.name}" toplu alım skandalı` });
     ctx.news(`🗞️ SKANDAL: "${g.name}" kopyalarını stüdyonun kendisinin topladığı ortaya çıktı! Hayranlar öfkeli.`, 'bad');
   } else ctx.news(`🛒 "${g.name}" için ${n.toLocaleString('tr-TR')} kopya sessizce toplandı. Liste haftası heyecanlı geçecek.`, 'info');
   return { ok: true };
@@ -582,7 +582,7 @@ function weeklyAnnounce(ctx) {
     } else {
       pj.announce = null; pj.annMissed = true;
       state.fans = Math.round(state.fans * (1 - a.missFans)); state.kaos = Math.min(100, state.kaos + a.missKaos);
-      if (pj.publisherHint) { const m = mkt(state); m.pubRel[pj.publisherHint] = (m.pubRel[pj.publisherHint] || 0) - 5; }
+      if (pj.deal) ctx.bus.fire('pubRel', { id: pj.deal.pubId, v: -5, memo: `"${pj.name}" duyurulan tarihte çıkmadı` });
       ctx.news(`😬 "${pj.name}" duyurulan tarihte çıkmadı. Hayranlar kızgın, forumlar alevli.`, 'bad');
     }
   }

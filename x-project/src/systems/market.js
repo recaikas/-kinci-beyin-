@@ -4,21 +4,22 @@ import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPowe
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
-import { publishersAvailable, initWorld } from './world.js';
+import { initWorld } from './world.js';
+import * as Pub from './publishers.js';
 import * as Modern from './modern.js';
 import * as Charts from './charts.js';
-export { publishersAvailable };
+export const publishersAvailable = (ctx) => Pub.list(ctx);
 
 export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null, printRun = 'normal' }) {
   const { state, pack, ledger, bus } = ctx;
   const pj = state.projects.find((p) => p.id === (projectId ?? state.projects.find((x) => x.status === 'debug')?.id));
   if (!pj || pj.status !== 'debug') return { ok: false, msg: 'Yayınlanacak hazır proje yok.' };
-  let pub = null;
-  if (publisherId) {
-    pub = publishersAvailable(ctx).find((p) => p.id === publisherId);
-    if (!pub) return { ok: false, msg: 'Yayıncı yok.' };
-    if (state.fans < pub.minFans) return { ok: false, msg: `${pub.name} en az ${pub.minFans} hayran istiyor.` };
-  } else if (!state.research.done.oz_yayin) return { ok: false, msg: 'Kendi yayının için araştırma gerekli.' };
+  // Yayıncı: imzalı sözleşme, kelepir satış ya da kendi yayının (Konu B)
+  const fr = Pub.forRelease(ctx, pj, publisherId ?? null);
+  if (!fr.ok) return fr;
+  const pub = fr.pub, deal = fr.deal || null;
+  if (!pub && !state.research.done.oz_yayin) return { ok: false, msg: 'Kendi yayının için araştırma gerekli; o zamana kadar bir yayıncıya sun.' };
+  if (pj.maxPrice) price = Math.min(price, pj.maxPrice);
 
   // Modern iş modelleri: ücretsiz oyun kendi yayınınla, abonelik servisi yılı gelince
   const MX = pack.modern;
@@ -45,7 +46,8 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   const game = {
     id: pj.id, name: pj.name, genre: pj.genre, sub: pj.sub, topic: pj.topic, audience: pj.audience, platforms: pj.platforms,
     size: pj.size, score: rv.score, critics: rv.critics, review: rv, price, hype: pj.hype, ipId: ip.id, ipValue: ipValueAtRelease,
-    publisherId: pub ? pub.id : null, publisherName: pub ? pub.name : null, publisherPower: pub ? pub.power : Math.min(100, selfPublishPower(ctx) + (hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0)), royalty: pub ? pub.royalty : null,
+    publisherId: pub ? pub.id : null, publisherName: pub ? pub.name : null, publisherPower: pub ? pub.power : Math.min(100, selfPublishPower(ctx) + (hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0)), selfPub: !pub,
+    royalty: deal ? (deal.kind === 'tek' ? 0 : pack.publishing.net * deal.pay / 100) : null, deal: deal ? { ...deal } : null,
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
@@ -70,11 +72,8 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   for (const id of game.platforms) game.sold[id] = 0;
   Charts.onRelease(ctx, game, printRun);
 
-  // Yayıncı avansı
-  if (pub) {
-    const size = pack.sizes.find((s) => s.id === pj.size);
-    ledger.post('yayinci', Math.round(pack.publisherAdvance.base * size.sales * inflation(ctx) * pub.power / 100), `${pub.name} avansı`);
-  }
+  // Kelepir satış peşin ödenir; sözleşmenin avansı ve finansmanı imzada ödendi (oyunun gelirine işlenir)
+  if (deal?.bargain) { ledger.post('yayinci', deal.buyout, `Kelepir Dağıtım: "${pj.name}"`); game.revenue += deal.buyout; }
   // Hayran
   const f = pack.fans;
   const dFans = rv.score >= f.threshold ? (rv.score - f.threshold) * f.perPointAbove * Math.max(1, inflation(ctx) ** 0.5)
@@ -101,6 +100,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   if (!state.projects.length) state.crunch = false;
   const report = learn(ctx, pj, rv);
   state.charts.unshift({ name: game.name, studio: state.companyName, score: game.score, week: state.week, mine: true, genre: game.genre });
+  if (deal) Pub.onRelease(ctx, game, pj); else Pub.onSelfRelease(ctx, game);
   bus.fire('afterReleaseGame', game);
   const mood = rv.score >= 85 ? '🎉' : rv.score >= 70 ? '🙂' : rv.score >= 50 ? '😐' : '💩';
   ctx.news(`${mood} "${game.name}" yayında! Not: ${rv.score}. Hayran ${dFans >= 0 ? '+' : ''}${Math.round(dFans)}.`, rv.score >= 70 ? 'good' : 'bad');
@@ -155,6 +155,7 @@ export function weeklySales(ctx) {
     const st = Charts.step(ctx, g);
     if (!f2p && Charts.ended(ctx, g, st)) {
       g.active = false;
+      Pub.onGameEnd(ctx, g);
       const left = g.printed && g.stock > 0 ? ` Depoda ${g.stock.toLocaleString('tr-TR')} basılı kopya kaldı.` : '';
       ctx.news(`📉 "${g.name}" ${Charts.isDigital(ctx) ? 'mağazalarda artık satmıyor' : 'raflardan kalktı'}. Toplam ${g.units.toLocaleString('tr-TR')} kopya.${left}`, 'info');
       continue;
@@ -185,13 +186,15 @@ export function weeklySales(ctx) {
       g.sold[id] += u; units += u;
       if (f2p) { newBy[p.kind] = (newBy[p.kind] || 0) + u; continue; }
       const price = gamePrice(ctx, g, p);
-      rev += g.royalty != null ? u * price * g.royalty
+      rev += g.deal?.dist ? u * (price * pack.publishing.net * g.deal.pay / 100 - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5)
+        : g.royalty != null ? u * price * g.royalty
         : g.printed ? u * price * (1 - s.retailCut)
         : u * (price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5);
     }
     if (g.printed) g.stock = Math.max(0, g.stock - units);
     Charts.commit(ctx, g, f < 1 ? st.s * (f + (1 - f) * pack.charts.print.lostShare) : st.s);
     if (f2p) rev = Modern.weeklyF2P(ctx, g, newBy).rev;
+    if (g.deal) rev = Pub.royaltyCash(ctx, g, rev);
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);
     (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
@@ -319,7 +322,7 @@ export function scheduled(ctx) {
   if (month === pack.fair.month && wk === pack.fair.week && fairPj) {
     const cost = Math.round(pack.fair.boothCost * inflation(ctx) ** 0.7);
     ctx.queue({ id: 'fuar', title: 'GameCon Fuarı', text: `Yıllık fuar kapıda. "${fairPj.name}" için stant açmak ${cost.toLocaleString('tr-TR')} $.`,
-      choices: [{ label: 'Stant aç!', effects: { cashRaw: -cost, hype: pack.fair.hype, fans: pack.fair.fans } }, { label: 'Bu yıl pas', effects: {} }] });
+      choices: [{ label: 'Stant aç!', effects: { cashRaw: -cost, hype: pack.fair.hype, fans: pack.fair.fans, pubFair: true } }, { label: 'Bu yıl pas', effects: {} }] });
   }
   if (month === pack.awards.month && wk === pack.awards.week) awards(ctx);
 }
@@ -337,6 +340,7 @@ function awards(ctx) {
     state.fans += a.goty.fans;
     ledger.post('odul', Math.round(a.goty.cash * inflation(ctx) ** 0.5), 'Yılın Oyunu');
     state.awards.push({ year: Math.floor(tableYear(ctx)), name: best.name, type: 'goty' });
+    ctx.bus.fire('awardWon', { type: 'goty', genre: best.genre });
     ctx.queue({ id: 'goty', title: '🏆 Yılın Oyunu!', text: `"${best.name}" yılın oyunu seçildi! Sahnede ağladın. Herkes ağladı.`, choices: [{ label: 'Teşekkürler!', effects: { morale: 15 } }] });
   }
   else {
@@ -350,6 +354,7 @@ function awards(ctx) {
       state.fans += g.fans;
       ledger.post('odul', Math.round(g.cash * inflation(ctx) ** 0.5), `En iyi ${gname}`);
       state.awards.push({ year: Math.floor(tableYear(ctx)), name: w.name, type: 'tur', genre: w.genre });
+      ctx.bus.fire('awardWon', { type: 'tur', genre: w.genre });
       ctx.news(`🥇 "${w.name}" yılın en iyi ${gname.toLowerCase()} oyunu seçildi!`, 'good');
     }
   }

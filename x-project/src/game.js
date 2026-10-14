@@ -17,6 +17,7 @@ import * as Co from './systems/company.js';
 import * as War from './systems/war.js';
 import * as Modern from './systems/modern.js';
 import * as Charts from './systems/charts.js';
+import * as Pub from './systems/publishers.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -53,6 +54,7 @@ function migrate(state) {
   state.vacationPolicy ||= 'planli';
   state.rel ||= {};
   Charts.mkt(state);
+  Pub.migrate(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -74,6 +76,8 @@ export function makeGame(state, pack = PACK) {
     },
     queue(ev) { state.pending.push(ev); bus.fire('pending', ev); },
   };
+  Pub.wire(ctx);
+  const contracts = () => { Prod.genContracts(ctx); Pub.addTrial(ctx); };
 
   const api = {
     ctx, state, pack, bus,
@@ -86,7 +90,7 @@ export function makeGame(state, pack = PACK) {
       founder.room = state.rooms[0].id;
       state.staff.push(founder);
       Staff.genApplicants(ctx);
-      Prod.genContracts(ctx);
+      contracts();
       Market.initRivals(ctx);
       Market.weeklyTrend(ctx);
       ctx.news(`🏚️ ${state.companyName} bir garajda kuruldu. Masada tek bir bilgisayar, kafada büyük hayaller.`, 'info');
@@ -114,6 +118,7 @@ export function makeGame(state, pack = PACK) {
       Charts.weeklyCalendar(ctx);
       Market.weeklyRivals(ctx);
       Market.weeklyCharts(ctx);
+      Pub.weekly(ctx);
       // ekonomi
       if (newMonth) {
         Eco.monthlyEconomy(ctx);
@@ -122,7 +127,7 @@ export function makeGame(state, pack = PACK) {
         Con.monthlyConsole(ctx);
         War.monthlyWar(ctx);
         Staff.genApplicants(ctx);
-        if (!state.contract || state.contractOffers.length === 0) Prod.genContracts(ctx);
+        if (!state.contract || state.contractOffers.length === 0) contracts();
         state.cashHist.push(Math.round(state.cash));
         if (state.cashHist.length > 480) state.cashHist.shift();
         bus.fire('monthProceeded', state.week);
@@ -209,6 +214,18 @@ export function makeGame(state, pack = PACK) {
     reprint: (id) => Charts.reprint(ctx, id),
     printAuto: (id) => Charts.togglePrintAuto(ctx, id),
     announce: (pid, weeks) => Charts.announce(ctx, pid, weeks),
+    // --- Yayıncılar (Konu B)
+    publishers: () => Pub.list(ctx),
+    pitch: (pid, pubIds, o) => Pub.pitch(ctx, pid, pubIds, o),
+    signOffer: (id) => Pub.sign(ctx, id),
+    declineOffer: (id) => Pub.decline(ctx, id),
+    negotiate: (id, move) => Pub.negotiate(ctx, id, move),
+    auction: (pid) => Pub.auction(ctx, pid),
+    acceptChange: (id, yes) => Pub.acceptChange(ctx, id, yes),
+    hireAgent: (tier) => Pub.hireAgent(ctx, tier),
+    fireAgent: () => Pub.fireAgent(ctx),
+    orderDraft: (id) => Pub.orderDraft(ctx, id),
+    buyRights: (ipId) => Pub.buyRights(ctx, ipId),
     startExpansion(gid) {
       const g = state.games.find((x) => x.id === gid);
       if (!Post.expansionAllowed(ctx, g)) return { ok: false, msg: 'Bu oyuna ek paket yapılamaz (çok eski ya da zaten yapılıyor).' };
@@ -297,4 +314,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub };

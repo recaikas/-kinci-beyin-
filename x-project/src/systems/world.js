@@ -11,23 +11,6 @@ export const companyRep = (c, y) => lerpTable(c.rep, y);
 export const isActive = (c, y) => y >= c.from && y < c.to;
 export const yearData = (y) => YEARS[Math.floor(y)] || null;
 
-// Yayıncılar: küçük sabitler + o yıl güçlü olan tarihsel yayıncılar.
-export function publishersAvailable(ctx, y = tableYear(ctx)) {
-  const W = ctx.pack.world;
-  const fixed = ctx.pack.publishers.filter((p) => y >= p.from && y < p.to);
-  const hist = COMPANIES.filter((c) => c.kind.includes('pub') && isActive(c, y))
-    .map((c) => ({ c, rep: companyRep(c, y) }))
-    .filter((x) => x.rep >= W.pubMinRep && !acquired(ctx, x.c.id))
-    .sort((a, b) => b.rep - a.rep).slice(0, W.pubMax)
-    .map(({ c, rep }) => ({
-      id: c.id, name: c.name, power: Math.round(rep), hist: true,
-      royalty: Math.max(W.royaltyMin, +(W.royaltyA - W.royaltyK * rep).toFixed(2)),
-      minFans: Math.round(Math.max(0, rep - 50) ** 2 * W.minFansK),
-    }));
-  return [...hist, ...fixed];
-}
-const acquired = (ctx, cid) => ctx.state.rivals.some((r) => r.cid === cid && r.acquired);
-
 function newRival(ctx, c, y) {
   const { state, rng, pack } = ctx;
   return { id: state.nextId++, cid: c.id, name: c.name, rep: companyRep(c, y), drift: 0, hw: c.kind.includes('hw'), pub: c.kind.includes('pub'),

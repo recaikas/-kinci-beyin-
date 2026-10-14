@@ -1,7 +1,8 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts } from '../src/game.js';
+import { createState, makeGame, newGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub } from '../src/game.js';
+import { EXTRA_PUBS, TRAITS } from '../src/data/publishers.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
@@ -235,6 +236,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   st.cash = 1e7;
   g.startProject({ name: 'R', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
   while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
+  Pub.directDeal(g.ctx, st.projects[0].id, 'mantar');
   const res = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 });
   check('Rapor üretilir ve bilgi birikir', res.report.length >= 3 && Know.known(g.ctx).topicGenre('uzay', 'aksiyon') === 10, res.report.length + ' satır');
   const game = res.game;
@@ -290,6 +292,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   st.cash = 1e7; st.research.done.tur_rpg = 1;
   g.startProject({ name: 'R', genre: 'rpg', topic: 'fantezi', audience: 'genc', platforms: ['pc'], size: 'kucuk' });
   while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
+  Pub.directDeal(g.ctx, st.projects[0].id, 'mantar');
   const game = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 }).game;
   check('Rapor 4 haftadan önce çıkmaz', !g.playerReport(game.id).ok);
   for (let i = 0; i < 5; i++) { st.pending = []; g.tick(); }
@@ -308,7 +311,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Her yıl 10 oyun ve 12 olay', ys.every((y) => YEARS[y].g.length === 10 && YEARS[y].e.length === 12), '', 'Veri');
   check('Oyunların şirketi ve türü geçerli', ys.every((y) => YEARS[y].g.every((g) => COMPANIES.some((c) => c.id === g[1]) && PACK.genres.some((x) => x.id === g[2]))), '', 'Veri');
   const banned = /\b(Nintendo|Sega|Sony|Atari|Microsoft|Xbox|PlayStation|Mario|Zelda|Sonic|Activision|Electronic Arts|Capcom|Konami|Ubisoft|Valve|Rockstar|Blizzard|Pokemon|Pokémon|Tetris|Minecraft|Fortnite|Halo|Doom|Steam|Apple|Commodore|Amiga|Facebook|YouTube|Twitch|Kickstarter)\b/i;
-  const all = [...ys.flatMap((y) => [...YEARS[y].g.map((g) => g[0]), ...YEARS[y].e]), ...COMPANIES.map((c) => c.name), ...PACK.platforms.map((p) => p.name), ...PACK.publishers.map((p) => p.name)];
+  const all = [...ys.flatMap((y) => [...YEARS[y].g.map((g) => g[0]), ...YEARS[y].e]), ...COMPANIES.map((c) => c.name), ...PACK.platforms.map((p) => p.name), ...PACK.publishers.map((p) => p.name), ...EXTRA_PUBS.map((p) => p.name)];
   const hit = all.filter((t) => banned.test(t));
   check('Telif: gerçek marka/ürün adı yok (parodi)', hit.length === 0, hit.slice(0, 3).join(' | '), 'Veri');
   check('50 yıllık tam tarih modu', PACK.meta.gameLengths[50] === 1);
@@ -325,8 +328,8 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('1998: Soni geldi, Ataro gitti', has('soni') && !has('ataro'), Math.floor(M.tableYear(g.ctx)) + '');
   const soni = st.rivals.find((r) => r.cid === 'soni');
   check('Platform devleri satın alınamaz', !Market.acquireRival(g.ctx, soni.id).ok);
-  const pubs = World.publishersAvailable(g.ctx);
-  check('Yayıncılar tarihten gelir (gücü yıla göre)', pubs.some((p) => p.hist) && pubs.every((p) => p.royalty > 0 && p.royalty < 0.6), pubs.slice(0, 3).map((p) => `${p.name} ${p.power}`).join(', '));
+  const pubs = Pub.list(g.ctx);
+  check('Yayıncılar tarihten gelir (gücü yıla göre)', pubs.some((p) => p.hist) && pubs.every((p) => p.power > 0 && p.power < 100 && TRAITS[p.trait]), pubs.slice(0, 3).map((p) => `${p.name} ${p.power}`).join(', '));
   check('Ataro yayıncılığı 1998\'de yok', !pubs.some((p) => p.id === 'ataro'));
   const act = M.activePlatforms(g.ctx).map((p) => p.id);
   check('1998 platformları dönemine uygun', act.includes('oi1') && act.includes('n64') && !act.includes('ataro') && !act.includes('oi2'), act.join(','));
@@ -424,6 +427,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const c0 = st.projects[0].cost;
   while (st.projects[0].status === 'dev') { st.pending = []; g.tick(); }
   check('Proje maliyeti maaşlarla büyür', st.projects[0].cost > c0, `${Math.round(c0)} → ${Math.round(st.projects[0].cost)}`);
+  Pub.directDeal(g.ctx, st.projects[0].id, 'mantar');
   const game = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 }).game;
   for (let i = 0; i < 6; i++) { st.pending = []; g.tick(); }
   check('Oyunun maliyeti ve kâr geçmişi var', game.devCost > 0 && game.profitHist.length >= 5 && game.profitHist.at(-1) === Math.round(game.revenue - game.devCost - game.postCost));
@@ -582,7 +586,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Tür listesi çalışır', Array.isArray(v.rows) && v.total >= v.rows.filter((r) => !r.filler).length);
   // Kendi yayınlanan fiziksel oyun basılır; stok biterse satış stokla sınırlı
   const g2 = newGame({ seed: 62, difficulty: 'orta' }); const s2 = g2.state;
-  s2.research.done.oz_yayin = 1; s2.cash = 1e6;
+  s2.research.done.oz_yayin = 1; s2.cash = 1e6; s2.fans = 150000;
   const pj = g2.startProject({ name: 'Basım', genre: 'aksiyon', topic: 'uzay', audience: 'herkes', platforms: ['pc'], size: 'kucuk' }).project;
   while (s2.projects[0]?.status === 'dev') { s2.pending = []; g2.tick(); }
   const rel = g2.release({ projectId: pj.id, publisherId: null, price: 20, printRun: 'temkinli' });
@@ -614,6 +618,141 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   p4.announce = g4.state.week - 1; const fans4 = g4.state.fans;
   g4.state.pending = []; g4.tick();
   check('Kaçırılan tarih hayran kaybettirir', p4.annMissed && g4.state.fans <= fans4);
+}
+
+// 32) Yayıncılar (Konu B): kimlik, kapı, kurul, pay, avans, pazarlık, açık artırma, ilişki, erken anlaşma, sipariş, deneme işi
+{
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const g = newGame({ seed: 71, difficulty: 'orta' });
+  const c = g.ctx, st = g.state, B = PACK.publishing;
+  const at = (y) => Pub.list(c, y);
+  const counts = [1976, 1985, 1990, 2000, 2010, 2020].map((y) => at(y).length);
+  check('Yayıncı sayısı döneme göre (üç kademe, 22 yeni yayıncı)', counts[0] >= 5 && counts[2] >= 25 && counts.every((n) => n >= 5) && EXTRA_PUBS.length === 24, counts.join('/'));
+  check('Her yayıncının huyu, bölgesi ve odağı var', [1976, 1995, 2015].every((y) => at(y).every((p) => TRAITS[p.trait] && p.region?.length && p.focus?.length)));
+  const ataro = Pub.byId(c, 'ataro'), mantar = Pub.byId(c, 'mantar');
+  check('Kapı: 1976 Kırmızı Mantar açık, Ataro kapalı (tanışma ister)', Pub.door(c, mantar).open && !Pub.door(c, ataro).open && /tanımıyor/.test(Pub.door(c, ataro).why));
+  check('Eşikler: Mantar ~40 (kumarbaz), Ataro ~68', Math.round(Pub.threshold(c, mantar)) === 40 && Math.round(Pub.threshold(c, ataro)) === 68);
+  let payOk = true;
+  for (const y of [1976, 1990, 2005, 2025]) for (const p of at(y)) for (const r of [-40, 0, 25, 50, 90]) { st.pub.rel[p.id] = r; const v = Math.round(Pub.basePay(c, p)); if (v + 3 + 6 > 40 || v < -10) payOk = false; st.pub.rel[p.id] = 0; }
+  check('Pay formülü: yeni stüdyoya netin %12–15\'i', (() => { const v = Pub.basePay(c, mantar); return v >= 12 && v <= 16; })() && payOk, Pub.basePay(c, mantar).toFixed(1));
+  const pj = g.startProject({ name: 'Garaj', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  tick(g, 3);
+  check('Erken anlaşma Ortak olmadan açılmaz', !Pub.canPitch(c, pj, mantar, 'erken').ok);
+  while (pj.status === 'dev') tick(g, 1);
+  check('Bitmiş oyun sunulur', g.pitch(pj.id, ['mantar']).ok && !g.pitch(pj.id, ['mantar']).ok && !g.pitch(pj.id, ['ataro']).ok);
+  // Garaj: hiç oyunu olmayan stüdyoya Finans "hayır" der → tek seferlik satış
+  const ev = Pub.evaluate(c, { pid: pj.id, pubId: 'mantar', est: 58, meet: {}, doc: false, note: false });
+  check('Garajın ilk oyunu: Finans hayır, tek seferlik satış', ev && ev.sc.finans < 0 && ['tek', 'tam'].includes(ev.verdict), `${ev?.verdict} finans ${ev?.sc.finans}`);
+  for (let i = 0; i < 6 && !st.pub.offers.some((o) => o.pid === pj.id); i++) tick(g, 1);
+  const off = st.pub.offers.find((o) => o.pid === pj.id);
+  check('Cevap 1–4 hafta içinde teklif olarak gelir', !!off && off.pubId === 'mantar', off?.kind);
+  // Pazarlık olasılıkları %10–90
+  const fake = { ...off, kind: 'tam', rounds: 0, adv: 1000, rights: 'yayinci', mode: 'bitmis', margin: 30, koz: 3 };
+  st.pub.offers.push(fake); fake.id = 99999;
+  const mv = Pub.negMoves(c, fake);
+  check('Pazarlık olasılıkları %10–90 arasında', mv.length >= 3 && mv.every((m) => m.p >= 10 && m.p <= 90), mv.map((m) => `${m.id} ${m.p}`).join(', '));
+  st.pub.offers = st.pub.offers.filter((o) => o !== fake);
+  // İmza ve geri ödemeli avans: telif önce avansı kapatır
+  st.pub.offers = []; st.pub.pitches = [];
+  const sres = Pub.directDeal(c, pj.id, 'mantar', 'tam');
+  check('Sözleşme imzalanır, avans ödenir', sres.ok && pj.deal && pj.deal.owed === pj.deal.adv && pj.deal.adv > 0, `avans ${pj.deal?.adv}`);
+  check('Sözleşme varken başka yayıncı seçilemez (sözleşmedeki yayıncı geçerli)', Pub.forRelease(c, pj, 'ataro').pub?.id === 'mantar');
+  const rel0 = Pub.rel(c, 'mantar');
+  const res = g.release({ projectId: pj.id, publisherId: 'mantar', price: 20 });
+  const game = res.game;
+  check('Yayın sözleşmeyi oyuna işler; ilişki artar', res.ok && game.deal?.pubId === 'mantar' && game.royalty > 0 && game.royalty < 0.2 && Pub.rel(c, 'mantar') > rel0, `pay ${game.royalty?.toFixed(3)}`);
+  const cash0 = st.cash, owed0 = game.deal.owed;
+  const gross = 500;
+  const got = Pub.royaltyCash(c, game, gross);
+  check('Avans kapanmadan telif akmaz', got === 0 && game.deal.owed === owed0 - gross, `${got}`);
+  game.deal.owed = 100;
+  check('Avans kapanınca telif akar', Pub.royaltyCash(c, game, 500) === 400 && game.deal.owed <= 0);
+  // İlişki sınırları ve kara liste
+  for (let i = 0; i < 30; i++) Pub.relAdd(c, 'segga', 50);
+  const hi = Pub.rel(c, 'segga');
+  for (let i = 0; i < 30; i++) Pub.relAdd(c, 'segga', -50);
+  check('İlişki −50 ile 100 arasında kalır', hi <= 100 && Pub.rel(c, 'segga') >= -50, `${hi} / ${Pub.rel(c, 'segga')}`);
+  const segga = Pub.byId(c, 'segga');
+  check('Kara listedeki yayıncı kapıyı kapatır', !Pub.door(c, segga).open && /kara liste/.test(Pub.door(c, segga).why));
+  check('Kara liste kademesi', Pub.tierOf(c, -40).name === 'Kara liste' && Pub.tierOf(c, 25).name === 'Tanıdık' && Pub.tierOf(c, 75).name === 'Stratejik ortak');
+  // Aynı tohum aynı kararlar
+  const run = () => { const h = newGame({ seed: 72, difficulty: 'orta' }); const p = h.startProject({ name: 'D', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project; while (p.status === 'dev') tick(h, 1); h.pitch(p.id, ['mantar']); tick(h, 6); return JSON.stringify(h.state.pub.offers.map((o) => [o.kind, o.pay, o.adv, o.buyout])); };
+  check('Aynı tohum aynı yayıncı kararı', run() === run());
+  // Eski kayıt: yayıncı durumu yokken açılır, A'nın ilişki puanı taşınır
+  const old = JSON.parse(g.save());
+  delete old.pub; old.mkt.pubRel = { namko: 12 };
+  const lg = loadGame(JSON.stringify(old));
+  check('Eski kayıt açılır, eski yayıncı puanı ilişkiye taşınır', lg.state.pub && lg.state.pub.rel.namko === 12);
+}
+{
+  // Açık artırma, değişiklik isteği, ret mektubu, kendi yayını eğrisi
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const g = newGame({ seed: 73, difficulty: 'kolay', length: 50 });
+  const c = g.ctx, st = g.state;
+  st.week = Math.round((1990 - 1976) * 48); st.cash = 1e8; st.research.done.oz_yayin = 1;
+  World.initWorld(c);
+  const pj = g.startProject({ name: 'Artırma', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  while (pj.status === 'dev') tick(g, 1);
+  const pubs = Pub.list(c).filter((p) => p.power < 60).slice(0, 2);
+  const mk = (p, pay) => ({ id: st.nextId++, pid: pj.id, pubId: p.id, pubName: p.name, kind: 'tam', mode: 'bitmis', pay, adv: 1000, buyout: 0, fund: 0, rights: 'sende', promo: 0, expUnits: 1000, price: 20, votes: {}, margin: 20, est: 70, expires: st.week + 4, rounds: 0, koz: 1 });
+  st.pub.offers.push(mk(pubs[0], 12), mk(pubs[1], 14));
+  const before = Math.max(...st.pub.offers.map((o) => o.pay));
+  const a = g.auction(pj.id);
+  check('Açık artırma payı yükseltir', a.ok && Math.max(...st.pub.offers.map((o) => o.pay)) > before, st.pub.offers.map((o) => o.pay).join('/'));
+  const win = st.pub.offers.find((o) => o.id === a.best);
+  const loser = st.pub.offers.find((o) => o.id !== a.best);
+  const lr = Pub.rel(c, loser.pubId);
+  check('Kazanan imzalanır, kaybedenle ilişki düşer', g.signOffer(win.id).ok && Pub.rel(c, loser.pubId) < lr && st.pub.offers.length === 0);
+  // Değişiklik isteği → teklif
+  const pj2 = g.startProject({ name: 'Değişiklik', genre: 'macera', topic: 'uzay', audience: 'yetiskin', platforms: ['pc'], size: 'kucuk', roomId: undefined });
+  const p2 = pj2.project || st.projects.find((p) => p.name === 'Değişiklik');
+  if (p2) {
+    while (p2.status === 'dev') tick(g, 1);
+    st.pub.offers.push({ ...mk(pubs[0], 12), pid: p2.id, kind: 'degisiklik', change: 'kitle', after: 'tam' });
+    const o = st.pub.offers.at(-1);
+    check('Değişiklik isteği kabul edilince teklife döner', g.acceptChange(o.id, true).ok && o.kind === 'tam' && p2.audience === 'herkes');
+  }
+  // Ret mektubu en zayıf üyeden
+  const ev = { pub: pubs[0], pj, E: 60, N: 30, d: -30, sc: { urun: -20, pazar: 5, finans: 2, hukuk: 8 }, votes: { urun: false, pazar: true, finans: true, hukuk: true }, ta: { v: 0, notes: [] }, it: 0, full: false };
+  check('Ret mektubu en büyük eksi terimden (Ürün)', /Demonuzu oynadık/.test(Pub.__test.rejectLetter(c, ev)));
+  ev.sc = { urun: 5, pazar: 4, finans: -15, hukuk: 8 }; ev.it = -10;
+  check('Ret mektubu en büyük eksi terimden (Finans: itibar)', /tanımıyoruz/.test(Pub.__test.rejectLetter(c, ev)));
+  // Kendi yayınının erişimi: garajda yayıncının çok altında, güçlü stüdyoda üstünde
+  const s = PACK.sales, Ys = (p) => s.selfA + s.selfB * (p / 100) ** s.selfExp, Yp = (p) => (s.yA + s.yB * p / 100) * s.pubReach;
+  const self = (p) => Ys(p) * (1 - s.retailCut - 0.08), pub = (p, pay) => Yp(p) * PACK.publishing.net * pay / 100;
+  check('Kendi yayını: garajda yayıncıdan az, büyük stüdyoda çok kazandırır', self(11) < pub(55, 15) && self(95) > pub(95, 21) * 2, `${self(11).toFixed(3)} < ${pub(55, 15).toFixed(3)}; ${self(95).toFixed(3)} > ${(pub(95, 21) * 2).toFixed(3)}`);
+}
+{
+  // Deneme işi, sipariş, erken anlaşma ve kilometre taşları, vitrin etkinliği
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const g = newGame({ seed: 74, difficulty: 'orta', length: 50 });
+  const c = g.ctx, st = g.state;
+  st.games.push({ id: 1, name: 'A', score: 75, genre: 'aksiyon', topic: 'uzay', platforms: ['pc'], units: 1000, active: false, ipId: 0 }, { id: 2, name: 'B', score: 72, genre: 'aksiyon', topic: 'uzay', platforms: ['pc'], units: 1000, active: false, ipId: 0 });
+  let tr = null;
+  for (let i = 0; i < 30 && !tr; i++) { Prod.genContracts(c); Pub.addTrial(c); tr = st.contractOffers.find((o) => o.trial); }
+  check('Deneme işi büyük yayıncıdan gelir', !!tr && Pub.byId(c, tr.trial).power >= 60, tr?.client);
+  if (tr) {
+    const r0 = Pub.rel(c, tr.trial);
+    Pub.onContractFinished(c, { ...tr, deadline: st.week + tr.weeks, weeks: tr.weeks });
+    check('Deneme işi geçilince Tanıdık olunur', Pub.rel(c, tr.trial) - r0 >= 25 && Pub.door(c, Pub.byId(c, tr.trial)).open);
+    Pub.onContractFailed(c, { ...tr });
+    check('Deneme işinde kalınca ilişki düşer ve 2 yıl yeni deneme yok', st.pub.trialBan[tr.trial] > st.week + 90);
+  }
+  // Erken anlaşma: Ortak yayıncı finanse eder, kilometre taşları telifle kapanır
+  st.pub.rel.mantar = 45; st.cash = 1e6;
+  const pj = g.startProject({ name: 'Erken', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  while (pj.phase < 1) tick(g, 1);
+  check('Ortak yayıncıya erken anlaşma sunulur', Pub.canPitch(c, pj, Pub.byId(c, 'mantar'), 'erken').ok);
+  const d = Pub.directDeal(c, pj.id, 'mantar');
+  check('Erken anlaşma: ilk kilometre taşı ödenir, kesin tarih var', d.ok && pj.deal.mode === 'erken' && pj.deal.ms === 1 && pj.deal.owed > 0 && pj.deal.due > st.week, `fon ${pj.deal?.fund}`);
+  while (pj.status === 'dev') tick(g, 1);
+  tick(g, 1);
+  check('Kilometre taşları faz sonlarında ödenir', pj.deal.ms === 3 && Math.abs(pj.deal.paid - pj.deal.fund) <= 2, `${pj.deal.paid} / ${pj.deal.fund}`);
+  // Vitrin etkinliği: katılan çalışan etkinlikte, sıra hesaplanır
+  st.week = Math.round((1980 - 1976) * 48); World.initWorld(c);
+  const n0 = st.news.length;
+  Pub.joinShowcase(c, 'dergi');
+  check('Dergi yarışmasına katılınır, kişi etkinlikte', st.staff.some((p) => p.status === 'etkinlik') && st.news.length > n0, st.news[0]?.t.slice(0, 60));
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

@@ -6,7 +6,7 @@ import { newGame } from '../src/game.js';
 import * as M from '../src/models.js';
 import { researchAvailable, researchInfo, devCapacity, projectCost, regionStatus, locCost } from '../src/systems/production.js';
 import { stationUpgradeCost, creditLimit, rent, designCost } from '../src/systems/economy.js';
-import { publishersAvailable } from '../src/systems/world.js';
+import * as Pub from '../src/systems/publishers.js';
 import * as Staff from '../src/systems/staff.js';
 import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
@@ -14,15 +14,15 @@ import * as War from '../src/systems/war.js';
 import * as Modern from '../src/systems/modern.js';
 import * as Charts from '../src/systems/charts.js';
 
-const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
-  'f_kaydirma', 'oz_yayin', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
+const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
+  'f_kaydirma', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
   'f_online', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
 
 export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false } = {}) {
   const g = newGame({ seed, difficulty, length });
   const { state, pack, ctx } = g;
-  const stats = { peakStaff: 0, consoles: 0, consoleSold: 0, ipo: null, loans: 0, contracts: 0, bankruptYear: null, firstHit: null, peakCash: 0 };
+  const stats = { pub: { self: 0, pub: 0, tek: 0, kelepir: 0, early: 0, byDecade: {} }, peakStaff: 0, consoles: 0, consoleSold: 0, ipo: null, loans: 0, contracts: 0, bankruptYear: null, firstHit: null, peakCash: 0 };
   let n = 0;
   const infl = () => M.inflation(ctx);
   const wages = () => state.staff.reduce((s, p) => s + p.salary, 0);
@@ -49,6 +49,12 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     if (e.crunch) v -= ns * unit * 20;
     if (e.flag === 'lootbox') v -= state.fans * 0.08;
     if (e.chance) v += e.chance.p * value(e.chance.yes) + (1 - e.chance.p) * value(e.chance.no);
+    // Yayıncı: dürüst ve iyi cevap; blöfü yalnız çok kazandırıyorsa; vitrin etkinlikleri ve tarih istekleri
+    if (e.pubMeet) v += (e.pubMeet.v - (e.pubMeet.bluff ? 6 : 0)) * unit * 3;
+    if (e.pubShow) v += ns >= 3 && runway() > 4 ? unit * 10 : -1;
+    if (e.pubDate) v += e.pubDate.ok ? unit * 4 : 0;
+    if (e.pubMulti) v += selfValue() < 0.12 ? unit * 5 : -unit * 5;
+    if (e.pubFair) v += unit * 4;
     if (money < 0 && state.cash + money < burn() * 2) v -= 1e9; // kasayı riske atma
     return v;
   }
@@ -111,8 +117,69 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     const eng = state.engines[state.engines.length - 1];
     if (eng) draft.engineId = eng.id;
     const ip = state.ips.filter((x) => x.value >= 1 && state.week - x.lastRelease >= pack.ip.waitWeeks).sort((a, b) => b.value - a.value)[0];
-    if (ip) { const base = state.games.find((x) => x.ipId === ip.id); if (base && base.genre === draft.genre) draft.sequelOf = ip.id; }
+    if (ip && ip.rightsPub && selfValue() > 0.08) { /* hakları yayıncıda: kendi yayınına engel; yeni IP */ }
+    else if (ip) { const base = state.games.find((x) => x.ipId === ip.id); if (base && base.genre === draft.genre) draft.sequelOf = ip.id; }
     return { draft, ratio };
+  }
+
+  // --- Yayıncı politikası (Konu B): kendi yayını daha kârlıysa kendin; değilse en iyi beklenen değerli 3 yayıncıya sun,
+  // teklifleri bekle (değişiklik isteğini kabul, iki teklifte açık artırma, olasılık %60+ ise pay iste), en değerlisini imzala.
+  // Hiç teklif gelmezse ve beklemek pahalıysa kelepir satış.
+  const Ycur = (pw) => pack.sales.yA + pack.sales.yB * pw / 100;
+  function selfValue() {
+    if (!state.research.done.oz_yayin) return -1;
+    const sp = Math.min(100, M.selfPublishPower(ctx) + (Staff.hasRoom(ctx, 'pazarlama') ? pack.rooms.selfPublishBonus : 0));
+    return (pack.sales.selfA + pack.sales.selfB * (sp / 100) ** 2) * (1 - pack.sales.retailCut - 0.08);
+  }
+  const pubValue = (pub, pay) => Ycur(pub.power) * pack.publishing.net * pay / 100;
+  function pubPlan(pj, late) {
+    const s = Pub.pubState(state);
+    if (pj.deal) return pj.deal.pubId;
+    if (pj.selfChosen) return null;
+    const sv = selfValue();
+    const ipR = pj.sequelOf != null ? state.ips.find((x) => x.id === pj.sequelOf) : null;
+    const locked = s.multi?.left > 0 || !!ipR?.rightsPub;
+    const est = Pub.trueEstimate(ctx, pj);
+    const scored = Pub.list(ctx).filter((p) => Pub.canPitch(ctx, pj, p).ok)
+      .map((p) => { const pr = Pub.preview(ctx, p, pj); const pAcc = 1 / (1 + Math.exp(-(est - pr.E) / 5)); return { p, v: pubValue(p, pr.pay), ev: pubValue(p, pr.pay) * pAcc }; }).sort((a, b) => b.ev - a.ev);
+    const bestV = Math.max(0, ...Pub.list(ctx).filter((p) => Pub.door(ctx, p).open).map((p) => pubValue(p, Pub.preview(ctx, p).pay)));
+    // Teklifler: değişikliği kabul, iki teklifte açık artırma, olasılığı yüksekse haklar ya da pay
+    for (const o of s.offers.filter((x) => x.pid === pj.id && x.kind === 'degisiklik')) g.acceptChange(o.id, o.change !== 'kitle');
+    const full = s.offers.filter((o) => o.pid === pj.id && o.kind === 'tam');
+    if (full.length >= 2 && !full.some((o) => o.auction)) g.auction(pj.id);
+    for (const o of s.offers.filter((x) => x.pid === pj.id && x.kind === 'tam' && x.mode === 'bitmis')) {
+      const mv = Pub.negMoves(ctx, o);
+      const m = mv.find((x) => x.id === 'rights' && x.p >= 50) || mv.find((x) => x.id === 'pay' && x.p >= 60);
+      if (m) g.negotiate(o.id, m.id);
+    }
+    const live = s.offers.filter((o) => o.pid === pj.id && o.kind !== 'degisiklik');
+    const pending = s.pitches.filter((x) => x.pid === pj.id);
+    if (live.length && (!pending.length || late || live.some((o) => o.expires - state.week <= 1))) {
+      const val = (o) => (o.kind === 'tek' ? o.buyout : o.expUnits * o.price * pack.publishing.net * o.pay / 100 * (o.dist ? 1.6 : 1)) * (o.rights === 'yayinci' ? 0.85 : 1);
+      const best = [...live].sort((a, b) => val(b) - val(a))[0];
+      if (!locked && sv > 0 && best.kind === 'tek' && sv >= pubValue(Pub.byId(ctx, best.pubId) || { power: 50 }, 12) * 0.8) { for (const o of live) g.declineOffer(o.id); pj.selfChosen = true; return null; }
+      if (g.signOffer(best.id).ok) return best.pubId;
+    }
+    if (pending.length || live.length) return 'wait';
+    if (!locked && sv > 0 && sv >= bestV) { pj.selfChosen = true; return null; }
+    if (!late && (pj.pitchTries || 0) < 3) {
+      const pick = scored.filter((x) => x.ev > 0).slice(0, 3).map((x) => x.p.id);
+      const cost = Pub.prepCost(ctx, true, true);
+      if (pick.length && g.pitch(pj.id, pick, { doc: cost < state.cash * 0.02, note: cost < state.cash * 0.02 }).ok) { pj.pitchTries = (pj.pitchTries || 0) + 1; return 'wait'; }
+      if (!pick.length && scored.length === 0 && Pub.list(ctx).some((p) => Pub.door(ctx, p).open && !Pub.canPitch(ctx, pj, p).ok && /hafta daha/.test(Pub.canPitch(ctx, pj, p).why))) return 'wait';
+    }
+    if (ipR?.rightsPub && g.buyRights(ipR.id).ok) return sv > 0 ? null : 'kelepir';
+    return sv > 0 && !locked ? null : 'kelepir';
+  }
+  // Erken anlaşma: Ortak bir yayıncı varsa ve kasa darsa konsept bitince finansman iste
+  function earlyPlan(pj) {
+    // Finanse oyun telifle kapanır ve nadiren kâr getirir: yalnız kendi yayını zayıfken ya da kasa çok darken
+    if (pj.deal || pj.status !== 'dev' || pj.phase < 1 || pj.earlyTried || runway() > (selfValue() > 0.08 ? 3 : 8)) return;
+    const s = Pub.pubState(state);
+    if (s.pitches.some((x) => x.pid === pj.id)) return;
+    const cands = Pub.list(ctx).filter((p) => Pub.canPitch(ctx, pj, p, 'erken').ok).sort((a, b) => Ycur(b.power) - Ycur(a.power));
+    pj.earlyTried = true;
+    if (cands.length && g.pitch(pj.id, cands.slice(0, 2).map((p) => p.id), { mode: 'erken' }).ok) stats.pub.early++;
   }
 
   function hireFor(roomId, filter = () => true) {
@@ -204,23 +271,34 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       if (pj.status === 'debug') {
         const pts = Object.values(pj.points).reduce((a, b) => a + b, 0);
         const late = state.week - pj.startedWeek > pj.totalWeeks + 6;
+        const pubLate = state.week - pj.startedWeek > pj.totalWeeks + 16;
+        if (!pj.deal && !pj.selfChosen && !(Modern.f2pAllowed(ctx) && pj.platforms.some((id) => M.platformById(ctx, id)?.kind === 'mobil'))) pubPlan(pj, pubLate); // içerik biter bitmez sun; teklif gelince imzala
         // Çıkış zamanlaması: aynı türde dev bir çıkışla çakışma ya da yılsonu yaklaşıyorsa biraz bekle (en çok 6 hafta)
         const clash = Charts.upcoming(ctx).some((h) => h.genre === pj.genre && h.rank < 4 && h.weeks <= 3);
         const mo = Charts.monthIdx(ctx), soonQ4 = mo === 9 && Charts.seasonMult(ctx, pj, 10) > Charts.seasonMult(ctx, pj, mo) * 1.2;
         pj.waited ||= 0;
         if (!late && pj.waited < 6 && runway() > 6 && (clash || soonQ4)) { pj.waited++; continue; }
         if (pj.bugs / Math.max(1, pts) < 0.02 || late) {
-          const pubs = publishersAvailable(ctx).filter((p) => state.fans >= p.minFans).sort((a, b) => b.power * b.royalty - a.power * a.royalty);
-          const selfP = M.selfPublishPower(ctx);
-          const self = state.research.done.oz_yayin && (!pubs[0] || selfP >= pubs[0].power * 0.7);
-          // Modern dönem: mobil/küçük oyunu ücretsiz yap; zayıf oyunu abonelik servisine sat
           const f2p = Modern.f2pAllowed(ctx) && pj.platforms.some((id) => M.platformById(ctx, id)?.kind === 'mobil');
           const pv = g.previewReview(pj.id).score;
           const offer = !f2p && pv < 72 ? Modern.serviceOffers(ctx, pj, pv).sort((a, b) => b.pay - a.pay)[0] : null;
-          const res = g.release({ projectId: pj.id, publisherId: self || f2p ? null : pubs[0]?.id, price: Math.max(10, Math.round(20 * infl() ** 0.4)), model: f2p ? 'f2p' : 'satis', monet: 'dengeli', service: offer?.id || null });
+          const price = Math.max(10, Math.round(20 * infl() ** 0.4));
+          let publisherId;
+          if (!f2p && !(pj.deal && !pj.hold)) {
+            const choice = pubPlan(pj, pubLate);
+            if (choice === 'wait') continue;
+            publisherId = choice;
+          }
+          if (pj.hold && state.week < pj.hold) continue;
+          const res = g.release({ projectId: pj.id, publisherId: f2p ? null : publisherId ?? null, price, model: f2p ? 'f2p' : 'satis', monet: 'dengeli', service: offer?.id || null });
+          if (process.env.PUBDBG && res.ok) console.log(Math.floor(y), res.game.name, res.game.size, res.game.score, res.game.publisherName || 'self', 'sv', selfValue().toFixed(3), 'fans', state.fans, 'cash', Math.round(state.cash), 'dev', res.game.devCost);
+          if (!res.ok && process.env.PUBDBG) console.log('release fail', res.msg);
+          if (res.ok) { const d = res.game.deal, k = d ? (d.bargain ? 'kelepir' : d.kind === 'tek' ? 'tek' : 'pub') : 'self'; stats.pub[k]++; const dec = Math.floor(y / 10) * 10; (stats.pub.byDecade[dec] ||= { self: 0, n: 0 }).n++; if (k === 'self') stats.pub.byDecade[dec].self++; }
           if (res.ok && res.game.score >= 85 && stats.firstHit == null) stats.firstHit = Math.floor(y);
         }
       } else if (pj.status === 'dev') {
+        earlyPlan(pj);
+        for (const o of Pub.pubState(state).offers.filter((x) => x.pid === pj.id)) { if (o.kind === 'degisiklik') g.acceptChange(o.id, true); else if (o.kind === 'tam' && o.mode === 'erken') g.signOffer(o.id); }
         if (Modern.eaAllowed(ctx, pj) && pack.sizes.find((z) => z.id === pj.size).target >= 1) g.earlyAccess(pj.id);
         if (Modern.crowdAllowed(ctx, pj) && runway() < 24) g.crowdfund(pj.id);
       }

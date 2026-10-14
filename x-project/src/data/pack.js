@@ -76,7 +76,8 @@ export const PACK = {
     curve: [0.6, 0.85, 1.0], tailA: 0.85, tailB: 0.95, tailBPirated: 0.91, stopAt: 0.02,
     capShare: 0.35, // V/P pazar tavanı
     sequelOverlapMult: 0.8, trendMult: 1.25, overusedMult: 0.85, // mevsim ve rekabet: charts
-    selfPublishPowerBase: 10, selfPublishFansPerPower: 5000, selfPublishPowerCap: 95,
+    selfPublishPowerBase: 10, selfPublishFansPerPower: 3500, selfPublishPowerCap: 95,
+    selfA: 0.05, selfB: 0.95, selfExp: 1.5, pubReach: 1.4, // kendi yayınının erişimi: 0,05 + 0,95 × (güç/100)^üs; yayıncının dağıtım gücü çarpanı (Konu B)
     retailCut: 0.45, unitCost: 2,
   },
 
@@ -109,7 +110,7 @@ export const PACK = {
     calendar: { aheadMonths: 3, slip: 0.25, slipMonths: [1, 2], slipNotice: 2, slipTopRanks: 5 },
     rewards: {
       // fansOfUnits: o ana kadar satılan kopyaların bu kadarı hayrana dönüşür (yüzde değil, birikmez)
-      top40: { morale: 3 }, top10: { fansOfUnits: 0.008, morale: 5, pubRel: 5 }, no1: { fansOfUnits: 0.015, hypeBank: 10 }, genre1: { fansOfUnits: 0.004, genreRep: 5 },
+      top40: { morale: 3 }, top10: { fansOfUnits: 0.008, morale: 5, pubRel: 5, memo: '"#" ilk 10\'a girdi' }, no1: { fansOfUnits: 0.015, hypeBank: 10, pubRel: 5, memo: '"#" listenin zirvesine çıktı' }, genre1: { fansOfUnits: 0.004, genreRep: 5 },
       classicRun: 10, classicQ: 0.03, yearTop: { prestige: 0.5 }, allTime: { ip: 0.1 },
     },
     lists: { top: 10, show: 40, playDecay: 0.94, allTimeMax: 100 },
@@ -340,6 +341,33 @@ export const PACK = {
     logMax: 120,
   },
   publisherAdvance: { _tag: 'P', base: 8000 },
+
+  // Yayıncılar (Konu B, P). Pay yayıncı netinin yüzdesi (net = perakendenin %55'i); avans telifle geri ödenir.
+  publishing: {
+    _tag: 'P',
+    net: 0.55, payBase: 18, payPowerK: 0.06, payMin: 5, payMax: 30, earlyPay: -4, tierPay: [0, 2, 4, 6],
+    hitPay: 4, hitAt: 1.5, kozMax: 3, rightsPay: 3, distPay: 70, distPower: 0.6, multiPay: 1,
+    buyoutShare: 0.6, advWeeks: 12, lifeWeeks: 100, fund: [1.0, 1.1], milestones: [0.3, 0.3, 0.4], dueSlack: 6, lateWithdraw: 8, withdrawRepay: 0.5,
+    thresholdA: 20, thresholdK: 0.55, need: 3, jitter: 3,
+    err: { finished: 6, early: 12, doc: 2, relMin: 0.4 },
+    tiers: { big: 80, mid: 60 },
+    door: { open: 60, known: 75, knownRel: 20 },
+    rel: { min: -50, max: 100, black: -30, tiers: [20, 40, 70], decay: 2, release: 5, hit: 10, top10: 5, no1: 5, recouped: 5, notRecouped: -8,
+      latePerWeek: -2, lateMax: -15, broken: -15, otherPub: -3, auctionLoss: -1, negFail: -2, scandal: -10, decline: -1, thirdReject: -5, dateRefuse: -3 },
+    respWeeks: [1, 4], cooldown: 12, resubmitGain: 5, maxPitches: 3, offerWeeks: 4, finishedDue: 8,
+    slotsPer: 20, slotsMin: 2, slotsFull: -10,
+    prepCost: 1500, prepWeeks: 1,
+    bargain: { power: 30, share: 0.3 },
+    promo: { base: 4, k: 10, like: 3, partner: 1.5, max: 20 },
+    neg: { base: 50, kE: 2, koz: 5, min: 10, max: 90, withdraw: 0.15, rounds: 2, rightsBase: 40, dateBase: 60, rival: 0.5 },
+    meet: { big: 2, mid: 1, catchBase: 0.2, catchRel: 0.005, catchMin: 0.15, catchMax: 0.7, caught: -10, caughtRel: -5 },
+    reputation: { base: -60, top10: 2, fansK: 5, fansMax: 15, min: -10, max: 30, none: -10 },
+    orders: { chance: 0.25, minGames: 2, scoreA: 55, scoreK: 0.2, scoreMin: 60, scoreMax: 80, slackWeeks: 12, penalty: 0.5 },
+    trial: { minGames: 2, minAvg: 60, rel: 25, relFast: 35, fastShare: 0.7, failRel: -20, banWeeks: 96, payK: 0.85 },
+    agent: { good: { fee: 0.10, retainer: 3000, doors: 2 }, cheap: { fee: 0.05, retainer: 800, doors: 1, scamKaos: 0.004 } },
+    showcase: { fans: 3000, morale: 5, skill: 1, top3Rel: 10, onePctRel: 5, modRel: 15, festPrize: 15000, jamHype: 10 },
+    referral: { partner: 15, staff: 10, staffBad: -10, devFriend: 10, platform: 10, critic: 10, fair: 8, ipo: 10, fanCampaign: 10, jury: 15, award: 20, course: 5, jamFriend: 8, social: -5 },
+  },
 
   // Ofis kademeleri (V: 4 kademe). Koltuklar artık odalardan gelir (MGT2 oda motoru): slot × oda başına koltuk.
   offices: [
@@ -584,7 +612,7 @@ export const PACK = {
     // GDS (V): süre 6–13 hafta, 1–2 kategori şartı, zor sözleşme daha çok öder ama daha çok ister,
     // başarı para + RP + itibar, başarısızlık ceza + itibar kaybı. Yük ve ödeme katsayıları P.
     weeksMin: 6, weeksMax: 13, offers: 3,
-    rewardPerPoint: 200, rewardExp: 0.5, penaltyShare: 0.6, twoDiscChance: 0.65,
+    rewardPerPoint: 260, rewardExp: 0.5, penaltyShare: 0.6, twoDiscChance: 0.65, // 260: Konu B ile yayıncı payı düştü; ilk yılların geliri sözleşmelerden
     // ödeme ∝ (enflasyon·40/H)^rewardExp × lateK(yıl): erken dönemde can simidi, sonra azalır ama 2020'lerde de maaşı karşılar
     lateK: [[1976, 1], [1995, 1.1], [2010, 1.7], [2025, 2.5]],
     minLoadH: 0.05, // stüdyo kapasitesi bilinmezse alt sınır: H(y) × bu × hafta

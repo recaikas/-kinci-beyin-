@@ -222,6 +222,7 @@ export function weeklyContract(ctx) {
     ledger.post('sozlesme', -Math.round(c.reward * pack.contracts.penaltyShare), `${c.client} gecikme cezası`);
     state.reputation = Math.max(0, state.reputation - tier.repLoss);
     ctx.news(`⛔ ${c.client} sözleşmesi yetişmedi (%${Math.round(contractShare(c) * 100)}). Ceza kesildi, itibar düştü.`, 'bad');
+    ctx.bus.fire('contractFailed', c);
     state.contract = null;
   }
 }

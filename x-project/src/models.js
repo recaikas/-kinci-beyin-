@@ -277,7 +277,7 @@ export function peakWeekly(ctx, game) {
   const size = ctx.pack.sizes.find((x) => x.id === game.size);
   const F = Math.max(1, 1 + s.fanK * Math.log10(Math.max(1, ctx.state.fans) / s.fanRef));
   const Hh = 1 + (s.hypeK * game.hype) / 100;
-  const Y = s.yA + (s.yB * game.publisherPower) / 100;
+  const Y = game.selfPub ? s.selfA + s.selfB * (game.publisherPower / 100) ** s.selfExp : (s.yA + (s.yB * game.publisherPower) / 100) * (s.pubReach ?? 1);
   const St = s.stA + (s.stB * Math.min(studioStars(ctx), s.stCap)) / s.stCap;
   const I = s.iA + s.iB * Math.min(game.ipValue, 1);
   const ip = 1 + s.ipK * game.ipValue * diff.ipD;
