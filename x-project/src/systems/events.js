@@ -28,7 +28,26 @@ function cond(ctx, w = {}) {
   if (w.notFlag && state.flags[w.notFlag]) return false;
   if (w.noResearch && state.research.done[w.noResearch]) return false;
   if (w.trait && !state.staff.some((p) => p.trait === w.trait || p.trait2 === w.trait)) return false;
+  // Yeni sistemlere bağlı koşullar
+  if (w.vacPolicy && (state.vacationPolicy || 'planli') !== w.vacPolicy) return false;
+  if (w.onVacation && !state.staff.some((p) => p.status === 'tatil')) return false;
+  if (w.hasRoom && !state.rooms.some((r) => r.type === w.hasRoom)) return false;
+  if (w.design && !Object.values(state.designs || {}).includes(w.design)) return false;
+  if (w.hasConsole && !(state.consoles || []).some((k) => k.launched && !k.retired && (w.hasConsole === true || k.type === w.hasConsole))) return false;
+  if (w.listed && !state.company?.listed) return false;
+  if (w.notListed && state.company?.listed) return false;
+  if (w.minGames && state.games.length < w.minGames) return false;
+  if (w.hasActiveGame && !state.games.some((g) => g.active)) return false;
+  const rels = Object.values(state.rel || {});
+  if (w.hasFriends && !rels.some((v) => v >= ctx.pack.relations.friendAt)) return false;
+  if (w.hasEnemies && !rels.some((v) => v <= ctx.pack.relations.enemyAt)) return false;
   return true;
+}
+// Rastgele bir oda arkadaşı çifti (ilişki olaylarının hedefi): önce en uç ilişki.
+function pairOf(ctx, sign) {
+  const rel = ctx.state.rel || {};
+  const keys = Object.keys(rel).filter((k) => (sign > 0 ? rel[k] > 0 : rel[k] < 0)).sort((a, b) => sign * (rel[b] - rel[a]));
+  return keys[0] || null;
 }
 
 export function applyEffects(ctx, e = {}) {
@@ -90,6 +109,20 @@ export function applyEffects(ctx, e = {}) {
     applyEffects(ctx, branch);
   }
   if (e.board) applyBoard(ctx, e.board);
+  if (e.relPair) {
+    const k = pairOf(ctx, e.relPair > 0 ? 1 : -1) || pairOf(ctx, e.relPair > 0 ? -1 : 1);
+    if (k) state.rel[k] = clamp(state.rel[k] + e.relPair, -100, 100);
+  }
+  if (e.vacOne) {
+    const p = [...state.staff].filter((x) => x.status === 'ok').sort((a, b) => b.stress - a.stress)[0];
+    if (p) { p.status = 'tatil'; p.statusWeeks = e.vacOne; p.vacDue = Math.max(0, (p.vacDue || 0) - e.vacOne); }
+  }
+  if (e.consoleMult) (state.consoleMods ||= []).push({ mult: e.consoleMult.mult, untilWeek: state.week + e.consoleMult.weeks });
+  if (e.sent && state.company?.listed) state.company.sent = clamp(state.company.sent * (1 + e.sent), ctx.pack.ipo.sentMin, ctx.pack.ipo.sentMax);
+  if (e.skillTop) {
+    const p = [...others()].sort((a, b) => b.skill - a.skill)[0];
+    if (p) { const o = p.skill; p.skill = clamp(p.skill + e.skillTop, 1, 100); if (p.skills) for (const k in p.skills) p.skills[k] = clamp(Math.round(p.skills[k] * p.skill / o), 1, 100); }
+  }
   if (e.crunch) state.crunch = true;
   if (e.news) ctx.news(e.news, 'info');
 }
@@ -123,6 +156,7 @@ export function weeklyEvents(ctx) {
   }
   state.marketMods = state.marketMods.filter((m) => m.untilWeek > state.week);
   state.gameMods = state.gameMods.filter((m) => m.untilWeek > state.week);
+  if (state.consoleMods) state.consoleMods = state.consoleMods.filter((m) => m.untilWeek > state.week);
 
   // Rastgele olaylar
   if (state.week < state.nextEventWeek) return;

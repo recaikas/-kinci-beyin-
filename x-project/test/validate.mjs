@@ -3,6 +3,8 @@
 import { PACK } from '../src/data/pack.js';
 import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market } from '../src/game.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
+import { readFileSync } from 'node:fs';
+import * as Ev from '../src/systems/events.js';
 import * as M from '../src/models.js';
 import { runBot } from './bot.mjs';
 
@@ -424,6 +426,27 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const game = g.release({ projectId: st.projects[0].id, publisherId: 'mantar', price: 20 }).game;
   for (let i = 0; i < 6; i++) { st.pending = []; g.tick(); }
   check('Oyunun maliyeti ve kâr geçmişi var', game.devCost > 0 && game.profitHist.length >= 5 && game.profitHist.at(-1) === Math.round(game.revenue - game.devCost - game.postCost));
+}
+
+// 27) Olaylar: en az 80; tüm koşul ve etki anahtarları motor tarafından tanınır; her seçim hatasız uygulanır
+{
+  check('En az 80 rastgele olay', PACK.events.length >= 80, PACK.events.length + '');
+  const src = readFileSync(new URL('../src/systems/events.js', import.meta.url), 'utf8');
+  const condKeys = new Set([...src.matchAll(/w\.(\w+)/g)].map((m) => m[1]));
+  const effKeys = new Set([...src.matchAll(/e\.(\w+)/g)].map((m) => m[1]));
+  const walk = (e, out) => { for (const [k, v] of Object.entries(e || {})) { out.add(k); if (k === 'chance') { walk(v.yes, out); walk(v.no, out); } } return out; };
+  const usedCond = new Set(PACK.events.flatMap((e) => Object.keys(e.when || {})));
+  const usedEff = PACK.events.reduce((acc, e) => { for (const ch of e.choices) walk(ch.effects, acc); return acc; }, new Set());
+  const badC = [...usedCond].filter((k) => !condKeys.has(k)), badE = [...usedEff].filter((k) => !effKeys.has(k));
+  check('Olay koşul anahtarları tanınıyor', !badC.length, badC.join(','));
+  check('Olay etki anahtarları tanınıyor', !badE.length, badE.join(','));
+  const g = newGame({ seed: 30, difficulty: 'kolay', length: 50 });
+  const st = g.state, ctx = g.ctx;
+  st.cash = 1e7; st.office.tier = 3;
+  for (let i = 0; i < 6; i++) { const p = Staff.makePerson(ctx, { skill: 50 }); p.room = st.rooms[0].id; st.staff.push(p); }
+  let err = '';
+  for (const e of PACK.events) for (const ch of e.choices) { try { Ev.applyEffects(ctx, ch.effects); } catch (x) { err = `${e.id}: ${x.message}`; } }
+  check('Tüm olay seçimleri hatasız uygulanır', !err, err);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

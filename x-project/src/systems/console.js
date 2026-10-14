@@ -145,6 +145,7 @@ function unitsThisWeek(ctx, k) {
   const price = c.prices.find((x) => x.id === k.price) || c.prices[1];
   let u = c.B * Pz(ctx) * lerpTable(t.demand || [[1976, 1]], tableYear(ctx)) * (t.units ?? 1) * qualityOf(ctx, k.tech, t) * F
     * (1 + c.ownGameBoost * games) * (k.appeal || 1) * price.units * seriesBoost(ctx, k) * Math.pow(c.decay, k.weeks);
+  for (const m of state.consoleMods || []) if (m.untilWeek > state.week) u *= m.mult;
   if (k.sunsetAt) u *= Math.pow(c.sunsetDecay, Math.max(0, state.week - (k.sunsetAt - c.overlapWeeks)));
   return Math.round(u);
 }
