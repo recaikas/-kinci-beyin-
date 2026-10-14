@@ -62,7 +62,7 @@ export function make(u) {
   }
   function readyDialog(pj) {
     app.readySeen[pj.id] = true;
-    dialog(`<h2>"${esc(pj.name)}" hazır</h2><p>İçerik tamamlandı. Ekip şimdi hataları ayıklıyor (${fmt(pj.bugs)} hata). İstediğin an yayınlayabilirsin.</p>
+    dialog(`<h2>"${esc(pj.name)}" hazır</h2><p>İçerik tamamlandı. Ekip şimdi hataları ayıklıyor (${fmt(pj.bugs)} hata). ${pj.deal ? `${esc(pj.deal.pubName)} ile sözleşmen hazır; istediğin an yayınlayabilirsin.` : 'Bu sırada oyunu yayıncılara sun: cevaplar 1–4 haftada gelir, hata ayıklama da o arada sürer.'}</p>
       <div class="choices"><button class="primary" data-act="go-release" data-pid="${pj.id}">Yayın ekranına git</button><button data-act="close-dialog">Biraz daha ayıklasınlar</button></div>`);
   }
   function reviewDialog(game, rv, report = []) {
