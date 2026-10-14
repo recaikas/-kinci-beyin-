@@ -118,10 +118,8 @@ export function make(u) {
     const outs = PACK.outsource.rows.map((_, i) => Prod.outsourceRow(c, i)).filter((r) => r.office <= s.office.tier).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>${discName(r.disc)} · +${fmt(r.points)} puan</small></div><button data-act="outsource" data-pid="${pid}" data-id="${r.i}" ${pj.status !== 'dev' ? 'disabled' : ''}>${money(r.fee)}</button></div>`).join('');
     let release = '';
     if (pj.status === 'debug') {
-      const pubs = Market.publishersAvailable(c);
       release = `<section class="box hl"><h3>Yayına hazır</h3><div class="form">
-        <label class="wide">Yayıncı<select id="r-pub">${pubs.map((p) => `<option value="${p.id}" ${s.fans < p.minFans ? 'disabled' : ''}>${esc(p.name)} · güç ${p.power} · pay %${Math.round(p.royalty * 100)}${s.fans < p.minFans ? ` (${fmt(p.minFans)} hayran)` : ''}</option>`).join('')}
-          ${s.research.done.oz_yayin ? `<option value="">Kendi yayınım · güç ${Math.round(M.selfPublishPower(c))}</option>` : ''}</select></label>
+        ${u.releaseChoice(pj)}
         <label>Fiyat ($)<input id="r-price" type="number" min="1" max="120" value="${Math.max(10, Math.round(20 * M.inflation(c) ** 0.4))}"></label>
         ${Modern.f2pAllowed(c) ? `<label>İş modeli<select id="r-model"><option value="satis">Satış (ücretli)</option><option value="f2p">Ücretsiz + oyun içi satış</option></select></label>
           <label>Para kazanma<select id="r-monet">${PACK.modern.f2p.monet.map((m) => `<option value="${m.id}" ${m.id === 'dengeli' ? 'selected' : ''}>${esc(m.name)}${m.score ? ` (not ${m.score})` : ''}</option>`).join('')}</select></label>` : ''}
@@ -132,11 +130,12 @@ export function make(u) {
         ${releaseTiming(pj)}
         <div class="foot"><span class="muted small">${fmt(pj.bugs)} hata kaldı. Beklemek hataları azaltır, maaş yer.</span><button class="primary big" data-act="release" data-pid="${pid}">Yayınla</button></div></section>`;
     }
+    const pubBox = u.projectPubBox(pj);
     return `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div>
       <div class="proj-head"><div><h2>${esc(pj.name)}</h2><p class="muted small">${genre.name}${pj.sub ? ' + ' + PACK.genres.find((x) => x.id === pj.sub).name : ''} · ${esc(topic)} · ${PACK.sizes.find((z) => z.id === pj.size).name}${pj.kind === 'ek' ? ' · ek paket' : ''}</p></div>
         <div class="forecast"><small>Şu an çıksa</small><b class="num">${Math.round(pv.score)}</b></div></div>
       <div class="progress"><span>${pj.status === 'dev' ? `${PACK.production.phaseNames[pj.phase]} · hafta ${pj.week}/${pj.totalWeeks}` : 'Hata ayıklama'}</span>${bar(prog, 'prog')}</div>
-      ${release}
+      ${pj.deal ? release + pubBox : pubBox + release}
       <section class="box"><h3>Hedefe ulaşma</h3>${discs}<p class="muted small">${pv.notes.map(esc).join(' · ') || 'Ceza yok'} · Uyum ×${pv.F.toFixed(2)} · Hiza ×${pv.hiza.toFixed(2)} · Hype ${Math.round(pj.hype)}</p>
         ${pj.status === 'dev' ? `<div class="foot"><button data-act="phase" data-pid="${pid}">Zaman dağılımını ayarla</button></div>` : ''}</section>
       <section class="box"><h3>Bölgeler</h3><div class="btns">${PACK.regions.list.map((r) => { const on = (pj.regions || []).includes(r.id), st = Prod.regionStatus(c, r.id); return on ? `<span class="pill">✓ ${esc(r.short)}</span>` : `<button data-act="localize" data-pid="${pid}" data-id="${r.id}" ${st.ok ? '' : 'disabled'}>${esc(r.short)}<small>${st.ok ? money(Prod.locCost(c, r.id, pj.size)) : st.why}</small></button>`; }).join('')}</div></section>

@@ -105,6 +105,7 @@ export function door(ctx, pub) {
   if (s.multi && s.multi.left > 0 && s.multi.pubId === pub.id) return { open: true };
   if (pub.power < D.open) return { open: true };
   if (pub.power < D.known) {
+    if (r >= D.knownRel || s.intro[pub.id]) return { open: true };
     const games = ctx.state.games.filter((g) => !g.portOf).length;
     return games >= 1 && itibar(ctx) >= 0 ? { open: true } : { open: false, why: `${pub.name} en az bir çıkmış oyun ve eksi olmayan itibar istiyor (itibarın ${itibar(ctx)}).` };
   }
@@ -954,8 +955,21 @@ function monthly(ctx) {
   const mi = Charts.monthIdx(ctx);
   for (const sc of SHOWCASES) if (sc.month === mi && showcaseOpen(ctx, sc) ) queueShowcase(ctx, sc);
 }
+// Yayıncının kendi kararı: sönen oyunun fiyatını indirmek. İyi ilişkide önce sorar.
+export function priceAnswer(ctx, { gid, ok }) {
+  const g = ctx.state.games.find((x) => x.id === gid);
+  if (!g?.deal) return;
+  if (ok) { g.price = Math.max(ctx.pack.post.priceFloor, Math.round(g.price * 0.75)); Charts.revive(ctx, g, 4); g.pubCut = true; ctx.news(`🏷️ ${g.deal.pubName} "${g.name}" fiyatını ${g.price} $'a indirdi.`, 'info'); }
+  else { g.pubCut = true; relAdd(ctx, g.deal.pubId, -2); }
+}
 function quarterly(ctx) {
   const { state } = ctx, s = pubState(state);
+  const fading = state.games.find((x) => x.active && x.deal && !x.deal.bargain && !x.pubCut && x.model !== 'f2p' && x.weeks > 30 && x.dif?.F > 0.85);
+  if (fading) {
+    if (rel(ctx, fading.deal.pubId) >= P(ctx).rel.tiers[0]) ctx.queue({ id: 'pubprice', title: `🏷️ ${fading.deal.pubName} soruyor`, text: `"${fading.name}" sönüyor. Fiyatı %25 indirelim mi? Satış biraz canlanır ama kopya başı payın düşer.`,
+      choices: [{ label: 'İndirin', effects: { pubPrice: { gid: fading.id, ok: true } } }, { label: 'Fiyat kalsın', effects: { pubPrice: { gid: fading.id, ok: false } } }] });
+    else priceAnswer(ctx, { gid: fading.id, ok: true });
+  }
   const g = state.games.filter((x) => x.active && x.deal && !x.deal.bargain && rel(ctx, x.deal.pubId) >= P(ctx).rel.tiers[0] && x.weeks >= 6).sort((a, b) => b.units - a.units)[0];
   if (!g) return;
   const exp = g.deal.expUnits * Math.min(1, g.weeks / 30);
@@ -1036,6 +1050,7 @@ export function wire(ctx) {
   bus.on('pubShow', (id) => joinShowcase(ctx, id));
   bus.on('pubMulti', (id) => acceptMulti(ctx, id));
   bus.on('pubFair', () => onFair(ctx));
+  bus.on('pubPrice', (a) => priceAnswer(ctx, a));
   bus.on('pubRel', (x) => relAdd(ctx, x.id, x.v, x.memo));
   bus.on('gameTop10', (g) => onTop10(ctx, g));
   bus.on('awardWon', (a) => onAward(ctx, a));

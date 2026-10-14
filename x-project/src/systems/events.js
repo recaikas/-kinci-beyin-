@@ -126,7 +126,7 @@ export function applyEffects(ctx, e = {}) {
   if (e.crunch) state.crunch = true;
   if (e.news) ctx.news(e.news, 'info');
   // Yayıncı (Konu B): toplantı cevabı, tarih isteği, vitrin etkinliği, çok oyunluk anlaşma, fuar tanışıklığı
-  for (const k of ['pubMeet', 'pubDate', 'pubShow', 'pubMulti', 'pubFair', 'pubRel']) if (e[k]) ctx.bus.fire(k, e[k]);
+  for (const k of ['pubMeet', 'pubDate', 'pubShow', 'pubMulti', 'pubFair', 'pubRel', 'pubPrice']) if (e[k]) ctx.bus.fire(k, e[k]);
 }
 
 export function resolvePending(ctx, choiceIdx) {

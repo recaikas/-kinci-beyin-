@@ -13,6 +13,7 @@ import { make as make_win_office } from './win_office.js';
 import { make as make_win_research } from './win_research.js';
 import { make as make_chart } from './chart.js';
 import { make as make_win_market } from './win_market.js';
+import { make as make_win_pub } from './win_pub.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
@@ -328,6 +329,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_win_research(u));
   Object.assign(u, make_chart(u));
   Object.assign(u, make_win_market(u));
+  Object.assign(u, make_win_pub(u));
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
@@ -397,6 +399,7 @@ export function boot(root, hotData = {}) {
       case 'go-release': app.dialog = null; el.modal.hidden = true; app.sub.gelistir = 'oyun'; app.sel = pid; openWin('gelistir'); app.wasRunning = app.wasRunningD; app.wasRunningD = false; return;
       case 'release': {
         const v = (q) => root.querySelector(q)?.value;
+        if (v('#r-pub') === 'kelepir' && v('#r-model') !== 'f2p' && app.confirm !== 'kelepir' + pid) { app.confirm = 'kelepir' + pid; note('Kelepir satış: oyunu küçük bir peşin paraya satarsın ve telif almazsın. Onaylamak için Yayınla\'ya tekrar bas.', 'warn'); return render(); }
         const res = g.release({ projectId: pid, publisherId: v('#r-model') === 'f2p' ? null : v('#r-pub') || null, price: Math.max(1, +v('#r-price') || 20), model: v('#r-model') || 'satis', monet: v('#r-monet') || 'dengeli', service: v('#r-svc') || null, printRun: v('#r-print') || 'normal' });
         if (!res.ok) return run(res);
         app.sel = null;
@@ -424,6 +427,21 @@ export function boot(root, hotData = {}) {
       case 'reprint': return run(g.reprint(+id));
       case 'printauto': return run(g.printAuto(+id));
       case 'announce': return run(g.announce(pid, +id));
+      // Yayıncılar (Konu B)
+      case 'pubpick': { const list = ((app.pubSel ||= {})[pid] ||= []); const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); else if (list.length < PACK.publishing.maxPitches) list.push(id); app.pubOpen = pid; return renderWindow(); }
+      case 'pubfilter': app.pubFilter = id; return renderWindow();
+      case 'pubdoc': app.pubDoc = !(app.pubDoc ?? true); return renderWindow();
+      case 'pubnote': app.pubNote = !(app.pubNote ?? false); return renderWindow();
+      case 'pitch': { const r = g.pitch(pid, (app.pubSel || {})[pid] || [], { mode: b.dataset.mode, doc: app.pubDoc ?? true, note: app.pubNote ?? false }); if (r.ok) app.pubSel[pid] = []; return run(r); }
+      case 'osign': return run(g.signOffer(+id));
+      case 'odecline': return run(g.declineOffer(+id));
+      case 'oneg': return run(g.negotiate(+id, b.dataset.move));
+      case 'oauction': return run(g.auction(pid));
+      case 'ochange': return run(g.acceptChange(+id, b.dataset.yes === '1'));
+      case 'agent': return run(g.hireAgent(id));
+      case 'agentfire': return twice('agentfire', () => g.fireAgent());
+      case 'buyrights': return twice('rights' + id, () => g.buyRights(+id));
+      case 'orderdraft': { const d = g.orderDraft(+id); if (!d) return; app.draft = { ...u.defaultDraft(), ...d }; app.sub.gelistir = 'oyun'; app.sel = null; app.wizOn = true; app.wiz = 1; app.win = 'gelistir'; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
       case 'ltab': app.listTab = { kind: id, key: null }; return renderWindow();
       case 'lkey': app.listTab = { ...(app.listTab || { kind: 'genel' }), key: id }; return renderWindow();
       case 'port': return run(g.port(+id, root.querySelector('#port-sel').value));

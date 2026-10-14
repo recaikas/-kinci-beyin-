@@ -226,6 +226,32 @@ h3.sub { margin: 10px 0 4px; font-size: var(--s-1); color: var(--ink-2); }
 .ltabs { margin-bottom: 6px; }
 .ltabs button { min-height: 32px; padding: 4px 10px; font-size: var(--s-1); }
 .ltabs button.on { background: var(--candy); color: var(--night); border-color: var(--candy); }
+/* Yayıncılar (Konu B) */
+.pubgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.pubcard { all: unset; box-sizing: border-box; display: grid; gap: 3px; padding: 8px 10px; background: var(--panel); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--shadow); min-width: 0; font-size: var(--s-1); }
+button.pubcard { cursor: pointer; }
+button.pubcard:hover:not([disabled]), button.pubcard:focus-visible { border-color: var(--candy); }
+.pubcard.sel { border-color: var(--candy); background: color-mix(in srgb, var(--candy) 14%, var(--panel)); }
+.pubcard.locked { opacity: 0.55; cursor: default; }
+.pubcard .ph { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pubcard .ph b { flex: 1; min-width: 0; font-size: var(--s0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pubcard .pr { display: grid; grid-template-columns: 46px 1fr auto; gap: 6px; align-items: center; }
+.pubcard .pr b { font-size: 1rem; white-space: nowrap; }
+.pubcard small { color: var(--ink-2); line-height: 1.3; }
+.pubcard small.why, .box small.why { color: var(--amber); }
+.pubcard small.mem { color: var(--sky); }
+.bar.pow > i { background: var(--amber); } .bar.rel > i { background: var(--ink-2); } .bar.rel-ok > i { background: var(--mint); } .bar.rel-bad > i { background: var(--blood); }
+.offer { border: 2px dashed var(--candy); padding: 8px 10px; display: grid; gap: 6px; background: var(--panel); }
+.offer .oh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.offer .oh b { flex: 1; }
+.pubpick > summary { cursor: pointer; list-style: none; padding: 4px 0; }
+.pubpick > summary::-webkit-details-marker { display: none; }
+.pubpick > summary b::before { content: '▸ '; color: var(--candy); }
+.pubpick[open] > summary b::before { content: '▾ '; }
+.pubpick { display: grid; gap: 8px; }
+button.on small { color: inherit; }
+.pubpick .btns button.on { background: var(--candy); color: var(--night); border-color: var(--candy); }
+@media (max-width: 600px) { .pubgrid { grid-template-columns: 1fr; } }
 .stats4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .stats4 > div { display: grid; padding: 8px; border: 2px solid var(--line); background: var(--panel-2); }
 .stats4 small { color: var(--ink-2); font-size: var(--s-1); }

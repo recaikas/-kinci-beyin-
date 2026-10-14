@@ -71,7 +71,7 @@ export function makeRenderer(canvas) {
     let e = null;
     if (p.status === 'tukenmis') e = 'skull';
     else if (p.status === 'hasta') e = 'plus';
-    else if (p.status === 'egitim') e = 'book';
+    else if (p.status === 'egitim' || p.status === 'etkinlik') e = 'book';
     else if (p.status === 'tatil') e = 'sun';
     else if (state.rel && frame % 120 < 40 && state.staff.some((x) => x !== p && x.room === p.room && (state.rel[p.id < x.id ? `${p.id}|${x.id}` : `${x.id}|${p.id}`] || 0) <= -45)) e = 'bolt';
     else if (state.crunch && !resting && frame % 60 < 30) e = 'fire';

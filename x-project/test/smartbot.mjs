@@ -55,6 +55,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     if (e.pubDate) v += e.pubDate.ok ? unit * 4 : 0;
     if (e.pubMulti) v += selfValue() < 0.12 ? unit * 5 : -unit * 5;
     if (e.pubFair) v += unit * 4;
+    if (e.pubPrice) v += e.pubPrice.ok ? unit : 0;
     if (money < 0 && state.cash + money < burn() * 2) v -= 1e9; // kasayı riske atma
     return v;
   }
