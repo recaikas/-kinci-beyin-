@@ -58,6 +58,7 @@ export function makeGame(state, pack = PACK) {
   const bus = makeBus();
   const rng = makeRng(state);
   const ledger = makeLedger(state, bus);
+  bus.on('ledgerPosted', (p) => Co.trackRevenue({ state, pack }, p));
   const ctx = {
     state, pack, bus, rng, ledger,
     infl: () => M.inflation(ctx),

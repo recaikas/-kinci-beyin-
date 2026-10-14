@@ -16,12 +16,12 @@ export const PACK = {
 
   difficulties: [
     // D, ipD: V (MGT2) · Z, startCash: P
-    { id: 'cok_kolay', name: 'Çok kolay', D: 0.7, Z: 1.0, ipD: 0.70, startCash: 300000 },
+    { id: 'cok_kolay', name: 'Çok kolay', D: 0.7, Z: 0.5, ipD: 0.70, startCash: 300000 },
     { id: 'kolay', name: 'Kolay', D: 1.0, Z: 0.3, ipD: 0.45, startCash: 200000 },
     { id: 'orta', name: 'Orta', D: 1.5, Z: 0.25, ipD: 0.38, startCash: 120000 },
-    { id: 'zor', name: 'Zor', D: 1.8, Z: 0.15, ipD: 0.36, startCash: 80000 },
-    { id: 'cok_zor', name: 'Çok zor', D: 2.2, Z: 0.10, ipD: 0.34, startCash: 60000 },
-    { id: 'efsanevi', name: 'Efsanevi', D: 3.0, Z: 0.07, ipD: 0.30, startCash: 45000 },
+    { id: 'zor', name: 'Zor', D: 1.8, Z: 0.2, ipD: 0.36, startCash: 80000 },
+    { id: 'cok_zor', name: 'Çok zor', D: 2.2, Z: 0.16, ipD: 0.34, startCash: 60000 },
+    { id: 'efsanevi', name: 'Efsanevi', D: 3.0, Z: 0.13, ipD: 0.30, startCash: 45000 },
   ],
 
   // H(y): Kolay oyun hedefi, logaritmik ara değer. Sayılar V, ara yıllar P.
@@ -49,7 +49,7 @@ export const PACK = {
     K: 0.784,
     skillStart: 35, skillPerYear: 2.7, skillCap: 75,
     etaFree: 10, etaLoss: 0.015, etaFloor: 0.7,
-    mCurve: [[1976, 1.0], [1980, 1.65], [1985, 2.4], [1990, 2.6], [2000, 2.85], [2010, 3.6], [2020, 5.6]],
+    mCurve: [[1976, 1.0], [1980, 1.65], [1985, 2.4], [1990, 2.9], [1995, 3.4], [2000, 3.85], [2005, 4.2], [2010, 4.6], [2020, 6.2]], // 1985–2010 araç ve yöntem iyileşmesi; hedef eğrisinin koşu bandını yumuşatır (P)
     specBonus: 1.3,
     rpShare: 0.15, // herkesin üretiminin araştırma puanına giden payı
     researchRoomRp: 0.6, // araştırmaya atanmış kişinin puanı → RP
@@ -81,6 +81,8 @@ export const PACK = {
 
   // Oyun boyutları. weeks/target/sales: P · MGT2 boyut cezası: V
   sizes: [
+    // Mini (P): shareware, bağımsız ya da mobil ölçekli iş. Küçük ekiplerin koşu bandından düştüğünde toparlanma yolu.
+    { id: 'mini', name: 'Mini', mgt: 'C', weeks: 6, target: 0.14, sales: 0.22, research: null, office: 1, devCost: 0.12 },
     { id: 'kucuk', name: 'Küçük', mgt: 'B', weeks: 10, target: 0.35, sales: 0.55, research: null, office: 1, devCost: 0.3 },
     { id: 'orta', name: 'Orta', mgt: 'B+', weeks: 16, target: 1.0, sales: 1.0, research: 'boyut_orta', office: 2, devCost: 1 },
     { id: 'buyuk', name: 'Büyük', mgt: 'A', weeks: 28, target: 1.8, sales: 1.7, research: 'boyut_buyuk', office: 3, devCost: 2.5 },
@@ -221,7 +223,8 @@ export const PACK = {
     { id: 'guverte', name: 'Buhar Güvertesi', kind: 'el', owner: 'vana', from: 2022, to: 2032, start: 1, units: 8, licence: 0, devCost: 50000, tech: 7, genre: [10, 9, 10, 9, 9, 8], aud: [8, 9, 10] },
     { id: 'svic2', name: 'Pandando Sviç 2', kind: 'konsol', owner: 'pandando', from: 2025, to: 2035, start: 3, units: 120, licence: 900000, devCost: 600000, tech: 7, genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 8] },
   ],
-  platformGrowth: { _tag: 'P', peakAt: 0.75 },
+  // Kurulu taban ömrün %75'inde zirveye çıkar; son %20'de oyun alan aktif kullanıcı zirvenin %25'ine kadar düşer (yeni nesil gelince eski konsolda satış söner).
+  platformGrowth: { _tag: 'P', peakAt: 0.75, declineFrom: 0.8, declineTo: 0.25 },
 
   // Yayıncılar. power: MGT2 gizli güç (V örnekleri), diğerleri P.
   // Yayıncılar: sabit küçükler + tarihten gelen büyükler (history.js 'pub' şirketleri; gücü yıllara göre değişir).
@@ -244,8 +247,8 @@ export const PACK = {
   // Ofis kademeleri (V: 4 kademe). Koltuklar artık odalardan gelir (MGT2 oda motoru): slot × oda başına koltuk.
   offices: [
     { tier: 1, name: 'Garaj', slots: 1, roomSeats: 1, cost: 0, rent: 300 },
-    { tier: 2, name: 'Küçük ofis', slots: 2, roomSeats: 3, cost: 120000, rent: 800 },
-    { tier: 3, name: 'Büyük ofis', slots: 4, roomSeats: 4, cost: 900000, rent: 2500 },
+    { tier: 2, name: 'Küçük ofis', slots: 3, roomSeats: 3, cost: 120000, rent: 900 },
+    { tier: 3, name: 'Büyük ofis', slots: 4, roomSeats: 4, cost: 600000, rent: 2500 },
     { tier: 4, name: 'ArGe kampüsü', slots: 6, roomSeats: 6, cost: 5000000, rent: 8000, floorCost: 1500000, floorSlots: 2, maxFloors: 8, floorRent: 3000 },
   ],
 
@@ -339,13 +342,13 @@ export const PACK = {
         demand: [[1976, 0.8], [1980, 1.5], [1984, 1.2], [1990, 1], [1996, 0.6], [2002, 0.25], [2010, 0.1], [2030, 0.06]], parts: ['cpu', 'gpu', 'media', 'ctrl'], genre: [10, 6, 5, 7, 5, 9], aud: [10, 9, 8] },
       { id: 'bilgisayar', name: 'Ev bilgisayarı', kind: 'pc', year: 1977, research: 'hw_ev_pc', cost: 4000000, work: 0.9, units: 0.7, margin: 15, techOffset: 0,
         demand: [[1977, 0.5], [1983, 1.3], [1990, 0.8], [1996, 0.25], [2001, 0.03], [2030, 0.01]], parts: ['cpu', 'gpu', 'media', 'ctrl'], genre: [8, 10, 10, 10, 10, 7], aud: [8, 9, 10] },
-      { id: 'konsol', name: 'Ev konsolu', kind: 'konsol', year: 1977, research: null, cost: 6000000, work: 1, units: 1, margin: 5, techOffset: 0,
+      { id: 'konsol', name: 'Ev konsolu', kind: 'konsol', year: 1977, research: null, cost: 6000000, work: 1, units: 1, margin: 2, techOffset: 0,
         demand: [[1977, 0.7], [1983, 0.35], [1986, 1], [2000, 1.1], [2030, 1.1]], parts: ['cpu', 'gpu', 'media', 'ctrl', 'net'], genre: [10, 9, 10, 9, 8, 8], aud: [9, 10, 10] },
-      { id: 'tasinabilir', name: 'El konsolu', kind: 'el', year: 1989, research: 'hw_el', cost: 4000000, work: 0.8, units: 1.1, margin: 4, techOffset: -1,
+      { id: 'tasinabilir', name: 'El konsolu', kind: 'el', year: 1989, research: 'hw_el', cost: 4000000, work: 0.8, units: 1.1, margin: 2, techOffset: -1,
         demand: [[1989, 1], [2004, 1.2], [2014, 0.6], [2030, 0.4]], parts: ['cpu', 'gpu', 'media', 'screen', 'ctrl', 'net'], genre: [8, 8, 9, 8, 7, 10], aud: [10, 10, 8] },
       { id: 'vr', name: 'VR başlığı', kind: 'vr', year: 2014, research: 'hw_vr', cost: 5000000, work: 0.9, units: 0.22, margin: 20, techOffset: 0,
         demand: [[2014, 0.3], [2016, 0.8], [2020, 0.6], [2030, 0.7]], parts: ['cpu', 'gpu', 'screen', 'ctrl', 'net'], genre: [10, 9, 6, 10, 5, 8], aud: [8, 9, 10] },
-      { id: 'melez', name: 'Melez konsol (ev + el)', kind: 'konsol', year: 2016, research: 'hw_melez', cost: 9000000, work: 1.2, units: 1.25, margin: 7, techOffset: -1,
+      { id: 'melez', name: 'Melez konsol (ev + el)', kind: 'konsol', year: 2016, research: 'hw_melez', cost: 9000000, work: 1.2, units: 1.25, margin: 3, techOffset: -1,
         demand: [[2016, 1], [2030, 1.2]], parts: ['cpu', 'gpu', 'media', 'screen', 'ctrl', 'net'], genre: [9, 9, 10, 9, 8, 10], aud: [10, 10, 9] },
       { id: 'mini', name: 'Retro mini konsol', kind: 'konsol', year: 2016, research: 'hw_mini', cost: 800000, work: 0.3, units: 0.6, margin: 8, techOffset: -5,
         demand: [[2016, 1], [2019, 0.6], [2030, 0.4]], parts: ['cpu', 'ctrl'], genre: [10, 8, 9, 6, 6, 10], aud: [9, 9, 10] },
@@ -435,7 +438,7 @@ export const PACK = {
     teamWeeks: 35, phases: ['Tasarım', 'Prototip', 'Seri üretim'], // aşama başına iş: dönemin ortalama çalışanının 35 haftası × (1 + tech/7) × tip
     fanLossWeeks: 12, fanLossPct: 0.03,
     B: 25000, decay: 0.985, qualityK: 0.25, qualityMin: 0.4, qualityMax: 1.6, ownGameBoost: 0.05,
-    marginPerUnit: 5, licencePerMillion: 20000, ownDevCost: 5000, stopBelow: 200,
+    marginPerUnit: 5, licencePerMillion: 5000, ownDevCost: 5000, stopBelow: 200,
     // Konsol aileleri (nesiller): seri ünü sonraki nesli satar; geriye uyumluluk kurulu tabanın bir kısmını taşır; eski nesil bir süre birlikte satılır.
     seriesK: 0.12, backCompat: 0.3, overlapWeeks: 48, sunsetDecay: 0.95, hwSkillMin: 65,
   },
@@ -449,10 +452,11 @@ export const PACK = {
       { tier: 3, name: 'Sunucu destekli istasyon', expectedFrom: 2000, maxTech: 7 },
       { tier: 4, name: 'ArGe kümesi', expectedFrom: 2012, maxTech: 7 },
     ],
-    step: 0.15, min: 0.7, max: 1.5, costSalaryMonths: 6,
+    step: 0.15, min: 0.7, max: 1.5, costSalaryMonths: 1.5, costTierK: 0.5, // koltuk başı 2,25 (kademe 1) – 4,5 (kademe 4) aylık maaş
   },
 
   economy: {
+    creditStep: 0.03, // kredi limiti çarpanının haftalık en fazla değişimi (dönem krizleri ~4 ayda oturur)
     _tag: 'P',
     inflation: 1.045, salaryPerSkill: 30, salaryJitter: [0.9, 1.25],
     hireFeeMonths: 1, severanceMonths: 1,
@@ -481,7 +485,9 @@ export const PACK = {
     // GDS (V): süre 6–13 hafta, 1–2 kategori şartı, zor sözleşme daha çok öder ama daha çok ister,
     // başarı para + RP + itibar, başarısızlık ceza + itibar kaybı. Yük ve ödeme katsayıları P.
     weeksMin: 6, weeksMax: 13, offers: 3,
-    rewardPerPoint: 260, penaltyShare: 0.6, twoDiscChance: 0.65,
+    rewardPerPoint: 200, rewardExp: 0.5, penaltyShare: 0.6, twoDiscChance: 0.65,
+    // ödeme ∝ (enflasyon·40/H)^rewardExp × lateK(yıl): erken dönemde can simidi, sonra azalır ama 2020'lerde de maaşı karşılar
+    lateK: [[1976, 1], [1995, 1.1], [2010, 1.7], [2025, 2.5]],
     minLoadH: 0.05, // stüdyo kapasitesi bilinmezse alt sınır: H(y) × bu × hafta
     tiers: [
       { id: 'kolay', name: 'Kolay', load: 0.65, pay: 1.0, rep: 1, repLoss: 1, rp: 4 },
@@ -673,7 +679,7 @@ export const PACK = {
   ipo: {
     _tag: 'P',
     minValuation: 4000000, minTier: 3, minWeeks: 240, profitMult: 7, fanValue: 2.5, ipK: 300000, prestigeK: 400000,
-    sellPcts: [0.1, 0.25, 0.4], discount: 0.9, shares: 1000000, quarterWeeks: 12, growthTarget: 0.05,
+    sellPcts: [0.1, 0.25, 0.4], discount: 0.9, shares: 1000000, quarterWeeks: 12, growthTarget: 0.025, pressureDecay: 4,
     beatSent: 1.06, missSent: 0.93, pressureMissK: 40, pressureBeat: -12, boardAt: 60, fireAt: 100,
     dividendShare: 0.1, dividendSent: 1.04, dividendPressure: -15, buybackPremium: 1.1, sentMin: 0.4, sentMax: 2.5,
     excluded: ['sermaye', 'kredi', 'halka_arz', 'temettu', 'geri_alim'],

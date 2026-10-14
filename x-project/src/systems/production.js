@@ -1,5 +1,5 @@
 // Üretim: oyun projesi (3 faz × 3 görev), uzman odalar, QA, hata ayıklama, dış kaynak, sözleşme, araştırma, motor.
-import { clamp } from '../kernel.js';
+import { clamp, lerpTable } from '../kernel.js';
 import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL } from '../models.js';
 import { weeklyOutput } from './staff.js';
 
@@ -134,7 +134,7 @@ export function genContracts(ctx) {
   const c = pack.contracts;
   const h = H(ctx);
   const cap = devCapacity(ctx);
-  const perPoint = c.rewardPerPoint * Math.sqrt(inflation(ctx) * 40 / h);
+  const perPoint = c.rewardPerPoint * Math.pow(inflation(ctx) * 40 / h, c.rewardExp ?? 0.5) * (c.lateK ? lerpTable(c.lateK, tableYear(ctx)) : 1);
   state.contractOffers = Array.from({ length: c.offers }, (_, i) => {
     const tier = c.tiers[i % c.tiers.length];
     const weeks = rng.int(c.weeksMin, c.weeksMax);

@@ -35,7 +35,7 @@ export function setDesign(ctx, bid, did) {
 
 export function creditLimit(ctx) {
   const e = ctx.pack.economy;
-  return Math.round((e.creditBase * inflation(ctx) + ctx.state.fans * e.creditPerFan) * eraMult(ctx, 'creditMult'));
+  return Math.round((e.creditBase * inflation(ctx) + ctx.state.fans * e.creditPerFan) * (ctx.state.creditK ?? eraMult(ctx, 'creditMult')));
 }
 
 export function monthlyEconomy(ctx) {
@@ -64,6 +64,10 @@ export function monthlyEconomy(ctx) {
 
 export function weeklySolvency(ctx) {
   const { state, pack } = ctx;
+  // Kriz dönemlerinde kredi limiti bir gecede değil, haftalar içinde daralır (oyuncu tepki verebilsin).
+  const target = eraMult(ctx, 'creditMult');
+  const k = state.creditK ?? 1;
+  state.creditK = Math.abs(target - k) < pack.economy.creditStep ? target : k + Math.sign(target - k) * pack.economy.creditStep;
   if (state.cash < -creditLimit(ctx)) {
     state.debtWeeks++;
     if (state.debtWeeks === 1) ctx.news(`🚨 Kredi limitini aştın! ${pack.economy.bankruptWeeks} hafta içinde toparlanmazsan iflas.`, 'bad');
@@ -116,7 +120,8 @@ export function stationUpgradeCost(ctx) {
   const ws = ctx.pack.workstations;
   const next = ctx.state.stationTier + 1;
   if (next >= ws.tiers.length) return null;
-  const perSeat = ws.costSalaryMonths * salaryFor(ctx, 50) * Math.pow(2, next);
+  // Koltuk başına birkaç aylık maaş: kademe arttıkça pahalılaşır ama dönemini yakalamak her stüdyo için mümkün kalır.
+  const perSeat = ws.costSalaryMonths * salaryFor(ctx, 50) * (1 + ws.costTierK * next);
   return Math.round(perSeat * seats(ctx));
 }
 export function upgradeStations(ctx) {

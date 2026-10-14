@@ -44,16 +44,29 @@ export function goPublic(ctx, pct) {
   const v = valuation(ctx);
   const cash = Math.round(v * pct * c.discount);
   ledger.post('halka_arz', cash, `Halka arz %${Math.round(pct * 100)}`);
-  Object.assign(co, { listed: true, pct, sent: 1, pressure: 0, qStart: state.week, lastQ: Math.max(1, quarterRevenue(ctx)), listedWeek: state.week });
+  Object.assign(co, { listed: true, pct, sent: 1, pressure: 0, qStart: state.week, lastQ: Math.max(1, quarterRevenue(ctx)), listedWeek: state.week, qAcc: 0, quarters: [] });
   co.price = sharePrice(ctx);
   ctx.news(`🔔 ${state.companyName} borsada! Hisselerin %${Math.round(pct * 100)}'i satıldı, kasaya ${cash.toLocaleString('tr-TR')} $ girdi. Gong çalındı.`, 'good');
   ctx.bus.fire('ipo', { pct, cash });
   return { ok: true, cash };
 }
-// Son çeyreğin (12 hafta) satış geliri.
+// Faaliyet gelirleri (satış, donanım, lisans, jeton, abonelik, sözleşme…) her hafta toplanır; çeyrek bu birikimdir.
+const REVENUE = ['satis', 'konsol', 'konsol_lisans', 'jeton', 'abonelik', 'lisans', 'sozlesme', 'istirak', 'yayinci'];
+export function trackRevenue(ctx, { category, amount }) {
+  if (amount > 0 && REVENUE.includes(category)) { const co = company(ctx.state); co.qAcc = (co.qAcc || 0) + amount; }
+}
 export function quarterRevenue(ctx) {
+  const co = company(ctx.state);
+  if (co.qAcc != null) return Math.round(co.qAcc);
   const n = I(ctx).quarterWeeks;
   return ctx.state.salesHist.slice(-n).reduce((a, x) => a + (x.r || 0), 0);
+}
+// Hedef: son 4 çeyreğin ortalaması × (1 + büyüme). Tek bir zayıf çeyrek (oyun çıkmadı) her şeyi bozmaz.
+export function quarterTarget(ctx) {
+  const co = company(ctx.state);
+  const last = co.quarters.slice(0, 4).map((q) => q.rev);
+  const base = last.length ? last.reduce((a, b) => a + b, 0) / last.length : co.lastQ;
+  return Math.round(Math.max(1, base) * (1 + I(ctx).growthTarget));
 }
 export function dividend(ctx) {
   const { state, ledger } = ctx;
@@ -95,7 +108,9 @@ export function weeklyCompany(ctx) {
   if (state.week - co.qStart < c.quarterWeeks) return;
   co.qStart = state.week;
   const rev = quarterRevenue(ctx);
-  const target = Math.round(co.lastQ * (1 + c.growthTarget));
+  const target = quarterTarget(ctx);
+  co.qAcc = 0;
+  co.pressure = Math.max(0, co.pressure - c.pressureDecay);
   const beat = rev >= target;
   co.quarters.unshift({ w: state.week, rev, target, beat }); if (co.quarters.length > 12) co.quarters.length = 12;
   if (beat) {

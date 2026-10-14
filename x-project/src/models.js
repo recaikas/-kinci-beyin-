@@ -225,8 +225,10 @@ export function platformBase(ctx, p, y = tableYear(ctx)) {
   if (y < p.from || y >= p.to) return 0;
   if (p.own) return ctx.state.consoles.find((k) => k.id === p.id).base;
   if (p.key) return lerpTable(p.key, y);
-  const frac = clamp((y - p.from) / ((p.to - p.from) * ctx.pack.platformGrowth.peakAt), 0, 1);
-  return p.start + (p.units - p.start) * frac;
+  const G = ctx.pack.platformGrowth, life = clamp((y - p.from) / (p.to - p.from), 0, 1);
+  const frac = clamp(life / G.peakAt, 0, 1);
+  const decline = life > G.declineFrom ? 1 - (1 - G.declineTo) * (life - G.declineFrom) / (1 - G.declineFrom) : 1;
+  return (p.start + (p.units - p.start) * frac) * decline;
 }
 export function activePlatforms(ctx, y = tableYear(ctx)) {
   return allPlatforms(ctx).filter((p) => y >= p.from && y < p.to);

@@ -6,7 +6,7 @@ import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
 import * as M from '../src/models.js';
-import { runBot } from './bot.mjs';
+import { runSmartBot } from './smartbot.mjs';
 
 let pass = 0, fail = 0;
 const check = (name, ok, info = '', kind = 'Tutarlılık') => {
@@ -101,22 +101,23 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
 
 // 10) Deterministik RNG: aynı tohum + aynı eylemler = aynı sonuç
 {
-  const a = runBot({ seed: 42, difficulty: 'orta', years: 6 }), b = runBot({ seed: 42, difficulty: 'orta', years: 6 });
+  const a = runSmartBot({ seed: 42, difficulty: 'orta', years: 6 }), b = runSmartBot({ seed: 42, difficulty: 'orta', years: 6 });
   check('Tohumlu RNG tekrarlanabilir', a.cash === b.cash && a.games === b.games, `${a.cash} = ${b.cash}`);
 }
 
-// 11) Duman testi: basit bot, üç tohum (tek tohumun şansına bağlı kalmasın)
+// 11) Duman testi: akıllı bot 50 yıl (1976–2025) oynar. Tam rapor: node tools/balance.mjs 8 --md docs/DENGE.md
 {
-  const seeds = [3, 11, 19];
-  const med = seeds.map((seed) => runBot({ seed, difficulty: 'orta', years: 20 }));
-  const leg = seeds.map((seed) => runBot({ seed, difficulty: 'efsanevi', years: 20 }));
-  const alive = med.filter((r) => !r.over || r.over === 'son').length;
-  const mid = (rs) => rs.map((r) => r.cash).sort((a, b) => a - b)[1];
-  console.log('   Orta  :', med.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
-  console.log('   Efsane:', leg.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
-  check('Orta: çoğunluk 20 yılda batmaz', alive >= 2, `${alive}/3`, 'Duman');
-  check('Orta: aşırı zengin değil (medyan < 50 M)', mid(med) < 50e6, (mid(med) / 1e6).toFixed(1) + ' M', 'Duman');
-  check('Efsanevi, Orta’dan zor', mid(leg) < mid(med), '', 'Duman');
+  const med = (rs) => rs.map((r) => r.cash).sort((a, b) => a - b)[Math.floor(rs.length / 2)];
+  const orta = [3, 11, 19].map((seed) => runSmartBot({ seed, difficulty: 'orta', years: 50 }));
+  const kolay = [3, 11].map((seed) => runSmartBot({ seed, difficulty: 'kolay', years: 50 }));
+  const efs = [19, 27, 35].map((seed) => runSmartBot({ seed, difficulty: 'efsanevi', years: 50 }));
+  console.log('   Orta    :', orta.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
+  console.log('   Efsanevi:', efs.map((r) => `${r.over || 'ayakta'} ${(r.cash / 1e6).toFixed(1)}M`).join(' | '));
+  check('Orta: bot 50 yılı batmadan bitirir', orta.every((r) => !r.over), orta.map((r) => r.over || 'ok').join(','), 'Duman');
+  check('Orta: aşırı zengin değil (medyan < 1 milyar)', med(orta) < 1e9, (med(orta) / 1e6).toFixed(0) + ' M', 'Duman');
+  check('Kolay, Orta’dan zengin', med(kolay) > med(orta), '', 'Duman');
+  check('Efsanevi kazanılabilir: bot en az bir tohumda 2025’e ulaşır', efs.some((r) => !r.over), efs.map((r) => r.over || 'ok').join(','), 'Duman');
+  check('Efsanevi, Orta’dan çok daha zor', med(efs) < med(orta) / 10, '', 'Duman');
 }
 
 // 12) Kairosoft kariyer kuralları (V): ileri kariyer için aynı kişinin ön koşulları seviye 5 olmalı

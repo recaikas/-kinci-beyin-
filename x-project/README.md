@@ -8,7 +8,8 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 151 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 199 kalibrasyon ve tutarlılık kontrolü (50 yıllık bot dumanı dahil, ~17 sn)
+node tools/balance.mjs 8 --md docs/DENGE.md   # tam denge raporu
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -36,7 +37,7 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 
 ## İçerik
 
-- 6 tür, 38 konu, 40 platform (1976–2035, bilgisayar, konsol, el konsolu, mobil), tarihten gelen yayıncılar, 5 oyun boyutu (MMO dahil)
+- 6 tür, 38 konu, 40 platform (1976–2035, bilgisayar, konsol, el konsolu, mobil), tarihten gelen yayıncılar, 6 oyun boyutu (Mini'den MMO'ya)
 - 9 görevli 3 fazlı geliştirme, kaydırıcı hizası, uyum katsayısı, hata ayıklama
 - Araştırma ağacı ve GDT v tablosuyla motor yapımı, motor lisanslama
 - Kadro: beceri, moral, stres, tükenmişlik, istifa, rakibe transfer, 12 kişilik özellik, eğitim, zam
@@ -56,7 +57,7 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 - **Oda görevleri (MGT)**: grafik, ses, QA ve pazarlama odaları belirli bir projeye atanır ya da tüm projelere bölünür. Yeni odalar: Pazarlama ve yayın (her hafta hype, kendi yayında güç), Müşteri destek (hayran, bedava oyuncu raporu)
 - **Oyuncu raporu (GDT)**: satıştan 4 hafta sonra; oyuncuların hangi görevi sevip sevmediği, kitle, fiyat, hata, motor ve beklenti yorumu. Görev önemleri faz pencerelerinde rozet olur
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
-- 40 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
+- 81 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
 - **Tarihsel oyun dünyası (1976–2025)**: 50+ parodi şirket (Ataro, Pandando, Segga, Soni, MikroYumuşak, Kapkom, Konamii…) yıllara göre kurulur, güçlenir, zayıflar, birleşir ya da piyasadan çekilir. Her yılın 10 popüler oyunu (Süper Tesisatçı Kardeşler, Zelma Efsanesi, Hızlı Kirpi…) yıl içine dağılıp satış listesine girer; her ay bir tarihî olay haber olur. "50 yıl · tam tarih" modu 1976'dan 2025'e kadar oynanır. Tüm adlar telife takılmamak için parodi
 - **Yayıncılar tarihten**: güçleri o yılki şirket gücünden gelir (Ataro 1980'lerde dev, sonra yok olur); pay ve hayran şartı güce göre
 - **Oyun dünyası penceresi**: yılın oyunları ve olayları, şirket sıralaması, platform pazar payları, olay arşivi
@@ -69,12 +70,19 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 - **Ödüller**: Yılın Oyunu artık tarihî hitlerle yarışır; olamazsan "türünün en iyisi" ödülü
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…
 
-## Denge (basit bot, 20 yıl)
+## Denge (akıllı bot, 50 yıl)
 
-| Zorluk | Sonuç |
-|---|---|
-| Kolay | 55–75 M $ |
-| Orta | 3 tohumdan 2'si ayakta, 15–40 M $; Yılın Oyunu + tür ödülleri |
-| Zor / Efsanevi | Bot garajdan çıkamadan batıyor |
+`test/smartbot.mjs` oyunun tüm sistemlerini kullanan bir bottur. `node tools/balance.mjs 8 --md docs/DENGE.md` her zorlukta 8 tohumla 1976–2025 oynatıp `docs/DENGE.md` raporunu üretir (yaklaşık 1,5 dakika). Özet:
+
+| Zorluk | 2025'e ulaşan | Medyan kasa |
+|---|---|---|
+| Çok kolay | 8/8 | ~1,5 milyar $ |
+| Kolay | 8/8 | ~450 M $ |
+| Orta | 8/8 | ~210 M $ |
+| Zor | 3/8 | çoğu batar; ayakta kalanlar büyük stüdyo |
+| Çok zor | 2/8 | — |
+| Efsanevi | 4/8 | ~1 M $ (küçük sözleşme stüdyosu) |
+
+Bu ölçümle bulunan ve düzeltilen 10 sorun raporun sonunda listelidir.
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.
