@@ -3,7 +3,7 @@
 // Bir oyunun bölgelere erişimi yayında game.reach'e yazılır; satış formülü (models.peakWeekly) onu okur.
 import { clamp, lerpTable } from '../kernel.js';
 import { REGIONS, HOMES, NET_LEVELS, LOC_LEVELS, TEXT_LOAD, BAD_LOC, HOLIDAYS, REGION_EVENTS, BOARDS } from '../data/regions.js';
-import { tableYear, inflation, platformById, regionShares, regionBias } from '../models.js';
+import { tableYear, inflation, platformById, regionShares, regionBias, regionPref } from '../models.js';
 
 export { REGIONS, HOMES, NET_LEVELS, LOC_LEVELS, HOLIDAYS, REGION_EVENTS, BOARDS };
 export const R = (id) => REGIONS.find((r) => r.id === id);
@@ -85,10 +85,10 @@ const pubY = (ctx, power) => (ctx.pack.sales.yA + ctx.pack.sales.yB * power / 10
 export function boardActive(ctx, rid) { return BOARDS.find((b) => b.region === rid && Y(ctx) >= b.year) || null; }
 export function ratingK(ctx, g, rid, loc = {}) {
   if ((loc?.[rid] || 0) >= 3) return 1;
-  const y = Y(ctx), adult = g.genre === 'aksiyon' && g.audience === 'yetiskin';
+  const y = Y(ctx), adult = ['aksiyon', 'nisanci', 'dovus'].includes(g.genre) && g.audience === 'yetiskin';
   if (rid === 'eu' && ctx.state.regRules?.siddet && adult) return 0.85;
   if (rid === 'jp' && y >= 1990 && adult && VIOLENT.includes(g.topic)) return 0.9;
-  if (rid === 'asya' && y >= 2004 && g.mmo) return 0.7;
+  if (rid === 'asya' && y >= 2004 && (g.mmo || g.sub === 'mmorpg')) return 0.7;
   return 1;
 }
 const pirRate = (ctx, rid) => clamp(lerpTable(R(rid).piracy, Y(ctx)) + (ctx.state.pirAdd?.[rid] || 0), 0, 0.95);
@@ -133,9 +133,9 @@ export function dealShare(g) {
 }
 // Proje için beklenen bölge dağılımı (takvim ve mevsim hesabı)
 export function projectSplit(ctx, pj) {
-  const w = regionShares(ctx), gi = ctx.pack.genres.findIndex((x) => x.id === pj.genre);
+  const w = regionShares(ctx);
   const reach = pj.reach || computeReach(ctx, { ...pj, selfPub: true }, pj.deal ? { deal: pj.deal, pub: { region: pj.deal.region, power: pj.deal.power } } : {}).reach;
-  const raw = Object.fromEntries(IDS.map((r) => [r, (w[r] || 0) * (R(r).pref[gi] ?? 1) * (reach[r] || 0)]));
+  const raw = Object.fromEntries(IDS.map((r) => [r, (w[r] || 0) * regionPref(ctx, R(r), pj.genre) * (reach[r] || 0)]));
   const sum = Object.values(raw).reduce((a, b) => a + b, 0) || 1;
   for (const r in raw) raw[r] /= sum;
   return raw;
@@ -279,8 +279,8 @@ export function refreshGame(ctx, g, msg, kick = 0.03) {
   const old = { ...g.reach };
   const pub = g.deal ? { power: g.deal.power, region: g.deal.region } : null;
   applyReach(ctx, g, pub, g.deal?.bargain ? g.deal : g.deal || null);
-  const w = regionShares(ctx), gi = ctx.pack.genres.findIndex((x) => x.id === g.genre);
-  const sum = (reach) => IDS.reduce((a, r) => a + (w[r] || 0) * (R(r).pref[gi] ?? 1) * (reach[r] || 0), 0);
+  const w = regionShares(ctx);
+  const sum = (reach) => IDS.reduce((a, r) => a + (w[r] || 0) * regionPref(ctx, R(r), g.genre) * (reach[r] || 0), 0);
   const k = sum(g.reach) / Math.max(1e-6, sum(old));
   if (k > 1.001) {
     for (const id in g.peak) g.peak[id] *= k;

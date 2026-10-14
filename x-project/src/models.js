@@ -3,6 +3,7 @@
 import { lerpTable, logTable, clamp, calendar } from './kernel.js';
 import { CRITICS } from './data/critics.js';
 import { REGIONS as REGION_DATA } from './data/regions.js';
+import { GENRE_IDS, REL, TOPIC_FIT, SUB, TOPIC_SUB, LEGENDS, TIER, MASTERY, LEGACY_SUB, tierOfValue } from './data/genres.js';
 
 export const tableYear = (ctx) => calendar(ctx.state, ctx.pack).tableYear;
 export const inflation = (ctx, y = tableYear(ctx)) => Math.pow(ctx.pack.economy.inflation, y - ctx.pack.meta.startYear);
@@ -95,6 +96,68 @@ export function personWeekly(ctx, p, n) {
   return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl * designOf(ctx, p).speed * rel;
 }
 
+// --- Konu D: türler ve kombinasyon katmanları
+const GIDX = Object.fromEntries(GENRE_IDS.map((id, i) => [id, i]));
+export const genreById = (ctx, id) => ctx.pack.genres.find((g) => g.id === id);
+// Eski 6 türlük diziler (platform, bölge, konsol) yeni türler için eksen karışımıyla okunur.
+export function axisBlend(ctx, arr, gid) {
+  const i = GIDX[gid] ?? 0;
+  if (i < 6) return arr[i];
+  const g = genreById(ctx, gid);
+  let v = 0, w = 0;
+  for (const [ax, k] of Object.entries(g.axes)) { v += arr[GIDX[ax]] * k; w += k; }
+  return v / (w || 1);
+}
+export function platGenre(ctx, p, gid) {
+  const i = GIDX[gid] ?? 0;
+  if (i < 6) return p.genre[i];
+  return clamp(axisBlend(ctx, p.genre, gid) + (genreById(ctx, gid).platAdj?.[p.kind] || 0), 4, 10);
+}
+export function regionPref(ctx, r, gid) {
+  const i = GIDX[gid] ?? 0;
+  if (i < 6) return r.pref[i];
+  return Math.round(axisBlend(ctx, r.pref, gid) * (genreById(ctx, gid).regAdj?.[r.id] || 1) * 100) / 100;
+}
+export const topicTier = (topicId, gid) => TOPIC_FIT[topicId]?.[GIDX[gid]] || 'G';
+export function subTier(gid, sid) {
+  const s = SUB[sid];
+  if (!s) return null;
+  if (s.rel?.[gid]) return s.rel[gid];
+  return s.parent === gid ? 'S' : REL[gid]?.[GIDX[s.parent]] || 'G';
+}
+export const topicSubTier = (topicId, sid) => TOPIC_SUB[`${topicId}|${sid}`] || 'G';
+export function legendOf(ctx, o, y = tableYear(ctx)) {
+  for (const L of LEGENDS) {
+    if (y < L.year) continue;
+    const a = L.any.find((r) => (!r.topic || r.topic === o.topic) && r.genre === o.genre && (!r.sub || r.sub.includes(o.sub)));
+    if (a) return { ...L, rule: a };
+  }
+  return null;
+}
+// Kombinasyon: konu×tür (kt), tür×alt tür (gs), konu×alt tür (ts), kitle ve platform tavanları, genel not.
+export const subId = (sid) => (!sid ? null : SUB[sid] ? sid : LEGACY_SUB[sid] || null); // eski kayıt: alt tür = ana tür
+export function combo(ctx, o) {
+  if (o.sub && !SUB[o.sub]) o = { ...o, sub: subId(o.sub) };
+  const L = o.topic && o.genre ? legendOf(ctx, o) : null;
+  let kt = topicTier(o.topic, o.genre), gs = o.sub ? subTier(o.genre, o.sub) : null, ts = o.sub ? topicSubTier(o.topic, o.sub) : 'G';
+  if (L) { kt = 'S'; if (gs) gs = 'S'; if (TIER[ts].v < 8) ts = 'G'; }
+  const sub = o.sub ? SUB[o.sub] : null;
+  const audCap = sub?.aud?.[o.audience] || null;
+  const v = gs ? (2 * TIER[kt].v + 2 * TIER[gs].v + TIER[ts].v) / 5 : TIER[kt].v;
+  const overall = L ? 'S' : [kt, gs, ts].includes('X') ? 'X' : tierOfValue(v);
+  return { kt, gs, ts, audCap, overall, legend: L };
+}
+export const platCap = (sid, p) => (sid && SUB[subId(sid)]?.plat?.[p.kind]) || null;
+export const platFit = (ctx, p, gid, sid) => Math.min(platGenre(ctx, p, gid), platCap(sid, p) ? TIER[platCap(sid, p)].v : 10);
+// Stüdyo tür bilgisi ve ustalık kademesi
+export const genreXp = (ctx, gid) => ctx.state.gxp?.[gid] ?? 0;
+export function mastery(ctx, gid) {
+  const x = genreXp(ctx, gid);
+  let m = MASTERY[0];
+  for (const r of MASTERY) if (x >= r.min) m = r;
+  return m;
+}
+
 // --- Production yardımcıları
 export function discShares(ctx, alloc) {
   const out = { oyn: 0, gfx: 0, ses: 0, tek: 0 };
@@ -112,14 +175,14 @@ export function alignment(ctx, project) {
   return Math.max(r.alignFloor, 1 - r.alignK * diff);
 }
 export function fitFactor(ctx, project) {
-  const gi = ctx.pack.genres.findIndex((x) => x.id === project.genre);
   const ai = ctx.pack.audiences.findIndex((x) => x.id === project.audience);
   const t = ctx.pack.topics.find((x) => x[0] === project.topic);
   const plats = project.platforms.map((id) => platformById(ctx, id));
   const avg = (f) => plats.reduce((s, p) => s + f(p), 0) / plats.length;
-  const tg = t[2][gi] / 10, ta = t[3][ai] / 10;
-  const pg = avg((p) => p.genre[gi] / 10), pa = avg((p) => p.aud[ai] / 10);
-  return Math.sqrt(tg * ta * pg * pa);
+  const c = combo(ctx, project);
+  const tg = TIER[c.kt].v / 10, ta = Math.min(t[3][ai], c.audCap ? TIER[c.audCap].v : 10) / 10;
+  const pg = avg((p) => platFit(ctx, p, project.genre, project.sub) / 10), pa = avg((p) => p.aud[ai] / 10);
+  return Math.sqrt(tg * ta * pg * pa) * (c.gs ? TIER[c.gs].subF ?? 1 : 1);
 }
 export function engineScore(ctx, engine) {
   if (!engine) return 0;
@@ -167,8 +230,17 @@ export function review(ctx, project) {
   }
   let score = F * sum;
   const notes = [];
-  if (!project.sub) { score -= r.noSubgenrePenalty; notes.push(`Alt tür yok −${r.noSubgenrePenalty}`); }
-  else if (!g.good.includes(project.sub)) { score -= r.badPairPenalty; notes.push(`Uyumsuz alt tür −${r.badPairPenalty}`); }
+  const c = combo(ctx, project);
+  const sgn = (v) => (v > 0 ? `+${String(v).replace('.', ',')}` : `−${String(-v).replace('.', ',')}`);
+  if (!subId(project.sub)) { score -= r.noSubgenrePenalty; notes.push(`Alt tür yok −${r.noSubgenrePenalty}`); }
+  else {
+    const a = TIER[c.gs].sub, b = TIER[c.ts].ts;
+    if (a) { score += a; notes.push(`Alt tür ${TIER[c.gs].name.toLowerCase()} ${sgn(a)}`); }
+    if (b) { score += b; notes.push(`Konu ve alt tür ${TIER[c.ts].name.toLowerCase()} ${sgn(b)}`); }
+  }
+  // Stüdyonun bu türdeki ustalığı (Konu D)
+  const ms = ctx.state.gxp ? mastery(ctx, project.genre) : null;
+  if (ms?.score) { score += ms.score; notes.push(`${g.name} ${ms.name.toLowerCase()} ${sgn(ms.score)}`); }
   const totalPts = Object.values(project.points).reduce((a, b) => a + b, 0) || 1;
   const bugRate = project.bugs / totalPts;
   const bugPen = Math.min(r.bugCap, r.bugMult * bugRate);
@@ -184,7 +256,7 @@ export function review(ctx, project) {
   if (score >= r.cap - 0.01) score = r.cap + ctx.rng.range(0, r.randTop);
   score = clamp(score, 1, 100);
   const critics = criticPanel(ctx, score, project.genre);
-  return { score: Math.round(score * 10) / 10, parts, hiza, F, bugRate, notes, critics, genreNote: genreNote(project.genre, score) };
+  return { score: Math.round(score * 10) / 10, parts, hiza, F, bugRate, notes, critics, genreNote: genreNote(project.genre, score), combo: c.overall, legend: c.legend?.id || null };
 }
 
 // Eleştirmen puanı: 5'in altında tam sayı, üstünde 0,2'lik adım. Her eleştirmen kendi kademesinden farklı bir yorum seçer.
@@ -266,12 +338,11 @@ export const ALL_REGIONS = (ctx) => ctx.pack.regions.list.map((r) => r.id);
 // Bir oyunun bir platformdaki bölge karışımı: pazar payı × tür ilgisi × platformun o bölgedeki gücü.
 export function regionMix(ctx, game, p, y = tableYear(ctx)) {
   const w = regionShares(ctx, y);
-  const gi = ctx.pack.genres.findIndex((x) => x.id === game.genre);
   const regs = game.regions || ALL_REGIONS(ctx);
   const out = {};
   for (const r of ctx.pack.regions.list) {
     const acc = game.reach ? game.reach[r.id] || 0 : regs.includes(r.id) ? 1 : 0;
-    if (acc > 0) out[r.id] = w[r.id] * r.pref[gi] * regionBias(ctx, p, r.id) * acc;
+    if (acc > 0) out[r.id] = w[r.id] * regionPref(ctx, r, game.genre) * regionBias(ctx, p, r.id) * acc;
   }
   return out;
 }
@@ -298,13 +369,12 @@ export function peakWeekly(ctx, game) {
   const base = s.B * Pz(ctx) * diff.Z * S(ctx, game.score) * ip * F * Hh * Y * St * I * size.sales;
   const act = activePlatforms(ctx);
   const total = act.reduce((a, p) => a + platformBase(ctx, p), 0) || 1;
-  const gi = ctx.pack.genres.findIndex((x) => x.id === game.genre);
   const ai = ctx.pack.audiences.findIndex((x) => x.id === game.audience);
   const out = {};
   for (const id of game.platforms) {
     const p = platformById(ctx, id);
     const share = platformBase(ctx, p) / total;
-    const fit = (p.genre[gi] / 10) * (p.aud[ai] / 10);
+    const fit = (platFit(ctx, p, game.genre, game.sub) / 10) * (p.aud[ai] / 10);
     const price = Math.pow((p.priceRef || s.priceRef) / gamePrice(ctx, game, p), s.priceExp);
     out[id] = base * share * fit * price * regionFactor(ctx, game, p);
   }

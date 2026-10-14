@@ -301,6 +301,38 @@ button.on small { color: inherit; }
 .kn { font-style: normal; font-family: var(--font-num); font-size: 0.95rem; margin-left: 6px; padding: 0 4px; background: var(--panel); border: 1px solid var(--line); }
 .tile.on .kn { background: var(--night); color: var(--ink); }
 .k10, .k9 { color: var(--mint); } .k8 { color: var(--ink-2); } .k7, .k6 { color: var(--blood); }
+/* ---- türler (Konu D) */
+.tS, .tI { color: var(--mint); } .tG { color: var(--ink-2); } .tB { color: var(--amber); } .tK, .tX { color: var(--blood); }
+.tX { font-weight: 700; }
+.tile.on .kn.tS, .tile.on .kn.tI { color: var(--mint); } .tile.on .kn.tK, .tile.on .kn.tX { color: var(--blood); }
+.tile em.kn { top: auto; bottom: -7px; right: -4px; background: var(--panel); color: var(--ink-2); border: 1px solid var(--line); }
+.tile em.kn.tS, .tile em.kn.tI { color: var(--mint); } .tile em.kn.tB { color: var(--amber); } .tile em.kn.tK, .tile em.kn.tX { color: var(--blood); }
+.tile .ms { display: block; font-size: 0.68rem; color: var(--ink-2); margin-top: 2px; }
+.tile.on .ms { color: var(--night); }
+.tile.locked { opacity: 0.45; cursor: not-allowed; }
+.tile.locked em { background: var(--panel-2); color: var(--ink-2); }
+.subs { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 6px; }
+.chip { padding: 4px 8px; font-size: var(--s-1); min-height: 30px; }
+.chip.on { background: var(--ink); color: var(--night); border-color: var(--ink); }
+.chip .kn { margin-left: 4px; }
+details.subgrp { margin: 4px 0; } details.subgrp summary { cursor: pointer; font-size: var(--s-1); color: var(--ink-2); padding: 4px 0; }
+.combo .tier { font-family: var(--font-display); font-size: var(--s0); }
+.combo .team { font-style: italic; }
+.combo .warn, .warn { color: var(--amber); }
+.ideas { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 4px; }
+.gtree { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin: 8px 0; }
+.gbranch { display: grid; gap: 3px; text-align: left; padding: 6px 8px; }
+.gbranch.on { border-color: var(--candy); background: var(--panel-2); }
+.gbranch.locked { opacity: 0.55; }
+.gbranch small { font-size: 0.7rem; color: var(--ink-2); }
+.slist { display: grid; gap: 6px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: var(--s-1); padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.srow small { color: var(--ink-2); }
+.srow.unborn { opacity: 0.6; }
+.tgrid { display: flex; flex-wrap: wrap; gap: 4px; }
+.tg { font-size: 0.72rem; padding: 2px 6px; border: 1px solid var(--line); background: var(--panel); }
+.pill.taste { background: var(--panel-2); }
+@media (max-width: 600px) { .srow { grid-template-columns: 1fr; gap: 2px; } }
 .report { display: grid; gap: 6px; text-align: left; }
 .report ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--s-1); }
 .report .good { color: var(--mint); } .report .bad { color: #ffb3bd; }

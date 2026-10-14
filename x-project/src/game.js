@@ -19,10 +19,11 @@ import * as Modern from './systems/modern.js';
 import * as Charts from './systems/charts.js';
 import * as Pub from './systems/publishers.js';
 import * as Regions from './systems/regions.js';
+import * as Genres from './systems/genres.js';
 
-export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na' } = {}) {
+export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na', background = 'salon' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
-  return {
+  const state = {
     version: 3, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
     companyName, founderName, founderSpec, cash: 0, startCash: Math.round(diff.startCash * (Regions.R(home)?.startK ?? 1)),
     ledger: { byYear: {}, total: {}, recent: [] },
@@ -38,6 +39,8 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
     designs: {}, vacationPolicy: 'planli', rel: {},
     home, net: {}, fanMix: { [home]: 1 },
   };
+  Genres.initState(state, PACK, background); // Konu D: kurucu geçmişi
+  return state;
 }
 
 // Eski kayıtları taşı: tek proje → proje listesi (v3).
@@ -58,6 +61,7 @@ function migrate(state) {
   Charts.mkt(state);
   Regions.migrate(state);
   Pub.migrate(state);
+  Genres.migrate(state, PACK);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -81,6 +85,7 @@ export function makeGame(state, pack = PACK) {
   };
   Pub.wire(ctx);
   Regions.wire(ctx);
+  Genres.wire(ctx);
   const contracts = () => { Prod.genContracts(ctx); Pub.addTrial(ctx); };
 
   const api = {
@@ -92,7 +97,9 @@ export function makeGame(state, pack = PACK) {
       state.rooms.push({ id: state.nextId++, type: 'gelistirme', mode: 'otomatik' });
       const founder = Staff.makePerson(ctx, { skill: pack.production.founderSkill, career: pack.careerRules.founderCareer[state.founderSpec], level: 1, founder: true, name: state.founderName });
       founder.room = state.rooms[0].id;
+      Genres.assignTaste(ctx, founder, true);
       state.staff.push(founder);
+      if (Genres.bg(ctx).bonus.fans) state.fans += Genres.bg(ctx).bonus.fans;
       Staff.genApplicants(ctx);
       contracts();
       Market.initRivals(ctx);
@@ -124,6 +131,7 @@ export function makeGame(state, pack = PACK) {
       Market.weeklyCharts(ctx);
       Pub.weekly(ctx);
       Regions.weekly(ctx);
+      Genres.weekly(ctx);
       // ekonomi
       if (newMonth) {
         Eco.monthlyEconomy(ctx);
@@ -165,6 +173,8 @@ export function makeGame(state, pack = PACK) {
       if (size.research && !state.research.done[size.research]) return { ok: false, msg: 'Bu boyut için araştırma gerekli.' };
       if (state.office.tier < size.office) return { ok: false, msg: `Bu boyut için en az "${pack.offices[size.office - 1].name}" gerekli.` };
       if (!o.platforms?.length) return { ok: false, msg: 'En az bir platform seç.' };
+      if (o.kind !== 'ek' && !Genres.knows(ctx, o.genre)) return { ok: false, msg: 'Bu türü henüz bilmiyorsun; önce araştır.' };
+      if (o.kind !== 'ek' && o.sub && !Genres.subAvailable(ctx, o.sub)) return { ok: false, msg: 'Bu alt tür henüz yok ya da bilinmiyor.' };
       const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
       const locked = o.platforms.map((id) => M.platformById(ctx, id)).filter((p) => !p || (!p.own && p.tech > maxTech));
       if (locked.some((p) => !p)) return { ok: false, msg: 'Bu platform artık piyasada değil.' };
@@ -234,6 +244,9 @@ export function makeGame(state, pack = PACK) {
     buyRights: (ipId) => Pub.buyRights(ctx, ipId),
     // --- Bölgeler (Konu C)
     buyNet: (rid) => Regions.buyNet(ctx, rid),
+    // --- Türler (Konu D)
+    invent: (sid) => Genres.invent(ctx, sid),
+    focusGroup: (o) => Genres.focusGroup(ctx, o),
     localizeLevel: (pid, rid, lv) => Regions.localize(ctx, pid, rid, lv, false),
     localizeGame: (gid, rid, lv) => Regions.localize(ctx, gid, rid, lv, true),
     startExpansion(gid) {
@@ -324,4 +337,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres };

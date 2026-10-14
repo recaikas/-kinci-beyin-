@@ -1,4 +1,6 @@
 // Eleştirmen yorumları (P, içerik). bands: [eşik, 5 yorum] — puan ≥ eşik olan son kademe seçilir.
+import { GENRE_CRITICS } from './genres.js';
+
 // 1–5 arası tam sayı, 5'ten sonra 0,2'lik adımlar. genre: her tür için kötüden iyiye 5 yorum.
 export const CRITICS = {
   _tag: 'P',
@@ -42,5 +44,6 @@ export const CRITICS = {
     simulasyon: ['Simülasyon değil, simülasyon taklidi.', 'Rakamlar dönüyor ama hayat yok.', 'Sistemler oturmuş, öğrenmesi zor.', 'Saatin nasıl geçtiğini anlamıyorsun.', 'Kendi dünyanı kurmanın en tatlı yolu.'],
     strateji: ['Yapay zekâ kendi askerini vuruyor.', 'Strateji var, derinlik yok.', 'Akıllı kararlar ödüllendiriliyor, arayüz yorucu.', 'Her hamle düşündürüyor, her zafer tatlı.', 'Satranç kadar derin, savaş kadar gürültülü.'],
     casual: ['Beş dakikada sıkıldık, telefonu bıraktık.', 'Basit, belki fazla basit.', 'Otobüs yolculukları için tatlı bir eşlikçi.', 'Bir el daha derken gece oldu.', 'Herkesin seveceği saf neşe.'],
+    ...GENRE_CRITICS, // Konu D: yeni ana türler
   },
 };

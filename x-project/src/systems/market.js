@@ -9,6 +9,7 @@ import * as Pub from './publishers.js';
 import * as Regions from './regions.js';
 import * as Modern from './modern.js';
 import * as Charts from './charts.js';
+import * as Genres from './genres.js';
 export const publishersAvailable = (ctx) => Pub.list(ctx);
 
 export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null, printRun = 'normal' }) {
@@ -35,6 +36,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   const m = Modern.monetById(ctx, monet);
   if (model === 'f2p' && m.score) { rv.score = Math.max(1, Math.round((rv.score + m.score) * 10) / 10); rv.notes.push(`Agresif para kazanma ${m.score}`); }
   const ea = Modern.eaOnRelease(ctx, pj, rv);
+  const gfx = Genres.onReview(ctx, pj, rv); // Konu D: efsane keşif, öncü, kült klasik
   bus.fire('afterGameReview', { project: pj, review: rv });
 
   // IP (ek paket temel oyunun IP'sini kullanır, IP değerini değiştirmez)
@@ -104,6 +106,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   state.lastCombo = `${pj.topic}/${pj.genre}`;
   state.projects = state.projects.filter((x) => x !== pj);
   if (!state.projects.length) state.crunch = false;
+  Genres.afterRelease(ctx, game, pj, gfx);
   const report = learn(ctx, pj, rv);
   state.charts.unshift({ name: game.name, studio: state.companyName, score: game.score, week: state.week, mine: true, genre: game.genre });
   if (deal) Pub.onRelease(ctx, game, pj); else Pub.onSelfRelease(ctx, game);
@@ -145,6 +148,7 @@ function weekMult(ctx, game) {
   if (newer) m *= s.sequelOverlapMult;
   if (state.flags.lootbox) m *= 1.1;
   if (game.reach) m *= Regions.weekK(ctx, game); // bölgesel bayram, kampanya, yasak
+  m *= Genres.lifeK(ctx, game); // alt türün yaşam döngüsü (Konu D)
   return m;
 }
 
@@ -241,7 +245,7 @@ export function weeklyTrend(ctx) {
   const y = tableYear(ctx);
   const topics = pack.topics.filter((t) => t[4] <= y);
   const byGenre = rng.chance(0.5);
-  state.trend = byGenre ? { genre: rng.pick(pack.genres).id, untilWeek: state.week + rng.int(pack.trends.minWeeks, pack.trends.maxWeeks) }
+  state.trend = byGenre ? { genre: rng.pick(Genres.bornGenres(ctx)).id, untilWeek: state.week + rng.int(pack.trends.minWeeks, pack.trends.maxWeeks) }
     : { topic: rng.pick(topics)[0], untilWeek: state.week + rng.int(pack.trends.minWeeks, pack.trends.maxWeeks) };
   const label = state.trend.genre ? pack.genres.find((g) => g.id === state.trend.genre).name : pack.topics.find((t) => t[0] === state.trend.topic)[1];
   ctx.news(`📈 Yeni trend: ${label}`, 'info');
@@ -257,7 +261,7 @@ export function initRivals(ctx) {
     const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + 5, r.scoreSpread), 20, 95));
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
-    const rg = { id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: rng.pick(pack.genres).id, weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true };
+    const rg = { id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: Genres.rivalGenre(ctx), weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true };
     Charts.tagRival(ctx, rg, { owner: rv.hw ? rv.cid : null });
     Charts.advanceRival(ctx, rg, rg.weeks);
     state.rivalGames.push(rg);
@@ -292,7 +296,7 @@ export function weeklyRivals(ctx) {
     if (!top.has(rv.id) && !rv.acquired) continue;
     // Sakin aylarda bazen bekler: çıkışlar yılsonuna yığılır.
     if (Charts.rivalPostpones(ctx)) { rv.nextRelease = 4; continue; }
-    const genre = rng.pick(pack.genres).id;
+    const genre = Genres.rivalGenre(ctx);
     // Aynı tür ve yakın tarihte duyurulmuş güçlü bir oyundan kaçabilir.
     if (Charts.rivalDodges(ctx, rv, genre)) { rv.nextRelease = pack.charts.announce.dodgeWeeks * 2 + 1; continue; }
     const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + r.scoreBias, r.scoreSpread), 15, 97));

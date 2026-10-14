@@ -19,6 +19,7 @@ export function make(u) {
       return builder + engines;
     }
     if (sub === 'konsol') return consoleView();
+    if (sub === 'turler') return u.genreTree(); // Konu D
     const cur = s.research.current ? (() => { const it = PACK.research.find((r) => r.id === s.research.current.id); return `<section class="box hl"><h3>${esc(it.name)}</h3><p class="muted small">${s.research.current.weeksLeft} hafta kaldı</p></section>`; })() : '';
     const row = (r) => {
       const i = Prod.researchInfo(c, r), can = s.research.rp >= i.rp && !s.research.current;
@@ -71,7 +72,7 @@ export function make(u) {
     const tiles = parts.types.map(({ t, ok, why }) => `<button class="tile ${d.type === t.id ? 'on' : ''}" data-act="ctype" data-id="${t.id}" ${ok ? '' : 'disabled'}>${esc(t.name)}<small>${ok ? `${t.year}'den beri` : why}</small></button>`).join('');
     const famOpts = `<option value="yeni" ${d.series === 'yeni' ? 'selected' : ''}>Yeni aile</option>${(s.consoleSeries || []).map((sr) => `<option value="${sr.id}" ${String(d.series) === String(sr.id) ? 'selected' : ''}>${esc(sr.name)} · ${sr.gen + 1}. nesil</option>`).join('')}`;
     const sel = (cat, list) => `<label>${esc(cp.parts[cat].name)}<select id="cp-${cat}" data-cpart="${cat}">${list.map(({ p, ok, why }) => `<option value="${p.id}" ${d.parts[cat] === p.id ? 'selected' : ''} ${ok ? '' : 'disabled'}>${esc(p.name)}${ok ? `${p.tech != null && cp.parts[cat].w ? ` · tek ${p.tech}` : ''} · ${money(p.cost * cp.costScale)}` : ` (${why})`}</option>`).join('')}</select></label>`;
-    const gfit = q && !q.issues.length ? PACK.genres.map((g, i) => `<span class="pill ${q.genre[i] >= 10 ? '' : q.genre[i] <= 7 ? 'warn' : ''}">${g.name} ${q.genre[i]}</span>`).join(' ') : '';
+    const gfit = q && !q.issues.length ? PACK.genres.map((g) => { const v = Math.round(M.platGenre(c, { genre: q.genre, kind: q.kind || 'konsol' }, g.id)); return `<span class="pill ${v >= 10 ? '' : v <= 7 ? 'warn' : ''}">${g.name} ${v}</span>`; }).join(' ') : '';
     const summary = q && !q.issues.length ? `<section class="box hl"><h3>${esc(q.name)} <small class="muted">${q.gen}. nesil · ${esc(typeName(d.type))}</small></h3>
         <div class="kv"><span>Teknoloji</span><b class="num">${q.tech} <small class="muted">dönem beklentisi ${q.expected} · kalite ×${q.quality.toFixed(2)}</small></b>
         <span>Yapım maliyeti</span><b class="num">${money(q.cost)}</b><span>İş yükü</span><b class="num">${cp.phases.length} × ${fmt(q.need)} puan</b>

@@ -15,6 +15,7 @@ import { make as make_chart } from './chart.js';
 import { make as make_win_market } from './win_market.js';
 import { make as make_win_pub } from './win_pub.js';
 import { make as make_win_regions } from './win_regions.js';
+import { make as make_win_genres } from './win_genres.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
@@ -332,6 +333,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_win_market(u));
   Object.assign(u, make_win_pub(u));
   Object.assign(u, make_win_regions(u));
+  Object.assign(u, make_win_genres(u));
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
@@ -375,7 +377,7 @@ export function boot(root, hotData = {}) {
       case 'close-dialog': return closeDialog();
       case 'begin': {
         const v = (q) => root.querySelector(q).value;
-        return start(newGame({ companyName: v('#n-company') || 'X Project', founderName: v('#n-founder') || 'Sen', founderSpec: v('#n-spec'), difficulty: v('#n-diff'), length: +v('#n-len'), seed: +v('#n-seed') || 1976, home: v('#n-home') || 'na' }));
+        return start(newGame({ companyName: v('#n-company') || 'X Project', founderName: v('#n-founder') || 'Sen', founderSpec: v('#n-spec'), difficulty: v('#n-diff'), length: +v('#n-len'), seed: +v('#n-seed') || 1976, home: v('#n-home') || 'na', background: v('#n-bg') || 'salon' }));
       }
       case 'continue': { const j = store((s) => s.getItem(SAVE_KEY)); if (j) start(loadGame(j)); return; }
       case 'newgame': return setupScreen();
@@ -431,6 +433,11 @@ export function boot(root, hotData = {}) {
       case 'announce': return run(g.announce(pid, +id));
       // Bölgeler (Konu C)
       case 'buynet': return run(g.buyNet(id));
+      // Konu D: türler
+      case 'focus': { const r = g.focusGroup(app.draft || {}); if (r.ok) app.focusLine = r.line; return run(r); }
+      case 'idea': { const it = g.state.ideas.find((x) => x.id === +id); if (!it) return; Object.assign(app.draft ||= u.defaultDraft(), { topic: it.topic, genre: it.genre, sub: it.sub }); g.state.ideas = g.state.ideas.filter((x) => x !== it); return renderWindow(); }
+      case 'invent': return run(g.invent(id));
+      case 'gtree': app.gtree = id; return renderWindow();
       case 'loclv': return run(g.localizeLevel(pid, id, +b.dataset.lv));
       case 'gloc': return run(g.localizeGame(+id, b.dataset.regionId, 1));
       // Yayıncılar (Konu B)

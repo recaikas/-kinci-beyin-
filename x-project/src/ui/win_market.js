@@ -1,5 +1,5 @@
 // Pazar: oyun ayrıntısı, satış listesi, son çıkanlar, rakipler.
-import { M, Market, Post, Know, Modern, Charts } from '../game.js';
+import { M, Market, Post, Know, Modern, Charts, Genres } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, move } from './util.js';
@@ -30,7 +30,7 @@ ${gm.model === 'f2p' ? '' : `        <button data-act="pricedrop" data-id="${gm.
       <div class="foot"><span class="muted small">Not −${P.portScorePenalty}, satış ×${P.portSales}.</span><button data-act="port" data-id="${gm.id}">Uyarla</button></div>` : '';
     const exp = !gm.expansion && !gm.portOf ? `<div class="foot"><span class="muted small">Ek paket: aynı konu ve türde kısa proje, temel oyunun satışlarına bağlı. ${Post.expansionAllowed(c, gm) ? '' : 'Bu oyun için artık yapılamaz.'}</span><button data-act="expansion" data-id="${gm.id}" ${canExp ? '' : 'disabled'}>Ek paket başlat</button></div>` : '';
     return `<div class="foot"><button class="ghost" data-act="back-game">← Oyunlar</button><span></span></div>
-      <div class="proj-head"><div><h2>${esc(gm.name)}</h2><p class="muted small">${PACK.genres.find((x) => x.id === gm.genre).name} · ${gm.year} · ${gm.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ')} · ${gm.price} $</p></div>
+      <div class="proj-head"><div><h2>${esc(gm.name)}</h2><p class="muted small">${PACK.genres.find((x) => x.id === gm.genre).name}${gm.sub && Genres.SUB[gm.sub] ? ` · ${esc(Genres.SUB[gm.sub].name)}` : ''}${gm.review?.combo ? ` · kombinasyon ${Genres.TIER[gm.review.combo].icon} ${Genres.TIER[gm.review.combo].name}` : ''}${gm.cult ? ' · 🎭 kült klasik' : ''}${gm.pioneer ? ' · 🧪 öncü' : ''} · ${gm.year} · ${gm.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ')} · ${gm.price} $</p></div>
         <div class="forecast"><small>Not</small><b class="num">${gm.score}</b></div></div>
       <div class="stats4">
         <div><small>Bu hafta</small><b class="num">${gm.active ? fmt(gm.lastWeek) : '—'}</b></div>

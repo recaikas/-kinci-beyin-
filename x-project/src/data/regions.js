@@ -91,7 +91,7 @@ export const LOC_LEVELS = [
   { lv: 3, name: 'Kültürelleştirme', k: 3.0, mult: 1.05, desc: 'İçerik uyarlanır (kan rengi, semboller); sansürü aşar ama yetişkin hayran biraz küser.' },
 ];
 // Türün metin yükü (çeviri bedeli çarpanı)
-export const TEXT_LOAD = { aksiyon: 0.6, macera: 1.4, rpg: 2.0, simulasyon: 1.0, strateji: 1.2, casual: 0.6 };
+export const TEXT_LOAD = { aksiyon: 0.6, macera: 1.4, rpg: 2.0, simulasyon: 1.0, strateji: 1.2, casual: 0.6, nisanci: 0.5, platform: 0.4, dovus: 0.4, spor: 0.6, yaris: 0.4, bulmaca: 0.5, ritim: 0.5 };
 
 // Kötü çeviri şakaları (özgün)
 export const BAD_LOC = [

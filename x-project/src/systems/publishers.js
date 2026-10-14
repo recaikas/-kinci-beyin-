@@ -8,6 +8,8 @@ import { tableYear, inflation, review, peakWeekly, platformById, activePlatforms
 import { companyRep, isActive } from './world.js';
 import * as Charts from './charts.js';
 import * as Regions from './regions.js';
+import * as Genres from './genres.js';
+import { topicTier, genreById, mastery } from '../models.js';
 
 const P = (ctx) => ctx.pack.publishing;
 export const MEMBERS = [['urun', 'Ürün'], ['pazar', 'Pazar'], ['finans', 'Finans'], ['hukuk', 'Hukuk']];
@@ -138,8 +140,12 @@ export function errorSd(ctx, pub, mode, doc) {
 export function tasteOf(ctx, pub, pj) {
   let v = 0;
   const notes = [];
+  // Konu D: yeni türler eski türlerin ailesinden sayılır (Nişancı → Aksiyon); aile eşleşmesi yarım puan
+  const fam = Object.entries(genreById(ctx, pj.genre)?.axes || {}).sort((a, b) => b[1] - a[1])[0]?.[0];
   if (pub.likes?.includes(pj.genre)) { v += 10; notes.push('like'); }
+  else if (fam && fam !== pj.genre && pub.likes?.includes(fam)) { v += 5; notes.push('like'); }
   if (pub.dislike === pj.genre) { v -= 10; notes.push('dislike'); }
+  else if (fam && fam !== pj.genre && pub.dislike === fam) { v -= 5; notes.push('dislike'); }
   if (pj.regions && pub.region && !pub.region.some((r) => pj.regions.includes(r))) { v -= 5; notes.push('region'); }
   const kinds = (pj.platforms || []).map((id) => platformById(ctx, id)?.kind).filter(Boolean);
   if (kinds.length && pub.focus && !kinds.some((k) => pub.focus.includes(k))) { v -= 10; notes.push('focus'); }
@@ -353,7 +359,7 @@ export function evaluate(ctx, pt) {
   const clone = (st.world?.hits || []).some((h) => h.genre === pj.genre && h.score >= 85 && st.week - h.week < 48) && !novelCombo(ctx, pj) ? -4 : 0;
   const m = pt.meet || {}, jit = B.jitter + (pub.tr.jitter || 0);
   const sc = {
-    urun: d + (pt.doc ? 5 : 0) + team + (pub.tr.novel && novelCombo(ctx, pj) ? pub.tr.novel : 0) + (m.urun || 0),
+    urun: d + (pt.doc ? 5 : 0) + team + Genres.pubAdj(ctx, pj.genre) + (pub.tr.novel && novelCombo(ctx, pj) ? pub.tr.novel : 0) + (m.urun || 0),
     pazar: d / 2 + 6 + ta.v * 1.2 + trend + (full ? B.slotsFull : 0) + (pt.note ? 5 : 0) + Math.min(5, (Charts.mkt(st).genreRep?.[pj.genre] || 0) / 2) + (m.pazar || 0),
     finans: d / 3 + it + r / 5 - lates * 4 * (pub.tr.lateK || 1) + (st.cash < 0 ? -6 : 0) + (m.finans || 0),
     hukuk: d / 4 + 8 + r / 10 + (owner && owner !== pub.id ? -30 : 0) + clone + (m.hukuk || 0),
@@ -377,6 +383,7 @@ function rejectLetter(ctx, ev) {
   const parts = review({ ...ctx, rng: makeRng({ rng: 7 }) }, pj).parts;
   const low = Object.entries(parts).sort((a, b) => a[1] - b[1])[0];
   const dn = { oyn: 'Oynanış', gfx: 'Grafikler', ses: 'Ses', tek: 'Teknik' }[low[0]];
+  if (weakest === 'urun' && mastery(ctx, pj.genre).id === 'acemi') return `Ekibiniz ${genreName(ctx, pj.genre).toLowerCase()} türünde tecrübesiz. Demoda bu çok belli; ilk oyununuzu biraz daha küçük bir yerle yapın.`;
   if (weakest === 'urun') return `Demonuzu oynadık. Sonra bir süre pencereden dışarı baktık. (${dn} hedefin %${low[1]}'inde; çıtamız ~${Math.round(ev.E)}.)`;
   if (weakest === 'pazar') {
     if (ev.ta.notes.includes('dislike')) return `${genreName(ctx, pj.genre)} mi? Biz ${genreName(ctx, pj.genre).toLowerCase()} oynayanları toplantıya bile almayız.`;
@@ -832,10 +839,10 @@ function genOrder(ctx) {
   if (!cands.length || !rng.chance(O.chance * (s.sequelHint ? 2 : 1))) return;
   s.sequelHint = false;
   const pub = rng.pick(cands), y = tableYear(ctx);
-  const genres = pack.genres.filter((g) => !g.research || state.research.done[g.research]);
+  const genres = Genres.knownGenres(ctx);
   const genre = pub.likes?.find((g) => genres.some((x) => x.id === g)) || rng.pick(genres).id;
-  const gi = pack.genres.findIndex((g) => g.id === genre);
-  const topics = pack.topics.filter((t) => t[4] <= y).sort((a, b) => b[2][gi] - a[2][gi]).slice(0, 8);
+  const rank = { S: 6, I: 5, G: 4, B: 3, K: 2, X: 1 };
+  const topics = pack.topics.filter((t) => t[4] <= y).sort((a, b) => rank[topicTier(b[0], genre)] - rank[topicTier(a[0], genre)]).slice(0, 8);
   const topic = rng.pick(topics);
   const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
   const plats = activePlatforms(ctx).filter((p) => !p.own && p.tech <= maxTech && pub.focus.includes(p.kind)).sort((a, b) => platformBase(ctx, b) - platformBase(ctx, a));

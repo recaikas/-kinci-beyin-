@@ -3,6 +3,7 @@
 //   V = doğrulanmış (PDF), L = sınırlı (oyuncu/rehber), P = bizim önerimiz / kalibrasyon.
 
 import { REGIONS, OWNER_BIAS } from './regions.js';
+import { GENRES } from './genres.js';
 
 export const PACK = {
   meta: {
@@ -44,6 +45,25 @@ export const PACK = {
     oldEngineYears: 5, oldEnginePenalty: 2, // P
     repeatComboPenalty: 3, // L (aynı konu×tür art arda)
     newFeatureBonus: 1, // L
+  },
+
+  // Konu D: tür sistemi (P). Kademeler, alt türler ve sözler data/genres.js'te.
+  genreSys: {
+    _tag: 'P',
+    startXp: 40, researchXp: 20, xpCap: 100,
+    gain: { kucuk: 8, orta: 12, buyuk: 16, aaa: 20, mmo: 20 }, gainScoreA: 0.5, gainDecay: 110, crossShare: 0.4,
+    rustYears: 8, rustPerYear: 1, rustFloor: 20,
+    nearDiscount: 0.7,
+    // Yaşam döngüsü: yükselen → altın çağ → doygun → niş; balon türler çöker; retro dalgası eski türleri kurtarır
+    life: { rise: 0.03, peak: 1.05, satFrom: 1.0, satTo: 0.9, satYears: 5, niche: 0.85, crash: 0.6, retro: [2014, 2022], retroBorn: 1990, retroK: 1.0 },
+    legend: { hype: 20, fans: 0.05, copyYears: 2 },
+    cult: { chance: 0.03, score: 10, fans: 0.02, earlyK: 3 },
+    invent: { yearsEarly: 6, minXp: 60, rpBase: 40, rpPerYear: 15, cost: 20000, costPerYear: 10000, weeks: 6, hype: 15, fans: 0.03, misfire: 0.3, misfireK: 0.8 },
+    staff: { likeK: 1.03, dislikeK: 0.94, likeMorale: 1, dislikeMorale: -1, likeTwo: 0.25, dislikeChance: 0.33, exp1: 3, exp1K: 1.02, exp2: 6, exp2K: 1.03 },
+    idea: { monthly: 0.02, morale: 10 },
+    focus: { share: 0.03, min: 1000 },
+    guide: { count: 3 },
+    pubXpK: 3, // yayıncı kurulu: uzman stüdyo +3, acemi −3
   },
 
   production: {
@@ -156,21 +176,9 @@ export const PACK = {
   ],
   audiences: [{ id: 'genc', name: 'Genç' }, { id: 'herkes', name: 'Herkes' }, { id: 'yetiskin', name: 'Yetişkin' }],
 
-  // Türler. disc = w_d (V ağırlık, P türetme). hint = GDT kaydırıcı önerisi (L), mission = GDT görev ağırlıkları (V).
-  genres: [
-    { id: 'aksiyon', name: 'Aksiyon', research: null, disc: { oyn: 0.397, gfx: 0.231, ses: 0.115, tek: 0.256 },
-      mission: [1, 0.9, 0.7, 0.6, 0.9, 1, 0.8, 1, 0.9], hint: [100, 80, 0, 0, 80, 100, 0, 100, 80], good: ['macera', 'rpg', 'casual'] },
-    { id: 'macera', name: 'Macera', research: null, disc: { oyn: 0.468, gfx: 0.247, ses: 0.104, tek: 0.182 },
-      mission: [0.7, 0.8, 1, 1, 0.8, 0.7, 1, 0.9, 0.8], hint: [0, 0, 100, 100, 0, 0, 100, 80, 0], good: ['rpg', 'aksiyon', 'casual'] },
-    { id: 'rpg', name: 'RPG', research: 'tur_rpg', disc: { oyn: 0.468, gfx: 0.247, ses: 0.104, tek: 0.182 },
-      mission: [0.7, 0.8, 1, 1, 0.8, 0.7, 1, 0.9, 0.8], hint: [0, 80, 100, 100, 80, 0, 100, 80, 0], good: ['aksiyon', 'macera', 'strateji'] },
-    { id: 'simulasyon', name: 'Simülasyon', research: 'tur_sim', disc: { oyn: 0.425, gfx: 0.225, ses: 0.113, tek: 0.237 },
-      mission: [0.9, 1, 0.8, 0.7, 0.9, 1, 0.8, 1, 0.9], hint: [80, 100, 0, 0, 80, 100, 0, 100, 80], good: ['strateji', 'casual'] },
-    { id: 'strateji', name: 'Strateji', research: 'tur_str', disc: { oyn: 0.438, gfx: 0.225, ses: 0.113, tek: 0.225 },
-      mission: [0.9, 1, 0.8, 0.7, 1, 0.9, 1, 0.8, 0.9], hint: [80, 100, 0, 0, 100, 80, 100, 0, 80], good: ['simulasyon', 'rpg'] },
-    { id: 'casual', name: 'Casual', research: null, disc: { oyn: 0.472, gfx: 0.236, ses: 0.125, tek: 0.167 },
-      mission: [0.6, 1, 0.7, 0.7, 1, 0.6, 0.7, 1, 0.9], hint: [0, 100, 0, 0, 100, 0, 0, 100, 80], good: ['aksiyon', 'simulasyon', 'macera'] },
-  ],
+  // Türler (Konu D): 13 ana tür data/genres.js'te. İlk altısı eski türler; platform/bölge dizileri bu altı eksene göre.
+  // disc = w_d (V ağırlık, P türetme). hint = GDT kaydırıcı önerisi (L), mission = GDT görev ağırlıkları (V).
+  genres: GENRES,
 
   // Konular: [id, ad, tür ağırlıkları ×10 (aks,mac,rpg,sim,str,cas), kitle ×10 (genç,herkes,yetişkin), açılış yılı]. P (GDT ölçeği V)
   topics: [
@@ -623,13 +631,23 @@ export const PACK = {
   researchV: { _tag: 'V', rows: [[1, 10, 8, 20000, 10, 10000], [2, 15, 10, 40000, 15, 30000], [4, 40, 12, 120000, 30, 50000], [6, 80, 14, 180000, 40, 100000], [8, 100, 16, 400000, 80, 140000], [10, 150, 20, 600000, 120, 180000], [12, 250, 25, 1200000, 200, 350000], [14, 300, 30, 1600000, 300, 500000]] },
   research: [
     { id: 'alt_tur', name: 'Alt tür (çok türlü oyun)', rp: 15, cost: 4000, weeks: 3, year: 1976 },
-    { id: 'tur_rpg', name: 'Tür: RPG', rp: 25, cost: 10000, weeks: 4, year: 1977 },
+    { id: 'tur_aks', name: 'Tür: Aksiyon', rp: 10, cost: 3000, weeks: 2, year: 1976, genre: 'aksiyon' },
+    { id: 'tur_mac', name: 'Tür: Macera', rp: 10, cost: 3000, weeks: 2, year: 1976, genre: 'macera' },
+    { id: 'tur_cas', name: 'Tür: Casual', rp: 10, cost: 3000, weeks: 2, year: 1976, genre: 'casual' },
+    { id: 'tur_spo', name: 'Tür: Spor', rp: 10, cost: 3000, weeks: 2, year: 1976, genre: 'spor' },
+    { id: 'tur_yar', name: 'Tür: Yarış', rp: 10, cost: 3000, weeks: 2, year: 1976, genre: 'yaris' },
+    { id: 'tur_rpg', name: 'Tür: RPG', rp: 25, cost: 10000, weeks: 4, year: 1977, genre: 'rpg' },
+    { id: 'tur_nis', name: 'Tür: Nişancı', rp: 20, cost: 6000, weeks: 3, year: 1978, genre: 'nisanci' },
+    { id: 'tur_bul', name: 'Tür: Bulmaca', rp: 20, cost: 6000, weeks: 3, year: 1980, genre: 'bulmaca' },
+    { id: 'tur_pla', name: 'Tür: Platform', rp: 25, cost: 8000, weeks: 4, year: 1981, genre: 'platform' },
+    { id: 'tur_dov', name: 'Tür: Dövüş', rp: 30, cost: 12000, weeks: 4, year: 1984, genre: 'dovus' },
+    { id: 'tur_rit', name: 'Tür: Ritim', rp: 60, cost: 80000, weeks: 6, year: 1996, genre: 'ritim' },
     { id: 'pazarlama_kucuk', name: 'Dergi reklamı', rp: 15, cost: 5000, weeks: 3, year: 1977 },
     { id: 'motor_ozel', name: 'Kendi motorunu yap', rp: 20, cost: 8000, weeks: 4, year: 1977 },
     { id: 'boyut_orta', name: 'Orta boy oyun', rp: 35, cost: 20000, weeks: 6, year: 1978 },
-    { id: 'tur_sim', name: 'Tür: Simülasyon', rp: 40, cost: 15000, weeks: 6, year: 1980 },
+    { id: 'tur_sim', name: 'Tür: Simülasyon', rp: 40, cost: 15000, weeks: 6, year: 1980, genre: 'simulasyon' },
     { id: 'oz_yayin', name: 'Kendi yayınını yap', rp: 60, cost: 40000, weeks: 8, year: 1980 },
-    { id: 'tur_str', name: 'Tür: Strateji', rp: 40, cost: 15000, weeks: 6, year: 1981 },
+    { id: 'tur_str', name: 'Tür: Strateji', rp: 40, cost: 15000, weeks: 6, year: 1979, genre: 'strateji' },
     { id: 'kopya_koruma', name: 'Kopya koruması', rp: 40, cost: 20000, weeks: 6, year: 1981 },
     { id: 'motor_lisans', name: 'Motor lisanslama', rp: 50, cost: 30000, weeks: 6, year: 1983, requires: 'motor_ozel' },
     { id: 'pazarlama_buyuk', name: 'TV kampanyası', rp: 100, cost: 80000, weeks: 8, year: 1985 },

@@ -1,12 +1,14 @@
-// Oyun raporu ve bilgi birikimi (GDT esinli): her yayından sonra konu×tür, konu×kitle, platform×tür uyumu
-// ve zaman dağılımı dersleri öğrenilir; sihirbaz bu bilgiyi gösterir. Uyum değerleri 6–10 (GDT ölçeği, V).
-import { discShares, inflation, engineFactor } from '../models.js';
+// Oyun raporu ve bilgi birikimi (GDT esinli): her yayından sonra konu×tür, tür×alt tür, konu×alt tür, konu×kitle,
+// platform×tür uyumu ve zaman dağılımı dersleri öğrenilir; sihirbaz bu bilgiyi gösterir.
+// Konu D: uyumlar altı kademeli (Süper 10 · İyi 9 · Geçerli 8 · Başarısız 7 · Kötü 6 · İğrenç 4).
+import { discShares, inflation, engineFactor, combo, platFit } from '../models.js';
 import { hasRoom } from './staff.js';
+import { TIER, tierOfValue, SUB, PRESS_LINES, PLAYER_LINES } from '../data/genres.js';
+import { learnCombo } from './genres.js';
 
-const LABEL = { 10: ['+++', 'Harika'], 9: ['++', 'İyi'], 8: ['+', 'Fena değil'], 7: ['−', 'Kötü'], 6: ['−−', 'Berbat'] };
-export const rating = (v) => LABEL[Math.max(6, Math.min(10, Math.round(v)))];
+export const rating = (v) => { const t = TIER[tierOfValue(v)]; return [t.icon, t.name]; };
+export const tierOf = (v) => TIER[tierOfValue(v)];
 
-const gi = (ctx, id) => ctx.pack.genres.findIndex((g) => g.id === id);
 const ai = (ctx, id) => ctx.pack.audiences.findIndex((a) => a.id === id);
 const topic = (ctx, id) => ctx.pack.topics.find((t) => t[0] === id);
 
@@ -15,6 +17,8 @@ export function known(ctx) {
   const k = ctx.state.knowledge;
   return {
     topicGenre: (t, g) => k[`tg|${t}|${g}`],
+    genreSub: (g, s) => k[`gs|${g}|${s}`],
+    topicSub: (t, s) => k[`ts|${t}|${s}`],
     topicAud: (t, a) => k[`ta|${t}|${a}`],
     platGenre: (p, g) => k[`pg|${p}|${g}`],
     genreFocus: (g) => k[`gf|${g}`],
@@ -27,17 +31,25 @@ export function learn(ctx, pj, rv) {
   const k = state.knowledge;
   const lines = [];
   const t = topic(ctx, pj.topic), g = pack.genres.find((x) => x.id === pj.genre);
-  const tg = t[2][gi(ctx, pj.genre)], ta = t[3][ai(ctx, pj.audience)];
-  k[`tg|${pj.topic}|${pj.genre}`] = tg;
+  const c = learnCombo(ctx, pj), ta = t[3][ai(ctx, pj.audience)];
   k[`ta|${pj.topic}|${pj.audience}`] = ta;
-  lines.push({ tone: tg >= 9 ? 'good' : tg <= 7 ? 'bad' : 'info', text: `${t[1]} + ${g.name}: ${rating(tg)[1]} (${rating(tg)[0]})` });
-  lines.push({ tone: ta >= 9 ? 'good' : ta <= 7 ? 'bad' : 'info', text: `${t[1]} konusu ${pack.audiences[ai(ctx, pj.audience)].name.toLowerCase()} kitle için: ${rating(ta)[1]}` });
+  const line = (tier, text) => lines.push({ tone: TIER[tier].tone, text: `${text}: ${TIER[tier].name} (${TIER[tier].icon})` });
+  line(c.kt, `${t[1]} + ${g.name}`);
+  if (pj.sub && SUB[pj.sub]) {
+    line(c.gs, `${g.name} + ${SUB[pj.sub].name}`);
+    if (c.ts !== 'G') line(c.ts, `${t[1]} + ${SUB[pj.sub].name}`);
+    lines.push({ tone: TIER[c.overall].tone, text: `Genel kombinasyon ${TIER[c.overall].name} ${TIER[c.overall].icon}${c.legend ? ` · efsane: ${c.legend.name}` : ''}. Basın: "${PRESS_LINES[c.overall]}"` });
+  }
+  const taT = tierOfValue(ta);
+  lines.push({ tone: TIER[taT].tone, text: `${t[1]} konusu ${pack.audiences[ai(ctx, pj.audience)].name.toLowerCase()} kitle için: ${TIER[taT].name}` });
+  if (c.audCap) lines.push({ tone: 'bad', text: `${SUB[pj.sub].name}, ${pack.audiences[ai(ctx, pj.audience)].name.toLowerCase()} kitleye ${TIER[c.audCap].name.toLowerCase()}; kitle uyumu bununla sınırlı kaldı.` });
   for (const id of pj.platforms.slice(0, 3)) {
     const p = pack.platforms.find((x) => x.id === id);
     if (!p) continue;
-    const v = p.genre[gi(ctx, pj.genre)];
+    const v = platFit(ctx, p, pj.genre, pj.sub);
     k[`pg|${id}|${pj.genre}`] = v;
-    if (v <= 8 || v === 10) lines.push({ tone: v === 10 ? 'good' : 'bad', text: `${p.name}, ${g.name.toLowerCase()} için ${rating(v)[1].toLowerCase()} bir platform` });
+    const pt = tierOfValue(v);
+    if (v <= 8 || v >= 10) lines.push({ tone: TIER[pt].tone, text: `${p.name}, ${pj.sub && SUB[pj.sub]?.plat?.[p.kind] ? SUB[pj.sub].name.toLowerCase() : g.name.toLowerCase()} için ${TIER[pt].name.toLowerCase()} bir platform` });
   }
   // Disiplin hedefleri
   const weak = Object.entries(rv.parts).filter(([, v]) => v < 80).sort((a, b) => a[1] - b[1]);
@@ -53,7 +65,8 @@ export function learn(ctx, pj, rv) {
     lines.push({ tone: 'bad', text: `Zaman dağılımı türe uymadı (×${rv.hiza.toFixed(2)}). ${g.name} için ideal: ${ideal}. En çok ${name(off)} ${mine[off] > g.disc[off] ? 'fazla' : 'az'}.` });
   } else { k[`gf|${pj.genre}`] = true; lines.push({ tone: 'good', text: `Zaman dağılımı ${g.name.toLowerCase()} türüne uydu.` }); }
   if (rv.bugRate * pack.review.bugMult > 2) lines.push({ tone: 'bad', text: `Hatalar notu ${Math.min(pack.review.bugCap, rv.bugRate * pack.review.bugMult).toFixed(1)} puan düşürdü. Kalite güvence odası ya da daha uzun ayıklama.` });
-  for (const n of rv.notes) if (/Alt tür|tekrar|Eskimiş|Küçük boyut/.test(n)) lines.push({ tone: 'bad', text: n });
+  for (const n of rv.notes) if (/Alt tür (başarısız|kötü|iğrenç|yok)|Konu ve alt tür (başarısız|kötü|iğrenç)|acemi|çırak|tekrar|Eskimiş|Küçük boyut/.test(n)) lines.push({ tone: 'bad', text: n });
+  for (const n of rv.notes) if (/Kült klasik|usta|uzman|efsane/.test(n)) lines.push({ tone: 'good', text: n });
   ctx.bus.fire('gameReport', { project: pj, lines });
   return lines;
 }
@@ -102,7 +115,8 @@ export function playerReport(ctx, id) {
   else if (g.score >= 80 && g.hype < 20) lines.push({ tone: 'info', text: 'Oyunu sevenler çok ama kimse duymamış. Daha çok pazarlama satışları katlardı.' });
   if (!lines.some((l) => l.tone === 'good')) lines.push({ tone: 'info', text: 'Oyuncular dikkat çekici bir güçlü yan bulamadı.' });
   const fan = ['"Gece 4\'e kadar oynadım, işe geç kaldım."', '"Kedim bile izledi."', '"Devamı ne zaman?!"', '"Para iadesi istiyorum, ama yine de oynuyorum."', '"Kardeşimle kavga ettik, kontrolcü bende kalacak."', '"Bu fiyata bu kadar hata olmaz."', '"Müziği hâlâ kafamda."', '"Sonunu beğenmedim ama 3 kez bitirdim."'];
-  lines.push({ tone: 'quote', text: `Bir oyuncu: ${rng.pick(fan)}` });
+  const cb = g.genre && g.topic ? combo(ctx, g) : null;
+  lines.push({ tone: 'quote', text: `Bir oyuncu: ${g.cult ? '"Bu kadar kötü olması onu iyi yapıyor. Üç kez bitirdim."' : cb && g.sub && rng.chance(0.5) ? `"${PLAYER_LINES[cb.overall]}"` : rng.pick(fan)}` });
   g.playerReport = lines;
   ctx.bus.fire('playerReport', { game: g, lines });
   ctx.news(`📋 "${g.name}" için oyuncu raporu hazır.`, 'info');

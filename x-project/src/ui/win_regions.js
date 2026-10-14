@@ -42,7 +42,7 @@ export function make(u) {
     const lv = Regions.netLevel(c, r.id), home = lv === 4;
     const next = home ? null : lv < 3 ? Regions.netCheck(c, r.id, lv + 1) : null;
     const nl = Regions.NET_LEVELS;
-    const likes = PACK.genres.map((x, i) => [x.name, r.pref[i]]).filter(([, v]) => v >= 1.1).map(([n]) => n).join(', ') || '—';
+    const likes = PACK.genres.map((x) => [x.name, M.regionPref(c, r, x.id)]).filter(([, v]) => v >= 1.1).map(([n]) => n).join(', ') || '—';
     const tops = Object.entries(r.topics).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => topicName(k)).join(', ');
     const peak = r.season.map((v, i) => [i, v]).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([i]) => Regions.MONTHS[i]).join(', ');
     const board = Regions.boardActive(c, r.id);
@@ -70,14 +70,14 @@ export function make(u) {
 
   // ---------- Projede dağıtım planı
   function distPlan(pj) {
-    const g = G(), c = ctx(), w = M.regionShares(c), gi = PACK.genres.findIndex((x) => x.id === pj.genre);
+    const g = G(), c = ctx(), w = M.regionShares(c);
     const pub = pj.deal ? { power: pj.deal.power, region: pj.deal.region || (g.publishers().find((p) => p.id === pj.deal.pubId) || {}).region } : null;
     const reach = Regions.computeReach(c, { ...pj, selfPub: !pj.deal, loc: pj.loc || {} }, pj.deal ? { pub, deal: pj.deal } : {}).reach;
-    const tot = Regions.IDS.reduce((a, r) => a + w[r] * (Regions.R(r).pref[gi] ?? 1) * reach[r], 0) || 1;
+    const tot = Regions.IDS.reduce((a, r) => a + w[r] * M.regionPref(c, Regions.R(r), pj.genre) * reach[r], 0) || 1;
     const rows = Regions.REGIONS.map((r) => {
       const lvNet = Regions.netLevel(c, r.id), loc = pj.loc?.[r.id] || 0, nat = Regions.isNative(c, r.id);
       const via = pj.deal && (!pj.deal.regions || pj.deal.regions.includes(r.id)) ? `📜 ${esc(pj.deal.pubName)}` : lvNet === 4 ? '🏠 yerli' : Regions.NET_LEVELS[Math.min(3, lvNet)].name;
-      const share = w[r.id] * (r.pref[gi] ?? 1) * reach[r.id] / tot;
+      const share = w[r.id] * M.regionPref(c, r, pj.genre) * reach[r.id] / tot;
       const btns = nat ? '<span class="pill">dil tamam</span>' : [1, 2, 3].filter((lv) => lv > loc).map((lv) => { const ck = Regions.locCheck(c, r.id, pj, lv); return `<button class="mini" data-act="loclv" data-pid="${pj.id}" data-id="${r.id}" data-lv="${lv}" ${ck.ok ? '' : 'disabled'} title="${esc(ck.ok ? Regions.LOC_LEVELS[lv].desc : ck.why)}">${Regions.LOC_LEVELS[lv].name}<small>${ck.ok ? money(ck.cost) : '🔒'}</small></button>`; }).join('');
       return `<div class="drow"><span>${r.flag} ${esc(r.short)}</span><small>${via}</small><small>${nat ? 'kendi dilin' : loc ? Regions.LOC_LEVELS[loc].name : 'çevirisiz'}</small>${bar(share * 100, 'prog')}<b class="num">${pct(share)}</b><span class="btns">${btns}</span></div>`;
     }).join('');

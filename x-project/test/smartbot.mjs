@@ -14,14 +14,18 @@ import * as Co from '../src/systems/company.js';
 import * as War from '../src/systems/war.js';
 import * as Modern from '../src/systems/modern.js';
 import * as Charts from '../src/systems/charts.js';
+import * as Genres from '../src/systems/genres.js';
+import { TIER } from '../src/data/genres.js';
 
-const GAME_RESEARCH = ['ihracat', 'alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
-  'f_kaydirma', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
-  'f_online', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
+const GAME_RESEARCH = ['ihracat', 'alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_cas', 'tur_mac', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'tur_nis', 'kopya_koruma', 'oda_uzman',
+  'f_kaydirma', 'tur_sim', 'tur_str', 'tur_aks', 'tur_spo', 'tur_yar', 'tur_bul', 'tur_pla', 'tur_dov', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
+  'f_online', 'tur_rit', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
+// Tür seçimi ayarları (denge ölçümünde değiştirilebilir)
+const BOT = { win: +(process.env.BOT_WIN ?? 1.5), know: +(process.env.BOT_KNOW ?? 0.02), rep: +(process.env.BOT_REP ?? 0.6), repStaff: +(process.env.BOT_REPSTAFF ?? 6) };
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
 
-export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false, home = 'na' } = {}) {
-  const g = newGame({ seed, difficulty, length, home });
+export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length = 50, consoles = true, ipo = true, verbose = false, home = 'na', background = 'salon' } = {}) {
+  const g = newGame({ seed, difficulty, length, home, background });
   const { state, pack, ctx } = g;
   const stats = { pub: { self: 0, pub: 0, tek: 0, kelepir: 0, early: 0, byDecade: {} }, peakStaff: 0, consoles: 0, consoleSold: 0, ipo: null, loans: 0, contracts: 0, bankruptYear: null, firstHit: null, peakCash: 0 };
   let n = 0;
@@ -72,24 +76,37 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
   // --- Proje planı
   function planGame() {
     const y = M.tableYear(ctx);
-    const genres = pack.genres.filter((x) => !x.research || state.research.done[x.research]);
+    const genres = Genres.knownGenres(ctx);
     const topics = pack.topics.filter((t) => t[4] <= y);
     const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
     const plats = M.activePlatforms(ctx).filter((p) => p.own || p.tech <= maxTech);
     const cands = [];
+    const alt = !!state.research.done.alt_tur;
     for (const gn of genres) {
-      const gi = pack.genres.indexOf(gn);
+      const ms = M.mastery(ctx, gn.id);
       for (const t of topics) {
         if (`${t[0]}/${gn.id}` === state.lastCombo) continue;
         const ai = t[3].indexOf(Math.max(...t[3]));
+        const sub = alt ? Genres.bestSubFor(ctx, gn.id, t[0]) : null;
+        const c = M.combo(ctx, { topic: t[0], genre: gn.id, sub, audience: pack.audiences[ai].id });
         // Gelir tahmini: kitle × uyum × fiyat (mobilde oyun fiyatı düşük)
-        const rv = (p) => M.platformBase(ctx, p) * p.genre[gi] * p.aud[ai] * ((p.priceRef || pack.sales.priceRef) / pack.sales.priceRef) ** 0.6;
+        const rv = (p) => M.platformBase(ctx, p) * M.platFit(ctx, p, gn.id, sub) * p.aud[ai] * ((p.priceRef || pack.sales.priceRef) / pack.sales.priceRef) ** 0.6;
         const ps = [...plats].sort((a, b) => rv(b) - rv(a));
-        cands.push({ gn, t, ai, ps, v: t[2][gi] * t[3][ai] + (state.trend && (state.trend.genre === gn.id || state.trend.topic === t[0]) ? 15 : 0) });
+        // Not eşdeğeri: uyum çarpanı + alt tür puanları + ustalık + yaşam döngüsü (satış ×k ≈ ln k / 0,09 puan) + öncülük
+        const subPts = sub ? TIER[c.gs].sub + TIER[c.ts].ts : -pack.review.noSubgenrePenalty;
+        const life = sub ? Math.log(Genres.phase(ctx, sub).k) / 0.09 : 0;
+        const pioneer = sub && state.invented[sub] && !state.subUsed[sub] && y < Genres.SUB[sub].year ? 5 : 0;
+        // Çeşitlilik (büyüyünce) ve bildiğine sadakat: deneyimli oyuncu önce bildiği türde büyür
+        const rep = state.staff.length >= BOT.repStaff ? state.games.slice(-3).filter((x) => x.genre === gn.id).length : 0;
+        const know = (M.genreXp(ctx, gn.id) - 40) * BOT.know;
+        const v = 70 * Math.sqrt(TIER[c.kt].v / 10 * Math.min(t[3][ai], c.audCap ? TIER[c.audCap].v : 10) / 10) + subPts + ms.score + life + pioneer + know - rep * BOT.rep
+          + (state.trend && (state.trend.genre === gn.id || state.trend.topic === t[0]) ? 2 : 0);
+        cands.push({ gn, t, ai, ps, sub, v });
       }
     }
     cands.sort((a, b) => b.v - a.v);
-    const pick = cands[n % Math.min(4, cands.length)];
+    const top = cands.filter((x) => x.v >= cands[0].v - BOT.win).slice(0, 4); // yakın adaylar arasında dönüşümlü
+    const pick = top[n % top.length];
     // Boyut: ekibin bitirebileceği en büyük boyut
     const out = devCapacity(ctx) + Staff.weeklyOutput(ctx, (r) => r.type === 'grafik' || r.type === 'ses').reduce((s, x) => s + x.w * pack.rooms.expertMult, 0);
     const sizes = pack.sizes.filter((s) => !s.mmo && (!s.research || state.research.done[s.research]) && state.office.tier >= s.office);
@@ -103,7 +120,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     const share = { oyn: 0, gfx: 0, ses: 0, tek: 0 };
     pack.missions.forEach((m) => (share[m.disc] += 1));
     const alloc = pack.missions.map((m, i) => Math.round(100 * pick.gn.disc[m.disc] / share[m.disc] * pick.gn.mission[i]));
-    const draft = { name: `Oyun ${n + 1}`, genre: pick.gn.id, sub: state.research.done.alt_tur ? pick.gn.good?.[0] || null : null, topic: pick.t[0], audience: pack.audiences[pick.ai].id, size: size.id, alloc };
+    const draft = { name: `Oyun ${n + 1}`, genre: pick.gn.id, sub: pick.sub, topic: pick.t[0], audience: pack.audiences[pick.ai].id, size: size.id, alloc };
     draft.platforms = [];
     // Mini ve küçük oyunlar lisansı yüksek konsollara gitmez (lisans boyutla küçülmez)
     const cheap = (p) => p.own || p.licence <= Math.max(5000, (size.devCost || 1) * 50000 * infl() ** 0.5);
@@ -118,7 +135,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     const wsh = M.regionShares(ctx);
     draft.regions = pack.regions.list.filter((r) => { const st = regionStatus(ctx, r.id); if (!st.ok) return false; if (st.free) return true;
       const reachable = Regions.netLevel(ctx, r.id) >= 1 || y >= 2008;
-      return reachable && wsh[r.id] >= 0.03 && r.pref[pack.genres.indexOf(pick.gn)] >= 0.85 && locCost(ctx, r.id, size.id, pick.gn.id) < Math.max(0, state.cash) * 0.04; }).map((r) => r.id);
+      return reachable && wsh[r.id] >= 0.03 && M.regionPref(ctx, r, pick.gn.id) >= 0.85 && locCost(ctx, r.id, size.id, pick.gn.id) < Math.max(0, state.cash) * 0.04; }).map((r) => r.id);
     const eng = state.engines[state.engines.length - 1];
     if (eng) draft.engineId = eng.id;
     const ip = state.ips.filter((x) => x.value >= 1 && state.week - x.lastRelease >= pack.ip.waitWeeks).sort((a, b) => b.value - a.value)[0];
@@ -134,9 +151,9 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
   // Konu C: değerler bölgesel erişimle hesaplanır (pazar payı × tür ilgisi × o bölgedeki erişim)
   const GENERIC = { genre: 'aksiyon', platforms: ['pc'], loc: {} };
   function reachValue(pj, opts) {
-    const w = M.regionShares(ctx), gi = pack.genres.findIndex((x) => x.id === pj.genre);
+    const w = M.regionShares(ctx);
     const reach = Regions.computeReach(ctx, { ...pj, loc: pj.loc || {} }, opts).reach;
-    return Regions.IDS.reduce((a, r) => a + (w[r] || 0) * (Regions.R(r).pref[gi] ?? 1) * reach[r], 0);
+    return Regions.IDS.reduce((a, r) => a + (w[r] || 0) * M.regionPref(ctx, Regions.R(r), pj.genre) * reach[r], 0);
   }
   function selfValue(pj = GENERIC) {
     if (!state.research.done.oz_yayin) return -1;
@@ -264,6 +281,12 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       if (!next && state.research.done.donanim_lab && consoles && rich) next = av.filter((r) => r.hw && hwUseful(r.id)).sort((a, b) => researchInfo(ctx, a).rp - researchInfo(ctx, b).rp)[0];
       const reserve = next?.hw ? 8 : 3;
       if (next && (!shop || researchInfo(ctx, next).cost < burn()) && state.research.rp >= researchInfo(ctx, next).rp && state.cash > researchInfo(ctx, next).cost * reserve + burn() * (next.hw ? 18 : 3)) g.startResearch(next.id);
+    }
+    // Konu D: usta olduğu türde, yakında doğacak bir alt türü icat et (kasa rahatsa)
+    if (!state.inventJob && !shop && state.research.done.alt_tur) {
+      const yy = M.tableYear(ctx);
+      const cand = Genres.SUBGENRES.filter((s) => s.year > yy && Genres.inventInfo(ctx, s.id).ok).sort((a, b) => a.year - b.year)[0];
+      if (cand && state.cash > Genres.inventInfo(ctx, cand.id).cost * 6 + burn() * 6) g.invent(cand.id);
     }
     // Motor
     if (state.research.done.motor_ozel && !state.engineJob && !shop) {

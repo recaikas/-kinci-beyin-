@@ -4,6 +4,7 @@ import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformB
 import { weeklyOutput } from './staff.js';
 import { consumeHypeBank } from './charts.js';
 import * as Regions from './regions.js';
+import * as Genres from './genres.js';
 
 // --- Proje (MGT: her geliştirme odası kendi oyununu yapar; uzman odalar ve QA tüm projelere bölünür)
 export function newProject(ctx, o) {
@@ -71,14 +72,15 @@ export function weeklyProject(ctx) {
       const ids = pack.missions.map((m, i) => i).filter((i) => pack.missions[i].phase === pj.phase);
       const sum = ids.reduce((s, i) => s + pj.alloc[i], 0) || 1;
       const eng = engineFactor(ctx, state.engines.find((e) => e.id === pj.engineId));
+      const spd = Genres.speedK(ctx, pj), gb = Genres.bugK(ctx, pj); // Konu D: stüdyonun tür ustalığı
       for (const { p, w } of crew) {
-        const c = careerOf(ctx, p);
+        const c = careerOf(ctx, p), aff = Genres.staffK(ctx, p, pj) * spd; // çalışanın tür yatkınlığı
         for (const i of ids) {
           const m = pack.missions[i];
-          let pts = w * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc] * skillK(ctx, p, DISC_SKILL[m.disc]);
+          let pts = w * aff * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc] * skillK(ctx, p, DISC_SKILL[m.disc]) * Genres.missionK(ctx, m);
           if (m.disc === 'tek') pts *= eng;
           pj.points[m.disc] += pts;
-          pj.bugs += pts * bugK(p);
+          pj.bugs += pts * bugK(p) * gb;
         }
       }
       // Uzman odalar: geliştirmedeki projelere eşit bölünür, yalnızca kendi disiplinine.
@@ -217,12 +219,13 @@ export function researchInfo(ctx, item) {
     const f = featureStats(ctx, item.id);
     return { rp: f.rp, cost: f.cost, weeks: f.weeks };
   }
-  return { rp: item.rp, cost: Math.round(item.cost * inflation(ctx) ** 0.5), weeks: item.weeks };
+  const k = Genres.researchDiscount(ctx, item); // yakın türü bilen ucuza öğrenir (Konu D)
+  return { rp: Math.round(item.rp * k), cost: Math.round(item.cost * k * inflation(ctx) ** 0.5), weeks: item.weeks };
 }
 export function researchAvailable(ctx) {
   const y = tableYear(ctx);
   const done = ctx.state.research.done;
-  return ctx.pack.research.filter((r) => !done[r.id] && y >= r.year && (!r.requires || done[r.requires]));
+  return ctx.pack.research.filter((r) => !done[r.id] && y >= r.year && (!r.requires || done[r.requires]) && !(r.genre && Genres.knows(ctx, r.genre)));
 }
 export function startResearch(ctx, id) {
   const { state, ledger } = ctx;
@@ -240,7 +243,8 @@ export function startResearch(ctx, id) {
 export function weeklyResearch(ctx) {
   const { state, pack } = ctx;
   const pr = pack.production;
-  for (const { p, w, room } of weeklyOutput(ctx, () => true)) state.research.rp += w * (pr.rpShare + (room.type === 'arastirma' ? pr.researchRoomRp * skillK(ctx, p, 'arge') * traitOf(ctx, p, 'research') : 0));
+  const rk = Genres.researchK(ctx);
+  for (const { p, w, room } of weeklyOutput(ctx, () => true)) state.research.rp += rk * w * (pr.rpShare + (room.type === 'arastirma' ? pr.researchRoomRp * skillK(ctx, p, 'arge') * traitOf(ctx, p, 'research') : 0));
   const cur = state.research.current;
   if (cur && --cur.weeksLeft <= 0) {
     state.research.done[cur.id] = state.week;

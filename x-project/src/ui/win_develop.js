@@ -1,5 +1,5 @@
 // Geliştir: proje listesi, yeni oyun sihirbazı, proje ayrıntısı, sözleşmeler.
-import { M, Prod, Market, Staff, Know, Modern, Charts } from '../game.js';
+import { M, Prod, Market, Staff, Know, Modern, Charts, Genres } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
@@ -11,9 +11,9 @@ export function make(u) {
   function defaultDraft() {
     const g = G(), y = M.tableYear(ctx());
     const r = PACK.rivals, pick = (a) => a[(g.state.week + g.state.games.length * 3) % a.length];
-    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
+    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: Genres.knownGenres(ctx())[0]?.id || 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
   }
-  const badgeOf = (v) => (v == null ? '' : `<em class="kn k${v}">${Know.rating(v)[0]}</em>`);
+  const badgeOf = (v) => (v == null ? '' : `<em class="kn t${u.tierOfV(v)}" title="${Know.rating(v)[1]}">${Know.rating(v)[0]}</em>`);
   // Yayın zamanlaması (Konu A): bu ayın talebi ve yakın tarihte aynı türde çıkacak büyük oyunlar
   function releaseTiming(pj) {
     const c = ctx(), mult = Charts.seasonMult(c, pj);
@@ -64,15 +64,17 @@ export function make(u) {
     const opt = (v, label, sel, dis = false) => `<option value="${v}" ${sel ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(label)}</option>`;
     const nav = (back, nextLabel) => `<div class="foot">${back ? '<button data-act="wiz" data-id="-1">Geri</button>' : ''}<span></span><button class="primary" data-act="wiz" data-id="1">${nextLabel}</button></div>`;
     if (app.wiz === 1) {
-      const genres = PACK.genres.filter((x) => !x.research || done[x.research]);
       const topics = PACK.topics.filter((t) => t[4] <= y);
+      if (!Genres.knows(c, d.genre)) d.genre = Genres.knownGenres(c)[0]?.id || d.genre;
+      if (d.sub && !Genres.subAvailable(c, d.sub)) d.sub = '';
       const tile = (key, id, label, on, hot, k) => `<button class="tile ${on ? 'on' : ''}" data-pick="${key}" data-id="${id}">${esc(label)}${hot ? '<em>trend</em>' : ''}${badgeOf(k)}</button>`;
       const focus = kn.genreFocus(d.genre) ? (() => { const gg = PACK.genres.find((x) => x.id === d.genre); return `<p class="muted small">Öğrendiğin ideal dağılım (${gg.name}): ${['oyn', 'gfx', 'ses', 'tek'].map((k) => `${discName(k)} %${Math.round(gg.disc[k] * 100)}`).join(' · ')}</p>`; })() : '';
       return head + `<label class="field">Oyunun adı<input id="f-name" data-draft="name" value="${esc(d.name)}" maxlength="40"></label>
         <h3>Konu <small class="muted">rozet: seçili türle bilinen uyum</small></h3><div class="tiles">${topics.map((t) => tile('topic', t[0], t[1], d.topic === t[0], trend.topic === t[0], kn.topicGenre(t[0], d.genre))).join('')}</div>
-        <h3>Tür</h3><div class="tiles">${genres.map((x) => tile('genre', x.id, x.name, d.genre === x.id, trend.genre === x.id, kn.topicGenre(d.topic, x.id))).join('')}</div>${focus}
-        <div class="form"><label>Alt tür<select id="f-sub" data-draft="sub" ${done.alt_tur ? '' : 'disabled'}>${opt('', done.alt_tur ? 'Yok (−3)' : 'Araştırma gerekli (−3)', !d.sub)}${genres.filter((x) => x.id !== d.genre).map((x) => opt(x.id, x.name, d.sub === x.id)).join('')}</select></label>
-        <label>Kitle<select id="f-aud" data-draft="audience">${PACK.audiences.map((a) => { const k = kn.topicAud(d.topic, a.id); return opt(a.id, a.name + (k ? ` (${Know.rating(k)[0]})` : ''), d.audience === a.id); }).join('')}</select></label></div>`
+        <h3>Tür <small class="muted">rozet: seçili konuyla bilinen uyum · stüdyonun ustalığı</small></h3><div class="tiles genres">${u.genreTiles(d)}</div>${focus}
+        <h3>Alt tür <small class="muted">rozet: seçili türle bilinen uyum · 🔥 altın çağ · 📉 çökmüş</small></h3>${u.subPicker(d)}
+        <div class="form"><label>Kitle<select id="f-aud" data-draft="audience">${PACK.audiences.map((a) => { const k = kn.topicAud(d.topic, a.id); return opt(a.id, a.name + (k ? ` (${Know.rating(k)[0]})` : ''), d.audience === a.id); }).join('')}</select></label></div>
+        ${u.comboBox(d)}`
         + nav(false, 'Platforma geç');
     }
     if (app.wiz === 2) {
@@ -80,14 +82,14 @@ export function make(u) {
       const plats = M.activePlatforms(c).map((p) => {
         const locked = !p.own && p.tech > maxTech;
         return `<label class="pick ${locked ? 'locked' : ''}"><input type="checkbox" id="pl-${p.id}" data-plat="${p.id}" ${d.platforms.includes(p.id) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
-          <span class="name">${esc(p.name)}${p.own ? ' ★' : ''} ${badgeOf(kn.platGenre(p.id, d.genre))}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
+          <span class="name">${esc(p.name)}${p.own ? ' ★' : ''} ${badgeOf(kn.platGenre(p.id, d.genre))}${d.sub && M.platCap(d.sub, p) ? ` <small class="warn">${esc(Genres.SUB[d.sub].name)}: ${Genres.TIER[M.platCap(d.sub, p)].name.toLowerCase()}</small>` : ''}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
       }).join('');
       const free = g.freeDevRooms();
       d.regions ||= Prod.baseRegions(c);
-      const gi = PACK.genres.findIndex((x) => x.id === d.genre), w = M.regionShares(c);
+      const gn = PACK.genres.find((x) => x.id === d.genre), w = M.regionShares(c);
       const regs = PACK.regions.list.map((r) => { const st = Prod.regionStatus(c, r.id), on = d.regions.includes(r.id) || st.free;
         return `<label class="pick ${st.ok ? '' : 'locked'}"><input type="checkbox" id="rg-${r.id}" data-region="${r.id}" ${on ? 'checked' : ''} ${!st.ok || st.free ? 'disabled' : ''}>
-          <span class="name">${r.flag || ''} ${esc(r.name)} <small class="muted">pazarın %${Math.round(w[r.id] * 100)} · ${PACK.genres[gi].name} ilgisi ×${r.pref[gi]}</small></span><span class="meta num">${st.free ? 'kendi dilin' : st.ok ? `çeviri ${money(Prod.locCost(c, r.id, d.size, d.genre))}` : st.why}</span></label>`; }).join('');
+          <span class="name">${r.flag || ''} ${esc(r.name)} <small class="muted">pazarın %${Math.round(w[r.id] * 100)} · ${gn.name} ilgisi ×${String(M.regionPref(c, r, d.genre)).replace('.', ',')}</small></span><span class="meta num">${st.free ? 'kendi dilin' : st.ok ? `çeviri ${money(Prod.locCost(c, r.id, d.size, d.genre))}` : st.why}</span></label>`; }).join('');
       return head + `<fieldset class="picks"><legend>Platformlar <small>rozet: seçili türle bilinen uyum</small></legend>${plats}</fieldset>
         <fieldset class="picks"><legend>Çeviriler <small>satabileceğin yerleri dağıtım ağın belirler (Dünya › Bölgeler)</small></legend>${regs}</fieldset>
         <div class="form">
@@ -101,7 +103,7 @@ export function make(u) {
     const size = PACK.sizes.find((z) => z.id === d.size);
     return head + `<div class="summary">
         <h2>${esc(d.name)}</h2>
-        <p>${esc(topic[1])} temalı ${genre.name.toLowerCase()}${d.sub ? ' + ' + PACK.genres.find((x) => x.id === d.sub).name.toLowerCase() : ''} oyunu, ${PACK.audiences.find((a) => a.id === d.audience).name.toLowerCase()} kitle için.</p>
+        <p>${esc(topic[1])} temalı ${genre.name.toLowerCase()}${d.sub && Genres.SUB[d.sub] ? ' (' + Genres.SUB[d.sub].name.toLowerCase() + ')' : ''} oyunu, ${PACK.audiences.find((a) => a.id === d.audience).name.toLowerCase()} kitle için.</p>
         <div class="kv"><span>Platform</span><b>${d.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ') || '—'}</b><span>Boyut</span><b>${size.name} · ${size.weeks} hafta</b>
         <span>Başlangıç maliyeti</span><b class="num">${money(Prod.projectCost(c, d))}</b><span>Kasa</span><b class="num">${money(s.cash)}</b></div>
       </div><div class="foot"><button data-act="wiz" data-id="-1">Geri</button><span></span><button class="primary big" data-act="start">Geliştirmeye başla</button></div>`;
@@ -132,7 +134,7 @@ export function make(u) {
     }
     const pubBox = u.projectPubBox(pj);
     return `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div>
-      <div class="proj-head"><div><h2>${esc(pj.name)}</h2><p class="muted small">${genre.name}${pj.sub ? ' + ' + PACK.genres.find((x) => x.id === pj.sub).name : ''} · ${esc(topic)} · ${PACK.sizes.find((z) => z.id === pj.size).name}${pj.kind === 'ek' ? ' · ek paket' : ''}</p></div>
+      <div class="proj-head"><div><h2>${esc(pj.name)}</h2><p class="muted small">${genre.name}${pj.sub && Genres.SUB[pj.sub] ? ' · ' + Genres.SUB[pj.sub].name : ''} · ${esc(topic)} · ${PACK.sizes.find((z) => z.id === pj.size).name}${pj.kind === 'ek' ? ' · ek paket' : ''}</p></div>
         <div class="forecast"><small>Şu an çıksa</small><b class="num">${Math.round(pv.score)}</b></div></div>
       <div class="progress"><span>${pj.status === 'dev' ? `${PACK.production.phaseNames[pj.phase]} · hafta ${pj.week}/${pj.totalWeeks}` : 'Hata ayıklama'}</span>${bar(prog, 'prog')}</div>
       ${pj.deal ? release + pubBox : pubBox + release}

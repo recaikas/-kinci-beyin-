@@ -29,7 +29,7 @@ export function make(u) {
       return `<p class="muted small">${y} yılında oyun pazarının bölgelere dağılımı, türlere ilgi ve her bölgede en güçlü platformlar. Oyunun hangi bölgelerde satılacağını yeni oyun sihirbazında seçersin; Japonya ve Dünya için araştırma ve yerelleştirme gerekir.</p>
         ${PACK.regions.list.map((r) => { const top = plats.map((p) => [p, M.platformBase(c, p) * M.regionBias(c, p, r.id)]).sort((a, b) => b[1] - a[1]).slice(0, 3);
           return `<section class="box"><div class="head"><h3>${esc(r.name)}</h3><span class="pill">%${Math.round(w[r.id] * 100)}</span></div>${bar(w[r.id] * 100, 'prog')}
-            <p class="small">${PACK.genres.map((g, i) => `<span class="pill ${r.pref[i] >= 1.15 ? '' : r.pref[i] <= 0.85 ? 'warn' : ''}">${g.name} ×${r.pref[i]}</span>`).join(' ')}</p>
+            <p class="small">${PACK.genres.map((g) => { const v = M.regionPref(ctx(), r, g.id); return `<span class="pill ${v >= 1.15 ? '' : v <= 0.85 ? 'warn' : ''}">${g.name} ×${String(v).replace('.', ',')}</span>`; }).join(' ')}</p>
             <p class="muted small">Önde: ${top.map(([p]) => `${p.own ? '★ ' : ''}${esc(p.name)}`).join(', ') || '—'}</p></section>`; }).join('')}`;
     }
     if (sub === 'tarih') return `<ul class="news">${W.log.map((e) => `<li class="tarih"><small class="num">${World.MONTHS[e.m].slice(0, 3)} ${e.y}</small><span>${esc(e.t)}</span></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ul>`;

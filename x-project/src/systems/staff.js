@@ -3,6 +3,7 @@ import { clamp } from '../kernel.js';
 import * as Regions from './regions.js';
 import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel, designOf, relAvg } from '../models.js';
 import { genSkills, growSkills, weeklyVacations, weeklyRelations, ensureSkills } from './people.js';
+import * as Genres from './genres.js';
 
 // --- Odalar
 export const officeOf = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
@@ -110,7 +111,7 @@ export function makePerson(ctx, { skill, career: cid, founder = false, name, lev
   const trait2 = trait && rng.chance(pack.traitChance2) ? rng.pick(pack.traits.filter((t) => t.id !== trait)).id : null;
   const skills = genSkills(ctx, sk, c.disc);
   const [j0, j1] = pack.economy.salaryJitter;
-  return {
+  return Genres.assignTaste(ctx, {
     skills, trait2, vacDue: rng.range(0, 1.5),
     id: state.nextId++,
     name: name ?? `${rng.pick(g.first)} ${rng.pick(g.last)}`,
@@ -119,7 +120,7 @@ export function makePerson(ctx, { skill, career: cid, founder = false, name, lev
     morale: 70, stress: 10, status: 'ok', statusWeeks: 0, room: null,
     look: { hair: rng.pick(g.hair), skin: rng.pick(g.skin) },
     hiredWeek: state.week, games: 0,
-  };
+  }, founder); // Konu D: sevdiği ve sevmediği türler
 }
 
 export function genApplicants(ctx) {
@@ -255,7 +256,7 @@ export function weeklyStaff(ctx) {
     const market = salaryFor(ctx, p.skill) * Math.pow(pack.careerRules.salaryPerLevel, careerLevel(p));
     const underpaid = p.founder ? 0 : Math.max(0, 1 - p.salary / market) * 100 * wb.moraleUnderpaidK;
     const target = wb.moraleTarget - p.stress * wb.moraleStressK * 6 + teamMood + traitOf(ctx, p, 'moraleSelf', 0) - underpaid + (state.flags.union ? 5 : 0) + (restRoom ? 3 : 0)
-      + des.morale + pack.relations.moraleK * relAvg(ctx, p) / 100;
+      + des.morale + pack.relations.moraleK * relAvg(ctx, p) / 100 + Genres.staffMood(ctx, p);
     p.morale = clamp(p.morale + (target - p.morale) * wb.moraleRecovery, 0, 100);
 
     if (p.stress >= wb.burnoutAt && rng.chance(wb.burnoutChance * (banned ? pack.vacation.banBurnout : 1))) {

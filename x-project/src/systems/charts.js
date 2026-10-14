@@ -9,6 +9,7 @@ import { clamp, lerpTable } from '../kernel.js';
 import { tableYear, inflation, platformBase, activePlatforms, regionMix, platformById, ALL_REGIONS } from '../models.js';
 import { COMPANIES } from '../data/history.js';
 import { seasonK } from './regions.js';
+import { bornGenres } from './genres.js';
 
 const C = (ctx) => ctx.pack.charts;
 const D = (ctx) => ctx.pack.charts.diffusion;
@@ -290,7 +291,7 @@ export function weeklyCharts(ctx) {
   const above = aboveFn(m, c.zipf);
   const gCount = {};
   for (const g of state.games) if (!g.active || g.model === 'f2p') { if (g.rank) g.prevRank = g.rank; g.rank = null; g.gRank = null; }
-  const shelfN = lerpTable(c.shelf.size, y), digital = y >= c.digitalYear, share = 1 / pack.genres.length;
+  const shelfN = lerpTable(c.shelf.size, y), digital = y >= c.digitalYear, share = 1 / bornGenres(ctx, y).length; // o yıl doğmuş türler (Konu D)
   let greater = 0;
   entries.forEach((e, i) => {
     if (i > 0 && e.x < entries[i - 1].x) greater = i;
@@ -421,7 +422,7 @@ export function listView(ctx, kind = 'genel', key = null) {
     const S1p = m.S1 * 12;
     return finish(rows, (x) => (x > 0 ? Math.min(m.N, Math.floor(Math.pow(S1p / x, 1 / c.zipf))) : m.N), S1p);
   }
-  if (kind === 'tur') { rows = base.filter((e) => e.g.genre === key).map((e) => ({ e, x: e.x })); share = 1 / ctx.pack.genres.length; }
+  if (kind === 'tur') { rows = base.filter((e) => e.g.genre === key).map((e) => ({ e, x: e.x })); share = 1 / bornGenres(ctx).length; }
   else if (kind === 'platform') { rows = base.map((e) => ({ e, x: unitsOf(e) })).filter((r) => r.x > 0); const p = platformById(ctx, key), act = activePlatforms(ctx); share = p ? platformBase(ctx, p) / (act.reduce((a, q) => a + platformBase(ctx, q), 0) || 1) : 0; }
   else if (kind === 'bolge') { rows = base.map((e) => ({ e, x: unitsOf(e) })).filter((r) => r.x > 0); share = 1 / ctx.pack.regions.list.length; }
   else rows = base.map((e) => ({ e, x: e.x }));

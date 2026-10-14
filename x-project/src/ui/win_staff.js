@@ -1,5 +1,5 @@
 // Personel: çalışan satırı, yetenek/huy/ilişki, tatil politikası, işe alım.
-import { M, Staff, People } from '../game.js';
+import { M, Staff, People, Genres } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, bar, STATUS, move } from './util.js';
@@ -35,7 +35,11 @@ export function make(u) {
       </button>${actions}</div>`;
   }
   const traitName = (id) => PACK.traits.find((t) => t.id === id)?.name || id;
-  const traitPills = (p) => { const t = [p.trait, p.trait2].filter(Boolean); return t.length ? `<p class="traits">${t.map((id) => `<span class="pill">${esc(traitName(id))}</span>`).join('')}</p>` : ''; };
+  // Konu D: sevdiği ve sevmediği türler, tür deneyimi
+  const gN = (id) => PACK.genres.find((g) => g.id === id)?.name || id;
+  const tastes = (p) => [...(p.likes || []).map((g) => `❤️ ${gN(g)}${Genres.expBadge(ctx(), p.gexp?.[g] || 0)}`), p.dislike ? `👎 ${gN(p.dislike)}` : '',
+    ...Object.entries(p.gexp || {}).filter(([g, n]) => !(p.likes || []).includes(g) && Genres.expBadge(ctx(), n)).map(([g, n]) => `${Genres.expBadge(ctx(), n)} ${gN(g)}`)].filter(Boolean);
+  const traitPills = (p) => { const t = [p.trait, p.trait2].filter(Boolean); const ts = tastes(p); return t.length || ts.length ? `<p class="traits">${t.map((id) => `<span class="pill">${esc(traitName(id))}</span>`).join('')}${ts.map((x) => `<span class="pill taste">${esc(x)}</span>`).join('')}</p>` : ''; };
   function relLine(p) {
     const rels = People.relationsOf(ctx(), p);
     if (!rels.length) return '';
@@ -52,7 +56,7 @@ export function make(u) {
   }
   function winStaff() {
     const s = G().state, c = ctx();
-    const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill} · ${People.topSkills(c, p).map(([n, v]) => `${n} ${v}`).join(', ')}${[p.trait, p.trait2].filter(Boolean).map((t) => ' · ' + esc(traitName(t))).join('')}</small></div>
+    const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill} · ${People.topSkills(c, p).map(([n, v]) => `${n} ${v}`).join(', ')}${[p.trait, p.trait2].filter(Boolean).map((t) => ' · ' + esc(traitName(t))).join('')}${tastes(p).map((x) => ' · ' + esc(x)).join('')}</small></div>
       <button data-act="hire" data-id="${p.id}" ${s.staff.length >= Staff.seats(c) ? 'disabled' : ''}>${money(p.salary)}/ay</button></div>`).join('');
     return vacationBox() + `<div class="legend"><span>Beceri</span><span><i class="dot m"></i>Moral</span><span><i class="dot s"></i>Stres</span><span class="muted">Ayrıntı için isme dokun</span></div>
       <div class="people">${s.staff.map(personRow).join('')}</div>

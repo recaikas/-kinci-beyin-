@@ -1,7 +1,9 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub, Regions } from '../src/game.js';
+import { createState, makeGame, newGame as rawNewGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub, Regions, Genres } from '../src/game.js';
+// Konu D öncesi testler 6 eski türün hepsini bilinen sayar; yeni tür testleri rawNewGame kullanır.
+const newGame = (o) => { const g = rawNewGame(o); for (const gg of PACK.genres.slice(0, 6)) g.state.research.done[gg.research] ??= 0; return g; };
 import { EXTRA_PUBS, TRAITS } from '../src/data/publishers.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
@@ -38,7 +40,7 @@ for (const g of PACK.genres) {
 // 3) Not: hedefin %100'ü ~98, %50'si ~49 (MGT2 yapısı)
 const proj = (ctx, frac) => {
   const g = PACK.genres.find((x) => x.id === 'aksiyon');
-  const p = { genre: 'aksiyon', sub: 'macera', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'orta', engineId: null, bugs: 0, points: {}, alloc: [] };
+  const p = { genre: 'aksiyon', sub: 'aksiyonmacera', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'orta', engineId: null, bugs: 0, points: {}, alloc: [] };
   // ideal hizalama: payA = w_d
   const share = { oyn: 0, gfx: 0, ses: 0, tek: 0 };
   PACK.missions.forEach((m) => (share[m.disc] += 1));
@@ -820,6 +822,77 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   delete old.home; delete old.net; delete old.fanMix; old.games = [{ id: 1, name: 'Eski', regions: ['na', 'eu', 'row'], regionSplit: { na: 0.5, eu: 0.3, row: 0.2 }, regionSold: {}, active: false, units: 0 }];
   const lg = loadGame(JSON.stringify(old));
   check('Eski kayıt: ana bölge K. Amerika, Avrupa dağıtımı açık, "Dünya" bölünür', lg.state.home === 'na' && lg.state.net.eu === 2 && !lg.state.games[0].regions.includes('row') && lg.state.games[0].regionSplit.asya > 0);
+}
+
+// 34) Türler (Konu D): 13 ana tür, 100+ alt tür, altı kademe, kurucu geçmişi, tür bilgisi, icat, yaşam döngüsü, efsaneler, göç
+{
+  const G = await import('../src/data/genres.js');
+  check('13 ana tür ve 100+ alt tür', PACK.genres.length === 13 && G.SUBGENRES.length >= 100, `${PACK.genres.length} / ${G.SUBGENRES.length}`);
+  check('Her konunun her türle kademesi var', PACK.topics.every((t) => (G.TOPIC_FIT[t[0]] || '').length === 13 && /^[SIGBKX]+$/.test(G.TOPIC_FIT[t[0]])));
+  check('Her konunun en az bir Süper türü var', PACK.topics.every((t) => G.TOPIC_FIT[t[0]].includes('S')));
+  check('Her alt türün ana türü ve altın çağı geçerli', G.SUBGENRES.every((sb) => PACK.genres.some((g) => g.id === sb.parent) && sb.peak[0] >= sb.year && sb.peak[1] >= sb.peak[0]));
+  // Aynı ekip: Süper ile İğrenç arasında en az 25 puan
+  const c20 = ctxAt(2020, 'orta');
+  const mkp = (genre, topic, sub) => {
+    const g = PACK.genres.find((x) => x.id === genre), share = { oyn: 0, gfx: 0, ses: 0, tek: 0 };
+    PACK.missions.forEach((m) => (share[m.disc] += 1));
+    const p = { genre, sub, topic, audience: 'herkes', platforms: ['pc'], size: 'orta', engineId: null, bugs: 0, points: {}, alloc: PACK.missions.map((m) => (g.disc[m.disc] / share[m.disc]) * 100) };
+    for (const d of ['oyn', 'gfx', 'ses', 'tek']) p.points[d] = M.target(c20, d, 'orta') * 0.85;
+    return p;
+  };
+  const sSup = M.review(c20, mkp('nisanci', 'uzay', 'kaydirmali')).score, sIgr = M.review(c20, mkp('strateji', 'dans', 'otosavas')).score;
+  check('İğrenç kombinasyon Süper\'den en az 25 puan düşük', sSup - sIgr >= 25, `${sSup} / ${sIgr}`);
+  check('Kombinasyon notları doğru', M.combo(c20, mkp('nisanci', 'uzay', 'kaydirmali')).overall === 'S' && M.combo(c20, mkp('strateji', 'dans', 'otosavas')).overall === 'X');
+  check('Platform tavanı: ışık tabancası telefonda İğrenç', M.platCap('isiktabancasi', { kind: 'mobil' }) === 'X' && M.platFit(c20, { kind: 'mobil', genre: [8, 7, 7, 9, 8, 10] }, 'nisanci', 'isiktabancasi') === 4);
+  check('Kitle tavanı: hayatta kalma korkusu gençlere Kötü', M.combo(c20, { ...mkp('aksiyon', 'korku', 'hayattakorku'), audience: 'genc' }).audCap === 'K');
+  // Efsane: yılı gelince Süper
+  const c99 = ctxAt(1999, 'orta'), c95 = ctxAt(1995, 'orta');
+  check('Efsane kombinasyon yılı gelince Süper (Ambulans Çılgınlığı)', M.combo(c99, { topic: 'hastane', genre: 'yaris' }).legend?.id === 'ambulans' && M.combo(c99, { topic: 'hastane', genre: 'yaris' }).overall === 'S' && M.combo(c95, { topic: 'hastane', genre: 'yaris' }).overall === 'X');
+  // Yaşam döngüsü
+  const lc = (y) => ctxAt(y, 'orta');
+  check('Yaşam döngüsü: plastik enstrüman 2008 altın çağ, 2012 çökmüş', Genres.phase(lc(2008), 'enstruman').id === 'altin' && Genres.phase(lc(2012), 'enstruman').id === 'cokmus' && Genres.phase(lc(2012), 'enstruman').k < 0.7);
+  check('Yaşam döngüsü: retro dalgası eski türü niş cezasından kurtarır', Genres.phase(lc(2016), 'tekekran').k === 1 && Genres.phase(lc(2010), 'tekekran').k < 1);
+  // Kurucu geçmişi
+  const gm = rawNewGame({ seed: 91, difficulty: 'orta', background: 'masa' });
+  check('Geçmiş: masa oyunu meraklısı Strateji ve Bulmaca bilir, Aksiyon bilmez', Genres.knows(gm.ctx, 'strateji') && Genres.knows(gm.ctx, 'bulmaca') && !Genres.knows(gm.ctx, 'aksiyon') && gm.state.gxp.strateji === PACK.genreSys.startXp);
+  check('Bilinmeyen türle proje başlamaz', !gm.startProject({ name: 'X', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).ok);
+  check('Geçmiş: mahalle kaptanı 300 hayranla başlar', rawNewGame({ seed: 92, background: 'mahalle' }).state.fans >= 300);
+  check('Kurucu kendi türlerini sever, çalışanların zevki var', gm.state.staff[0].likes.join() === 'strateji,bulmaca' && gm.state.applicants.every((p) => p.likes?.length >= 1));
+  // Tür bilgisi yayınla artar
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const gx = rawNewGame({ seed: 93, difficulty: 'kolay' });
+  gx.state.research.done.oz_yayin = 1;
+  const x0 = gx.state.gxp.aksiyon;
+  const pj = gx.startProject({ name: 'Bilgi', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  while (pj.status === 'dev') tick(gx, 1);
+  const rl = gx.release({ projectId: pj.id, price: 20 });
+  check('Yayın tür bilgisini artırır ve kombinasyonu öğretir', rl.ok && gx.state.gxp.aksiyon > x0 && gx.state.knowledge['tg|uzay|aksiyon'] === 10);
+  // Paslanma
+  gx.state.gxp.yaris = 50; gx.state.gxpLast.yaris = 1960;
+  gx.state.week = 48 * 10 - 1; tick(gx, 1);
+  check('Kullanılmayan tür paslanır', gx.state.gxp.yaris < 50 && gx.state.gxp.yaris >= PACK.genreSys.rustFloor);
+  // İcat
+  const gi = rawNewGame({ seed: 94, difficulty: 'kolay' });
+  gi.state.week = Math.round((1981 - 1976) * 48 * gi.state.lengthMult); gi.state.research.done.alt_tur = 1; gi.state.gxp.aksiyon = 70; gi.state.research.rp = 500; gi.state.cash = 1e6;
+  check('Usta stüdyo doğmamış alt türü icat edebilir; çok erkeni edemez', Genres.inventInfo(gi.ctx, 'metroidvania').ok && !Genres.inventInfo(gi.ctx, 'battleroyale').ok && !Genres.subAvailable(gi.ctx, 'metroidvania'));
+  const ok = gi.invent('metroidvania').ok;
+  tick(gi, PACK.genreSys.invent.weeks + 1);
+  check('İcat bitince alt tür doğuşundan önce kullanılabilir', ok && Genres.subAvailable(gi.ctx, 'metroidvania') && gi.state.invented.metroidvania);
+  // Odak grubu
+  const gf = rawNewGame({ seed: 95, difficulty: 'kolay' }); gf.state.research.done.alt_tur = 1;
+  const c0 = gf.state.cash, fr = gf.focusGroup({ topic: 'yaris', genre: 'yaris', sub: 'arcadeyaris', platforms: ['pc'], size: 'kucuk' });
+  check('Odak grubu kademeleri öğretir ve para alır', fr.ok && gf.state.cash < c0 && gf.state.knowledge['gs|yaris|arcadeyaris'] === 10 && Genres.knownCombo(gf.ctx, { topic: 'yaris', genre: 'yaris', sub: 'arcadeyaris' }).overall === 'S');
+  // Ekip sezgisi: usta stüdyoda kesin
+  gf.state.gxp.yaris = 70;
+  check('Usta stüdyoda ekip sezgisi kesin', Genres.intuition(gf.ctx, { topic: 'dans', genre: 'yaris', sub: 'arcadeyaris' }).exact && Genres.intuition(gf.ctx, { topic: 'yaris', genre: 'yaris', sub: 'arcadeyaris' }).tier === 'S');
+  // Eski kayıt göçü
+  const old = JSON.parse(rawNewGame({ seed: 96 }).save());
+  for (const k of ['genreV', 'gxp', 'gxpLast', 'background', 'legends', 'invented', 'subUsed', 'ideas']) delete old[k];
+  old.research.done.tur_rpg = 10;
+  old.games = [{ id: 1, name: 'Eski', genre: 'aksiyon', sub: 'rpg', topic: 'uzay', size: 'kucuk', score: 70, year: 1980, regions: ['na'], regionSplit: { na: 1 }, regionSold: {}, active: false, units: 0 }];
+  for (const p of old.staff) { delete p.likes; delete p.dislike; delete p.gexp; }
+  const lg = loadGame(JSON.stringify(old));
+  check('Eski kayıt: eski türler bilinir, alt tür eşlenir, bilgi geçmiş oyunlardan', Genres.knows(lg.ctx, 'macera') && Genres.knows(lg.ctx, 'casual') && Genres.knows(lg.ctx, 'rpg') && lg.state.games[0].sub === 'aksiyonrpg' && lg.state.gxp.aksiyon > 0 && lg.state.staff[0].likes?.length >= 1);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);
