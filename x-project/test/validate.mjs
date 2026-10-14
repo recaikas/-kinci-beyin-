@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War } from '../src/game.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
@@ -448,6 +448,53 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   let err = '';
   for (const e of PACK.events) for (const ch of e.choices) { try { Ev.applyEffects(ctx, ch.effects); } catch (x) { err = `${e.id}: ${x.message}`; } }
   check('Tüm olay seçimleri hatasız uygulanır', !err, err);
+}
+
+// 28) Bölgesel pazarlar: paylar, yerelleştirme, tür tercihi
+{
+  const c76 = ctxAt(1976), c25 = ctxAt(2025, 'kolay');
+  const w76 = M.regionShares(c76), w25 = M.regionShares(c25);
+  check('Bölge payları toplamı 1', Math.abs(Object.values(w25).reduce((a, b) => a + b, 0) - 1) < 1e-9);
+  check('1976: Dünya pazarı yok, 2025: Japonya’dan büyük', w76.row === 0 && w25.row > w25.jp, `${w25.row.toFixed(2)} > ${w25.jp.toFixed(2)}`);
+  const g = newGame({ seed: 40, difficulty: 'kolay', length: 50 });
+  const st = g.state, ctx = g.ctx;
+  st.week = (1995 - 1976) * 48; st.cash = 1e7;
+  check('Japonya araştırmasız kapalı', !Prod.regionStatus(ctx, 'jp').ok);
+  st.research.done.yerel_jp = 1; st.research.done.yerel_dunya = 1; st.research.done.tur_rpg = 1; st.stationTier = 2;
+  const r = g.startProject({ name: 'J', genre: 'rpg', topic: 'fantezi', audience: 'genc', platforms: ['oi1'], size: 'kucuk' });
+  const pj = r.project;
+  check('Varsayılan: İngilizce sürüm (K. Amerika + Avrupa)', pj.regions.join() === 'na,eu');
+  const c0 = st.cash;
+  check('Japonca yerelleştirme bedeli ödenir', g.localize(pj.id, 'jp').ok && st.cash < c0 && pj.regions.includes('jp'));
+  const p = M.platformById(ctx, 'oi1');
+  const en = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu'] }, p), all = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu', 'jp', 'row'] }, p);
+  check('Tüm bölgeler yalnız İngilizceden çok satar', all > en * 1.2, `${all.toFixed(2)} > ${en.toFixed(2)}`);
+  const jpRpg = M.regionMix(ctx, { genre: 'rpg', regions: ['jp'] }, p).jp, jpStr = M.regionMix(ctx, { genre: 'strateji', regions: ['jp'] }, p).jp;
+  check('Japonya RPG’yi stratejiden çok sever', jpRpg > jpStr * 1.5);
+  check('X-Kutu Japonya’da zayıf', M.regionBias(ctx, M.platformById(ctx, 'xkutu') || { owner: 'mikroyumusak' }, 'jp') < 0.5);
+}
+
+// 29) Konsol savaşı: pay, rakipten oyuncu çalma, üçüncü parti, özel anlaşma, donanımdan çekilme
+{
+  const g = newGame({ seed: 41, difficulty: 'kolay', length: 50 });
+  const st = g.state, ctx = g.ctx;
+  st.week = (1996 - 1976) * 48; st.cash = 1e9; st.fans = 500000;
+  const k = { id: 'ownT', name: 'Test Kutu', type: 'konsol', kind: 'konsol', tech: 5, genre: [10, 10, 10, 10, 10, 10], aud: [10, 10, 10], launched: 1996, retired: null, base: 60, active: 6e7, sold: 6e7, weeks: 10, price: 'normal', seriesId: 1, gen: 1 };
+  st.consoles.push(k);
+  const snes = M.platformById(ctx, 'snes');
+  const before = M.platformBase(ctx, snes);
+  War.updateShares(ctx);
+  check('Konsolun segment payı hesaplanır', st.war.konsol.share > 0.2, st.war.konsol.share.toFixed(2));
+  check('Rakip platformlardan oyuncu çalınır', M.platformBase(ctx, snes) < before * 0.9, `${before.toFixed(1)} → ${M.platformBase(ctx, snes).toFixed(1)}`);
+  check('Segment payları senin konsolunu içerir', War.segmentShares(ctx, 'konsol').some((r) => r.own));
+  st.rng = 5; for (let i = 0; i < 40; i++) War.thirdPartyRelease(ctx, 'Kapkom', 'Oyun ' + i, false);
+  check('Üçüncü parti oyunlar gelir', k.thirdParty > 3, String(k.thirdParty));
+  check('Özel oyun anlaşması yapılır', g.exclusiveDeal(k.id).ok && st.consoleMods.some((m) => m.console === k.id));
+  check('Anlaşma beklemesi var', !g.exclusiveDeal(k.id).ok);
+  k.base = 400; const old = { ...PACK.war }; PACK.war.exitChance = 1; PACK.war.exitRepBelow = 101; PACK.war.reactAt = [];
+  War.monthlyWar(ctx);
+  check('Payı yüksek konsol karşısında zayıf rakip donanımdan çekilir', Object.keys(st.platformEnd || {}).length > 0, JSON.stringify(st.platformEnd));
+  Object.assign(PACK.war, old);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

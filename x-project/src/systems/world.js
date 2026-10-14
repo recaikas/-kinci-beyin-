@@ -2,7 +2,7 @@
 // Şirketler yıllara göre kurulur, güçlenir, zayıflar ve piyasadan çekilir; rakip listesi ve yayıncılar buradan beslenir.
 import { COMPANIES, YEARS } from '../data/history.js';
 import { lerpTable, clamp } from '../kernel.js';
-import { tableYear, Pz, S, difficulty, inflation } from '../models.js';
+import { tableYear, Pz, S, difficulty, inflation, activePlatforms } from '../models.js';
 
 export const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 export const companyById = (id) => COMPANIES.find((c) => c.id === id);
@@ -92,6 +92,7 @@ function releaseHit(ctx, h) {
   state.world.hits.unshift({ name: h.name, studio, score, genre: h.genre, year: Math.floor(tableYear(ctx)), week: state.week });
   if (state.world.hits.length > 600) state.world.hits.length = 600;
   ctx.news(`🕹️ ${studio}, "${h.name}" oyununu çıkardı (not ${score}).`, h.rank < 3 ? 'tarih' : 'info');
+  ctx.bus.fire('rivalRelease', { studio, name: h.name, big: true, cid: h.cid });
 }
 
 // Haftalık: yıl değişimi, hit oyunlar, ayın tarihî olayı.
@@ -123,8 +124,7 @@ export function companyBoard(ctx, n = 12) {
 
 // Platform pazar payları (dünya penceresi).
 export function platformShares(ctx, base) {
-  const y = tableYear(ctx);
-  const list = ctx.pack.platforms.filter((p) => y >= p.from && y < p.to).map((p) => ({ p, b: base(p) }));
+  const list = activePlatforms(ctx).map((p) => ({ p, b: base(p) })).filter((x) => x.b > 0);
   const total = list.reduce((a, x) => a + x.b, 0) || 1;
   return list.map((x) => ({ ...x, share: x.b / total })).sort((a, b) => b.share - a.share);
 }

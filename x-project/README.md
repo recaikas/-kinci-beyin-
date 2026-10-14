@@ -58,6 +58,8 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 - **Oyuncu raporu (GDT)**: satıştan 4 hafta sonra; oyuncuların hangi görevi sevip sevmediği, kitle, fiyat, hata, motor ve beklenti yorumu. Görev önemleri faz pencerelerinde rozet olur
 - **Kaos ölçeri**: kadro, yıl, crunch, borç, stres ve skandallarla yükselir. Olaylar sıklaşır, ofis görsel olarak bozulur
 - 81 rastgele olay (dava, sızıntı, korsan, inceleme bombardımanı, sendika, yatırımcı baskısı, NFT, YZ ile işten çıkarma…)
+- **Bölgesel pazarlar**: Kuzey Amerika, Avrupa, Japonya ve Dünya; payları yıllara göre değişir (Dünya 2000'lerden sonra büyür), her bölgenin türlere ilgisi (Japonya RPG sever, Avrupa strateji/simülasyon) ve platformlara eğilimi (X-Kutu Japonya'da zayıf, bilgisayar Avrupa'da güçlü) farklı. İngilizce sürüm K. Amerika + Avrupa'yı kapsar; Japonya ve Dünya için araştırma ve yerelleştirme bedeli. Oyun ayrıntısında bölge satışları
+- **Konsol savaşı**: konsolların aynı segmentteki rakip platformlardan oyuncu çalar; pay büyüdükçe rakipler fiyat kırar, özel oyun kapar, reklam savaşı açar; zayıf rakip donanımdan çekilip yayıncıya döner. Üçüncü parti yayıncılar payın kadar senin konsoluna oyun çıkarır (lisans ücreti + kütüphane); büyük yayıncılarla özel oyun anlaşması
 - **Tarihsel oyun dünyası (1976–2025)**: 50+ parodi şirket (Ataro, Pandando, Segga, Soni, MikroYumuşak, Kapkom, Konamii…) yıllara göre kurulur, güçlenir, zayıflar, birleşir ya da piyasadan çekilir. Her yılın 10 popüler oyunu (Süper Tesisatçı Kardeşler, Zelma Efsanesi, Hızlı Kirpi…) yıl içine dağılıp satış listesine girer; her ay bir tarihî olay haber olur. "50 yıl · tam tarih" modu 1976'dan 2025'e kadar oynanır. Tüm adlar telife takılmamak için parodi
 - **Yayıncılar tarihten**: güçleri o yılki şirket gücünden gelir (Ataro 1980'lerde dev, sonra yok olur); pay ve hayran şartı güce göre
 - **Oyun dünyası penceresi**: yılın oyunları ve olayları, şirket sıralaması, platform pazar payları, olay arşivi
@@ -76,12 +78,12 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 
 | Zorluk | 2025'e ulaşan | Medyan kasa |
 |---|---|---|
-| Çok kolay | 8/8 | ~1,5 milyar $ |
-| Kolay | 8/8 | ~450 M $ |
-| Orta | 8/8 | ~210 M $ |
-| Zor | 3/8 | çoğu batar; ayakta kalanlar büyük stüdyo |
-| Çok zor | 2/8 | — |
-| Efsanevi | 4/8 | ~1 M $ (küçük sözleşme stüdyosu) |
+| Çok kolay | 8/8 | ~2,4 milyar $ |
+| Kolay | 8/8 | ~510 M $ |
+| Orta | 8/8 | ~310 M $ |
+| Zor | 6/8 | ~90 M $ |
+| Çok zor | 1/8 | — |
+| Efsanevi | 4/8 | küçük sözleşme stüdyosu |
 
 Bu ölçümle bulunan ve düzeltilen 10 sorun raporun sonunda listelidir.
 

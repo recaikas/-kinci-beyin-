@@ -3,7 +3,7 @@
 // (kartuş → kaset/disket → CD → DVD → Blu-ray → dijital → bulut), konsol aileleri ve nesiller (Seri, Seri 2, Seri 3…),
 // fiyat stratejisi, donanım satışı, salon jetonu/bulut aboneliği ve rakiplerden lisans geliri.
 import { clamp, lerpTable } from '../kernel.js';
-import { Pz, inflation, tableYear, skillK, marketSkill, mYear } from '../models.js';
+import { Pz, inflation, tableYear, skillK, marketSkill, mYear, segmentOf } from '../models.js';
 import { weeklyOutput, hasRoom } from './staff.js';
 
 const C = (ctx) => ctx.pack.console;
@@ -146,7 +146,12 @@ function unitsThisWeek(ctx, k) {
   // Pazar büyümesinin kareköküyle ölçeklenir: konsol pazarı oyun pazarı kadar hızlı büyümez.
   let u = c.B * Math.sqrt(Pz(ctx)) * lerpTable(t.demand || [[1976, 1]], tableYear(ctx)) * (t.units ?? 1) * qualityOf(ctx, k.tech, t) * F
     * (1 + c.ownGameBoost * games) * (k.appeal || 1) * price.units * seriesBoost(ctx, k) * Math.pow(c.decay, k.weeks);
-  for (const m of state.consoleMods || []) if (m.untilWeek > state.week) u *= m.mult;
+  const seg = segmentOf({ kind: t.kind });
+  for (const m of state.consoleMods || []) if (m.untilWeek > state.week && (!m.seg || m.seg === seg) && (!m.console || m.console === k.id)) u *= m.mult;
+  // Konsol savaşı: üçüncü parti kütüphanesi çeker; aynı segmentte yeni nesil rakip çıktıysa satış düşer.
+  u *= 1 + ctx.pack.war.thirdPartyBoost * (k.thirdParty || 0);
+  const y = tableYear(ctx);
+  if (ctx.pack.platforms.some((p) => segmentOf(p) === seg && y >= p.from && y - p.from < 1)) u *= ctx.pack.war.newGenRival;
   if (k.sunsetAt) u *= Math.pow(c.sunsetDecay, Math.max(0, state.week - (k.sunsetAt - c.overlapWeeks)));
   return Math.round(u);
 }

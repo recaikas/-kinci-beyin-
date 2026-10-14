@@ -10,11 +10,41 @@ export function newProject(ctx, o) {
   return {
     id: state.nextId++, name: o.name, genre: o.genre, sub: o.sub || null, topic: o.topic, audience: o.audience,
     platforms: o.platforms, size: o.size, engineId: o.engineId ?? null, sequelOf: o.sequelOf ?? null, roomId: o.roomId ?? null,
-    kind: o.kind || 'oyun', baseGameId: o.baseGameId ?? null,
+    kind: o.kind || 'oyun', baseGameId: o.baseGameId ?? null, regions: o.regions?.length ? [...o.regions] : baseRegions(ctx),
     alloc: o.alloc || pack.genres.find((g) => g.id === o.genre).hint.map((v) => Math.max(20, v)),
     week: 0, totalWeeks: Math.round(size.weeks * (o.kind === 'ek' ? pack.post.expansionWeeks : 1)), phase: 0, status: 'dev',
     points: { oyn: 0, gfx: 0, ses: 0, tek: 0 }, bugs: 0, hype: 0, startedWeek: state.week, mmo: !!size.mmo && o.kind !== 'ek', outsourced: 0,
   };
+}
+
+// --- Yerelleştirme: İngilizce sürüm (K. Amerika + Avrupa) her zaman var; diğer bölgeler araştırma + bedel ister.
+export const baseRegions = (ctx) => ctx.pack.regions.list.filter((r) => r.base).map((r) => r.id);
+export function regionStatus(ctx, rid) {
+  const r = ctx.pack.regions.list.find((x) => x.id === rid);
+  if (!r) return { ok: false, why: 'yok' };
+  if (r.base) return { ok: true, free: true };
+  if (r.research && !ctx.state.research.done[r.research]) return { ok: false, why: 'araştır' };
+  if (lerpTable(r.weight, tableYear(ctx)) <= 0.001) return { ok: false, why: 'pazar yok' };
+  return { ok: true };
+}
+export function locCost(ctx, rid, sizeId) {
+  const r = ctx.pack.regions.list.find((x) => x.id === rid);
+  const size = ctx.pack.sizes.find((s) => s.id === sizeId);
+  return r.base ? 0 : Math.round(r.locCost * Math.max(0.3, size.devCost) * inflation(ctx) ** 0.5);
+}
+export function localize(ctx, pid, rid) {
+  const { state, ledger } = ctx;
+  const pj = state.projects.find((p) => p.id === pid);
+  if (!pj) return { ok: false, msg: 'Proje yok.' };
+  if (pj.regions.includes(rid)) return { ok: true };
+  const st = regionStatus(ctx, rid);
+  if (!st.ok) return { ok: false, msg: `Bu bölge için ${st.why}.` };
+  const cost = locCost(ctx, rid, pj.size);
+  if (state.cash < cost) return { ok: false, msg: `Yerelleştirme ${cost.toLocaleString('tr-TR')} $.` };
+  ledger.post('yerellestirme', -cost, `${pj.name}: ${ctx.pack.regions.list.find((r) => r.id === rid).name}`);
+  pj.cost = (pj.cost || 0) + cost;
+  pj.regions.push(rid);
+  return { ok: true };
 }
 
 export function projectCost(ctx, o) {
@@ -24,6 +54,7 @@ export function projectCost(ctx, o) {
     const p = platformById(ctx, id);
     if (p) cost += p.licence + p.devCost * size.devCost;
   }
+  for (const rid of o.regions || []) if (regionStatus(ctx, rid).ok) cost += locCost(ctx, rid, o.size);
   return Math.round(cost * (o.kind === 'ek' ? ctx.pack.post.expansionCost : 1));
 }
 

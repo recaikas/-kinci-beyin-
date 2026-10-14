@@ -232,6 +232,39 @@ export const PACK = {
     { id: 'mantar', name: 'Kırmızı Mantar', power: 55, royalty: 0.40, from: 1976, to: 2200, minFans: 0 },
     { id: 'morayi', name: 'Mor Ayı Indie', power: 60, royalty: 0.45, from: 2008, to: 2200, minFans: 0 },
   ],
+  // Bölgesel pazarlar (P). weight: oyun pazarındaki pay (yıllara göre, normalize edilir); pref: türlere ilgi
+  // (aksiyon, macera, rpg, simülasyon, strateji, casual); locCost: yerelleştirme bedeli (boyutun devCost'uyla çarpılır).
+  // İngilizce sürüm Kuzey Amerika ve Avrupa'yı kapsar; Japonya ve Dünya için araştırma + yerelleştirme gerekir.
+  regions: {
+    _tag: 'P',
+    list: [
+      { id: 'na', name: 'Kuzey Amerika', short: 'K.Amerika', weight: [[1976, 0.55], [1990, 0.42], [2005, 0.38], [2025, 0.3]], pref: [1.2, 1.0, 0.9, 1.0, 0.85, 1.05], locCost: 0, base: true },
+      { id: 'eu', name: 'Avrupa', short: 'Avrupa', weight: [[1976, 0.3], [1990, 0.28], [2005, 0.3], [2025, 0.27]], pref: [1.0, 1.1, 0.9, 1.15, 1.25, 0.95], locCost: 0, base: true },
+      { id: 'jp', name: 'Japonya', short: 'Japonya', weight: [[1976, 0.15], [1990, 0.25], [2005, 0.17], [2025, 0.1]], pref: [0.9, 1.0, 1.45, 0.85, 0.8, 1.1], locCost: 9000, research: 'yerel_jp' },
+      { id: 'row', name: 'Dünya (Asya, Latin Amerika…)', short: 'Dünya', weight: [[1976, 0.0], [1990, 0.05], [2005, 0.15], [2025, 0.33]], pref: [1.1, 0.9, 1.0, 0.9, 0.95, 1.2], locCost: 7000, research: 'yerel_dunya' },
+    ],
+    // Platform sahibinin ya da türünün bölgelere göre gücü (ör. X-Kutu Japonya'da zayıf, bilgisayar Avrupa'da güçlü)
+    ownerBias: {
+      pandando: { na: 1.1, eu: 0.9, jp: 1.45, row: 0.9 }, segga: { na: 1.0, eu: 1.2, jp: 0.9, row: 1.3 }, soni: { na: 1.0, eu: 1.1, jp: 1.1, row: 1.0 },
+      mikroyumusak: { na: 1.35, eu: 1.0, jp: 0.3, row: 0.8 }, ataro: { na: 1.3, eu: 0.9, jp: 0.4, row: 0.8 }, hadson: { na: 0.6, eu: 0.5, jp: 1.8, row: 0.5 },
+      vana: { na: 1.1, eu: 1.1, jp: 0.6, row: 1.0 }, pc: { na: 1.0, eu: 1.3, jp: 0.6, row: 1.2 }, mobil: { na: 0.9, eu: 0.9, jp: 1.2, row: 1.4 },
+      sen: { na: 1.0, eu: 1.15, jp: 0.7, row: 1.0 },
+    },
+    norm: 1.0, // bütün bölgelerin ağırlıklı ortalaması ~1; yalnız İngilizce sürüm erken dönemde ~%85 satar
+  },
+
+  // Konsol savaşı (P): oyuncunun konsolu aynı segmentteki tarihsel platformlardan oyuncu çalar; rakipler tepki verir.
+  war: {
+    _tag: 'P',
+    steal: 0.7, // payın bu kadarı rakip platformların oyun satışı tabanından düşer
+    reactAt: [[0.12, 'fiyat', 0.08], [0.2, 'ozel', 0.05], [0.3, 'reklam', 0.04]], // [pay eşiği, tepki, aylık olasılık]
+    exitAt: 0.4, exitRepBelow: 75, exitChance: 0.04,
+    priceCut: { mult: 0.85, weeks: 16 }, exclusive: { mult: 0.9, weeks: 30 }, adWar: { mult: 0.92, weeks: 20 },
+    newGenRival: 0.85, // aynı segmentte son 48 haftada yeni rakip konsol çıktıysa
+    thirdPartyK: 0.6, thirdPartyFee: 40000, thirdPartyBoost: 0.02, thirdPartyCap: 40,
+    dealCost: 600000, dealMult: 1.35, dealWeeks: 30, dealThirdParty: 3, dealCooldown: 48,
+  },
+
   // Tarihsel dünya (P): rakipler ve yayıncılar history.js'ten; her yıl 10 hit, her ay bir olay.
   world: {
     _tag: 'P',
@@ -567,6 +600,8 @@ export const PACK = {
     { id: 'hw_tetik', name: 'Donanım: Adaptif tetik', rp: 160, cost: 6000000, weeks: 10, year: 2020, requires: 'hw_kablosuz', hw: true },
     { id: 'hw_oled', name: 'Donanım: OLED ekran', rp: 200, cost: 10000000, weeks: 12, year: 2021, requires: 'hw_hdekran', hw: true },
     { id: 'hw_yz', name: 'Donanım: Yapay zekâ hızlandırıcı', rp: 480, cost: 35000000, weeks: 22, year: 2024, requires: 'hw_soc', hw: true },
+    { id: 'yerel_jp', name: 'Japonca yerelleştirme', rp: 30, cost: 30000, weeks: 4, year: 1981 },
+    { id: 'yerel_dunya', name: 'Dünya pazarları (çok dilli sürüm)', rp: 60, cost: 80000, weeks: 6, year: 1993 },
     { id: 'uzaktan', name: 'Uzaktan çalışma altyapısı', rp: 50, cost: 30000, weeks: 4, year: 2019 },
     // Motor özellikleri: v seviyesi → RP/süre/maliyet/motor puanı researchV'den gelir.
     { id: 'f_metin', name: 'Motor: Metin arayüzü', v: 1, year: 1976, engine: true },

@@ -4,15 +4,16 @@
 // (tek istisna: konu/tür uyum tablosu; deneyimli bir oyuncunun raporlardan öğreneceğini varsayar).
 import { newGame } from '../src/game.js';
 import * as M from '../src/models.js';
-import { researchAvailable, researchInfo, devCapacity, projectCost } from '../src/systems/production.js';
+import { researchAvailable, researchInfo, devCapacity, projectCost, regionStatus, locCost } from '../src/systems/production.js';
 import { stationUpgradeCost, creditLimit, rent, designCost } from '../src/systems/economy.js';
 import { publishersAvailable } from '../src/systems/world.js';
 import * as Staff from '../src/systems/staff.js';
 import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
+import * as War from '../src/systems/war.js';
 
-const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'tur_rpg', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
-  'f_kaydirma', 'oz_yayin', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
+const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
+  'f_kaydirma', 'oz_yayin', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
   'f_online', 'f_shader', 'motor_lisans', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
 
@@ -102,6 +103,9 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       if (cost < Math.max(0, state.cash) * 0.35 || p.own) draft.platforms.push(p.id);
     }
     if (!draft.platforms.length) draft.platforms = ['pc'];
+    // Yerelleştirme: açık bölgelerden türe ilgisi yeterli ve bedeli kasaya göre küçük olanlar
+    draft.regions = pack.regions.list.filter((r) => { const st = regionStatus(ctx, r.id); if (!st.ok) return false; if (st.free) return true;
+      return r.pref[pack.genres.indexOf(pick.gn)] >= 0.9 && locCost(ctx, r.id, size.id) < Math.max(0, state.cash) * 0.05; }).map((r) => r.id);
     const eng = state.engines[state.engines.length - 1];
     if (eng) draft.engineId = eng.id;
     const ip = state.ips.filter((x) => x.value >= 1 && state.week - x.lastRelease >= pack.ip.waitWeeks).sort((a, b) => b.value - a.value)[0];
@@ -255,6 +259,8 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         if (!(cand && cand.skills.donanim >= pack.console.hwSkillMin && g.moveStaff(cand.id, lab.id).ok)) hireFor(lab.id, (p) => (p.skills?.donanim || 0) >= pack.console.hwSkillMin);
       }
       if (lab) consolePlan();
+      // Konsol savaşı: zenginken özel oyun anlaşması
+      for (const k of state.consoles.filter((x) => x.launched && !x.retired && !x.ended)) if (state.cash > War.dealCost(ctx) * 10 + burn() * 12) g.exclusiveDeal(k.id);
       // Ofis ve istasyonlar
       const nextOffice = pack.offices.find((o) => o.tier === state.office.tier + 1);
       const full = state.staff.length >= seats - 1 && state.rooms.length >= Staff.slots(ctx);

@@ -221,8 +221,16 @@ export function ownPlatforms(ctx) {
 export const allPlatforms = (ctx) => ctx.pack.platforms.concat(ownPlatforms(ctx));
 export const platformById = (ctx, id) => allPlatforms(ctx).find((p) => p.id === id);
 
+// Konsol savaşı segmenti: aynı segmentteki platformlar oyuncu için yarışır.
+export const segmentOf = (p) => (p.kind === 'el' ? 'el' : p.kind === 'konsol' ? 'konsol' : p.kind || 'pc');
+export const platformEnd = (ctx, p) => ctx.state.platformEnd?.[p.id] ?? p.to;
 export function platformBase(ctx, p, y = tableYear(ctx)) {
-  if (y < p.from || y >= p.to) return 0;
+  const raw = platformBaseRaw(ctx, p, y);
+  const w = !p.own && raw > 0 && ctx.state.war && ctx.state.war[segmentOf(p)];
+  return w ? raw * (1 - ctx.pack.war.steal * w.share) : raw;
+}
+export function platformBaseRaw(ctx, p, y = tableYear(ctx)) {
+  if (y < p.from || y >= platformEnd(ctx, p)) return 0;
   if (p.own) return ctx.state.consoles.find((k) => k.id === p.id).base;
   if (p.key) return lerpTable(p.key, y);
   const G = ctx.pack.platformGrowth, life = clamp((y - p.from) / (p.to - p.from), 0, 1);
@@ -231,8 +239,30 @@ export function platformBase(ctx, p, y = tableYear(ctx)) {
   return (p.start + (p.units - p.start) * frac) * decline;
 }
 export function activePlatforms(ctx, y = tableYear(ctx)) {
-  return allPlatforms(ctx).filter((p) => y >= p.from && y < p.to);
+  return allPlatforms(ctx).filter((p) => y >= p.from && y < platformEnd(ctx, p));
 }
+// --- Bölgesel pazarlar
+export function regionShares(ctx, y = tableYear(ctx)) {
+  const list = ctx.pack.regions.list;
+  const raw = list.map((r) => Math.max(0, lerpTable(r.weight, y)));
+  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  return Object.fromEntries(list.map((r, i) => [r.id, raw[i] / sum]));
+}
+export function regionBias(ctx, p, rid) {
+  const key = p.own ? 'sen' : p.owner || (p.kind === 'pc' ? 'pc' : p.kind === 'mobil' ? 'mobil' : null);
+  return (key && ctx.pack.regions.ownerBias[key]?.[rid]) ?? 1;
+}
+export const ALL_REGIONS = (ctx) => ctx.pack.regions.list.map((r) => r.id);
+// Bir oyunun bir platformdaki bölge karışımı: pazar payı × tür ilgisi × platformun o bölgedeki gücü.
+export function regionMix(ctx, game, p, y = tableYear(ctx)) {
+  const w = regionShares(ctx, y);
+  const gi = ctx.pack.genres.findIndex((x) => x.id === game.genre);
+  const regs = game.regions || ALL_REGIONS(ctx);
+  const out = {};
+  for (const r of ctx.pack.regions.list) if (regs.includes(r.id)) out[r.id] = w[r.id] * r.pref[gi] * regionBias(ctx, p, r.id);
+  return out;
+}
+export const regionFactor = (ctx, game, p) => Object.values(regionMix(ctx, game, p)).reduce((a, b) => a + b, 0) / ctx.pack.regions.norm;
 export function studioStars(ctx) {
   return clamp(ctx.state.prestige + Math.log10(1 + ctx.state.fans / 10000), 0, 5);
 }
@@ -262,7 +292,7 @@ export function peakWeekly(ctx, game) {
     const share = platformBase(ctx, p) / total;
     const fit = (p.genre[gi] / 10) * (p.aud[ai] / 10);
     const price = Math.pow((p.priceRef || s.priceRef) / gamePrice(ctx, game, p), s.priceExp);
-    out[id] = base * share * fit * price;
+    out[id] = base * share * fit * price * regionFactor(ctx, game, p);
   }
   return out;
 }

@@ -11,7 +11,7 @@ export function make(u) {
   function defaultDraft() {
     const g = G(), y = M.tableYear(ctx());
     const r = PACK.rivals, pick = (a) => a[(g.state.week + g.state.games.length * 3) % a.length];
-    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '' };
+    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
   }
   const badgeOf = (v) => (v == null ? '' : `<em class="kn k${v}">${Know.rating(v)[0]}</em>`);
   function winDevelop(sub) {
@@ -67,7 +67,13 @@ export function make(u) {
           <span class="name">${esc(p.name)}${p.own ? ' ★' : ''} ${badgeOf(kn.platGenre(p.id, d.genre))}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
       }).join('');
       const free = g.freeDevRooms();
+      d.regions ||= Prod.baseRegions(c);
+      const gi = PACK.genres.findIndex((x) => x.id === d.genre), w = M.regionShares(c);
+      const regs = PACK.regions.list.map((r) => { const st = Prod.regionStatus(c, r.id), on = d.regions.includes(r.id) || st.free;
+        return `<label class="pick ${st.ok ? '' : 'locked'}"><input type="checkbox" id="rg-${r.id}" data-region="${r.id}" ${on ? 'checked' : ''} ${!st.ok || st.free ? 'disabled' : ''}>
+          <span class="name">${esc(r.name)} <small class="muted">pazarın %${Math.round(w[r.id] * 100)} · ${PACK.genres[gi].name} ilgisi ×${r.pref[gi]}</small></span><span class="meta num">${st.free ? 'İngilizce sürüm' : st.ok ? money(Prod.locCost(c, r.id, d.size)) : st.why}</span></label>`; }).join('');
       return head + `<fieldset class="picks"><legend>Platformlar <small>rozet: seçili türle bilinen uyum</small></legend>${plats}</fieldset>
+        <fieldset class="picks"><legend>Bölgeler <small>yerelleştirme bedeli boyuta göre</small></legend>${regs}</fieldset>
         <div class="form">
           <label>Boyut<select id="f-size" data-draft="size">${PACK.sizes.map((z) => { const lock = z.research && !done[z.research] ? ' (araştır)' : s.office.tier < z.office ? ` (${PACK.offices[z.office - 1].name})` : ''; return opt(z.id, `${z.name} · ${z.weeks} hf${lock}`, d.size === z.id, !!lock); }).join('')}</select></label>
           <label>Motor<select id="f-engine" data-draft="engineId">${opt('', 'Motorsuz', !d.engineId)}${s.engines.map((e) => opt(e.id, `${e.name} (${M.engineScore(c, e)})`, String(d.engineId) === String(e.id))).join('')}</select></label>
@@ -110,6 +116,7 @@ export function make(u) {
       ${release}
       <section class="box"><h3>Hedefe ulaşma</h3>${discs}<p class="muted small">${pv.notes.map(esc).join(' · ') || 'Ceza yok'} · Uyum ×${pv.F.toFixed(2)} · Hiza ×${pv.hiza.toFixed(2)} · Hype ${Math.round(pj.hype)}</p>
         ${pj.status === 'dev' ? `<div class="foot"><button data-act="phase" data-pid="${pid}">Zaman dağılımını ayarla</button></div>` : ''}</section>
+      <section class="box"><h3>Bölgeler</h3><div class="btns">${PACK.regions.list.map((r) => { const on = (pj.regions || []).includes(r.id), st = Prod.regionStatus(c, r.id); return on ? `<span class="pill">✓ ${esc(r.short)}</span>` : `<button data-act="localize" data-pid="${pid}" data-id="${r.id}" ${st.ok ? '' : 'disabled'}>${esc(r.short)}<small>${st.ok ? money(Prod.locCost(c, r.id, pj.size)) : st.why}</small></button>`; }).join('')}</div></section>
       <section class="box"><h3>Pazarlama</h3><div class="btns">${camps}</div></section>
       <section class="box"><h3>Baskı</h3><div class="foot"><span class="muted small">Crunch tüm stüdyoya uygulanır: +%40 üretim; stres, hata ve skandal riski patlar.</span><button data-act="crunch" class="${s.crunch ? 'danger on' : ''}">${s.crunch ? 'Crunch\'ı bitir' : 'Crunch başlat'}</button></div></section>
       <details class="box"><summary><h3>Dış kaynak</h3></summary><p class="muted small">Tek seferlik ücretle anında puan. Pahalılaştıkça getirisi azalır.</p>${outs}</details>

@@ -14,6 +14,7 @@ import * as Know from './systems/knowledge.js';
 import * as World from './systems/world.js';
 import * as People from './systems/people.js';
 import * as Co from './systems/company.js';
+import * as War from './systems/war.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -59,6 +60,7 @@ export function makeGame(state, pack = PACK) {
   const rng = makeRng(state);
   const ledger = makeLedger(state, bus);
   bus.on('ledgerPosted', (p) => Co.trackRevenue({ state, pack }, p));
+  bus.on('rivalRelease', (r) => War.thirdPartyRelease(ctx, r.studio, r.name, r.big));
   const ctx = {
     state, pack, bus, rng, ledger,
     infl: () => M.inflation(ctx),
@@ -113,6 +115,7 @@ export function makeGame(state, pack = PACK) {
         Market.monthlyMmo(ctx);
         Market.monthlySubsidiaries(ctx);
         Con.monthlyConsole(ctx);
+        War.monthlyWar(ctx);
         Staff.genApplicants(ctx);
         if (!state.contract || state.contractOffers.length === 0) Prod.genContracts(ctx);
         state.cashHist.push(Math.round(state.cash));
@@ -233,7 +236,9 @@ export function makeGame(state, pack = PACK) {
     levelUp: (id) => Staff.levelUp(ctx, id),
     changeCareer: (id, cid) => Staff.changeCareer(ctx, id, cid),
     outsource: (pid, i) => Prod.outsource(ctx, pid, i),
+    localize: (pid, rid) => Prod.localize(ctx, pid, rid),
     startConsole: (d) => Con.startConsole(ctx, d),
+    exclusiveDeal: (id) => War.exclusiveDeal(ctx, id),
 
     // --- Sözleşme, araştırma, motor
     acceptContract: (id) => Prod.acceptContract(ctx, id),
@@ -269,4 +274,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War };

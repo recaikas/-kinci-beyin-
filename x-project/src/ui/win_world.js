@@ -19,8 +19,17 @@ export function make(u) {
     if (sub === 'platformlar') {
       const sh = World.platformShares(c, (p) => M.platformBase(c, p));
       return `<p class="muted small">${y} yılında piyasadaki konsollar ve bilgisayarlar. Kurulu taban (milyon kişi) ve pazar payı.</p>
-        <div class="split-bars">${sh.map((x) => `<div><span>${esc(x.p.name)}<small class="muted"> ${x.p.owner ? esc(World.companyById(x.p.owner)?.name || '') : x.p.kind === 'pc' ? 'bilgisayar' : ''}</small></span>${bar(x.share * 100, 'prog')}<b class="num">${x.b.toFixed(1)} M</b></div>`).join('')}</div>
+        <div class="split-bars">${sh.map((x) => `<div><span>${x.p.own ? '★ ' : ''}${esc(x.p.name)}<small class="muted"> ${x.p.own ? 'senin' : x.p.owner ? esc(World.companyById(x.p.owner)?.name || '') : x.p.kind === 'pc' ? 'bilgisayar' : ''}</small></span>${bar(x.share * 100, 'prog')}<b class="num">${x.b.toFixed(1)} M</b></div>`).join('')}</div>
         <p class="muted small">Yakında: ${PACK.platforms.filter((p) => p.from > M.tableYear(c) && p.from < M.tableYear(c) + 3).map((p) => `${esc(p.name)} (${p.from})`).join(', ') || '—'}</p>`;
+    }
+    if (sub === 'bolgeler') {
+      const w = M.regionShares(c);
+      const plats = M.activePlatforms(c).filter((p) => M.platformBase(c, p) > 0);
+      return `<p class="muted small">${y} yılında oyun pazarının bölgelere dağılımı, türlere ilgi ve her bölgede en güçlü platformlar. Oyunun hangi bölgelerde satılacağını yeni oyun sihirbazında seçersin; Japonya ve Dünya için araştırma ve yerelleştirme gerekir.</p>
+        ${PACK.regions.list.map((r) => { const top = plats.map((p) => [p, M.platformBase(c, p) * M.regionBias(c, p, r.id)]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+          return `<section class="box"><div class="head"><h3>${esc(r.name)}</h3><span class="pill">%${Math.round(w[r.id] * 100)}</span></div>${bar(w[r.id] * 100, 'prog')}
+            <p class="small">${PACK.genres.map((g, i) => `<span class="pill ${r.pref[i] >= 1.15 ? '' : r.pref[i] <= 0.85 ? 'warn' : ''}">${g.name} ×${r.pref[i]}</span>`).join(' ')}</p>
+            <p class="muted small">Önde: ${top.map(([p]) => `${p.own ? '★ ' : ''}${esc(p.name)}`).join(', ') || '—'}</p></section>`; }).join('')}`;
     }
     if (sub === 'tarih') return `<ul class="news">${W.log.map((e) => `<li class="tarih"><small class="num">${World.MONTHS[e.m].slice(0, 3)} ${e.y}</small><span>${esc(e.t)}</span></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ul>`;
     const hits = W.hits.filter((h) => h.year === y);

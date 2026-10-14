@@ -373,6 +373,8 @@ export function boot(root, hotData = {}) {
       case 'cancel': return twice('cancel' + pid, () => { app.sel = null; return g.cancelProject(pid); });
       case 'campaign': return run(g.campaign(pid, id));
       case 'outsource': return run(g.outsource(pid, +id));
+      case 'localize': return run(g.localize(pid, id));
+      case 'deal': return run(g.exclusiveDeal(id));
       case 'patch': return run(g.patch(+id));
       case 'pricedrop': return run(g.priceDrop(+id));
       case 'port': return run(g.port(+id, root.querySelector('#port-sel').value));
@@ -406,6 +408,7 @@ export function boot(root, hotData = {}) {
     const t = e.target, g = G();
     if (!g) return;
     if (t.dataset.draft) { app.draft[t.dataset.draft] = t.value; if (t.dataset.draft !== 'name') { t.blur(); renderWindow(); } return; }
+    if (t.dataset.region) { const set = new Set(app.draft.regions); t.checked ? set.add(t.dataset.region) : set.delete(t.dataset.region); app.draft.regions = [...set]; return; }
     if (t.dataset.plat) { const set = new Set(app.draft.platforms); t.checked ? set.add(t.dataset.plat) : set.delete(t.dataset.plat); app.draft.platforms = [...set]; return; }
     if (t.dataset.feat) { t.checked ? app.engineSel.add(t.dataset.feat) : app.engineSel.delete(t.dataset.feat); return; }
     if (t.dataset.eng) { app.engineName = t.value; return; }

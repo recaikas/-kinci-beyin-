@@ -4,12 +4,12 @@ Akıllı bot (`test/smartbot.mjs`), 50 yıl (1976–2025), tohumlar: 3, 11, 19, 
 
 | Zorluk | Ayakta | Kasa (medyan) | Şirket değeri | Oyun | Son 10 oyun notu | Yılın Oyunu | Tür ödülü | En büyük kadro | Konsol | Halka arz | Batanlar |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Çok kolay | 8/8 | 1534.0 M $ | 1596.7 M $ | 77 | 80 | 27 | 13 | 86 | 14 | 8/8 | — |
-| Kolay | 8/8 | 446.9 M $ | 493.9 M $ | 70 | 79 | 19 | 11 | 86 | 13 | 8/8 | — |
-| Orta | 8/8 | 209.6 M $ | 247.3 M $ | 69 | 76 | 10 | 11 | 86 | 15 | 8/8 | — |
-| Zor | 3/8 | -0.3 M $ | 16.9 M $ | 49 | 70 | 1 | 7 | 52 | 0 | 4/8 | iflas@1997 iflas@2018 iflas@1998 iflas@2005 iflas@2008 |
-| Çok zor | 2/8 | -0.2 M $ | 11.0 M $ | 34 | 61 | 0 | 3 | 9 | 0 | 0/8 | iflas@2023 iflas@2004 iflas@2000 iflas@2009 iflas@1992 iflas@2004 |
-| Efsanevi | 4/8 | 1.0 M $ | 5.8 M $ | 29 | 48 | 0 | 2 | 16 | 0 | 0/8 | iflas@2015 iflas@2017 iflas@2021 iflas@2025 |
+| Çok kolay | 8/8 | 2392.3 M $ | 2448.6 M $ | 77 | 78 | 29 | 10 | 84 | 14 | 8/8 | — |
+| Kolay | 8/8 | 512.0 M $ | 561.1 M $ | 72 | 78 | 20 | 11 | 86 | 14 | 8/8 | — |
+| Orta | 8/8 | 308.9 M $ | 353.1 M $ | 68 | 75 | 10 | 10 | 92 | 14 | 8/8 | — |
+| Zor | 6/8 | 90.0 M $ | 126.7 M $ | 66 | 71 | 3 | 7 | 80 | 11 | 6/8 | iflas@2004 iflas@1998 |
+| Çok zor | 1/8 | -0.2 M $ | 6.6 M $ | 31 | 61 | 0 | 2 | 16 | 0 | 1/8 | iflas@2005 iflas@2012 iflas@2018 iflas@2003 iflas@2009 iflas@1999 iflas@2022 |
+| Efsanevi | 4/8 | -0.2 M $ | 5.1 M $ | 28 | 39 | 0 | 1 | 16 | 0 | 0/8 | iflas@2014 iflas@2016 iflas@2020 iflas@2009 |
 
 ## Nasıl okunur
 

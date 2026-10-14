@@ -1,6 +1,6 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp } from '../kernel.js';
-import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf } from '../models.js';
+import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
@@ -36,10 +36,11 @@ export function release(ctx, { projectId, publisherId, price }) {
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
-    devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [],
+    devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [], regions: [...(pj.regions || ALL_REGIONS(ctx))], regionSold: {},
   };
   game.peak = peakWeekly(ctx, game);
   if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
+  game.regionSplit = regionSplitOf(ctx, game);
   for (const id of game.platforms) game.sold[id] = 0;
 
   // Yayıncı avansı
@@ -79,6 +80,20 @@ export function release(ctx, { projectId, publisherId, price }) {
   for (const p of state.staff) p.morale = clamp(p.morale + (rv.score - 65) / 3, 0, 100);
   if (rv.score < 40) state.heat += 8;
   return { ok: true, game, review: rv, report };
+}
+
+// Satışın bölgelere dağılımı (platform zirveleriyle ağırlıklı); arayüzde bölge çubukları için.
+export function regionSplitOf(ctx, game) {
+  const tot = {};
+  for (const id of game.platforms) {
+    const p = platformById(ctx, id);
+    if (!p) continue;
+    const mix = regionMix(ctx, game, p), sum = Object.values(mix).reduce((a, b) => a + b, 0) || 1;
+    for (const r in mix) tot[r] = (tot[r] || 0) + (game.peak[id] || 0) * mix[r] / sum;
+  }
+  const all = Object.values(tot).reduce((a, b) => a + b, 0) || 1;
+  for (const r in tot) tot[r] /= all;
+  return tot;
 }
 
 function weekMult(ctx, game) {
@@ -122,6 +137,7 @@ export function weeklySales(ctx) {
       rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * inflation(ctx) ** 0.5);
     }
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
+    if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);
     (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
     (g.profitHist ||= []).push(Math.round(g.revenue - (g.devCost || 0) - (g.postCost || 0))); if (g.profitHist.length > 104) g.profitHist.shift();
     (g.hist ||= []).push(units); if (g.hist.length > 104) g.hist.shift();
@@ -212,6 +228,7 @@ export function weeklyRivals(ctx) {
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
     state.rivalGames.push({ id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true });
+    if (!rv.hw && !rv.acquired) ctx.bus.fire('rivalRelease', { studio: rv.name, name, big: false, cid: rv.cid });
   }
   if (state.charts.length > 40) state.charts.length = 40;
   // Rakip oyunların bu haftaki satışı
