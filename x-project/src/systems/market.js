@@ -18,7 +18,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   const fr = Pub.forRelease(ctx, pj, publisherId ?? null);
   if (!fr.ok) return fr;
   const pub = fr.pub, deal = fr.deal || null;
-  if (!pub && !state.research.done.oz_yayin) return { ok: false, msg: 'Kendi yayının için araştırma gerekli; o zamana kadar bir yayıncıya sun.' };
+  if (!pub && !state.research.done.oz_yayin && pj.kind !== 'ek') return { ok: false, msg: 'Kendi yayının için araştırma gerekli; o zamana kadar bir yayıncıya sun.' };
   if (pj.maxPrice) price = Math.min(price, pj.maxPrice);
 
   // Modern iş modelleri: ücretsiz oyun kendi yayınınla, abonelik servisi yılı gelince

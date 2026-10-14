@@ -1,6 +1,7 @@
 // Yayın sonrası (MGT/GDT): güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket.
 import { inflation, peakWeekly, platformById, activePlatforms } from '../models.js';
 import { revive, onRelease } from './charts.js';
+import * as Pub from './publishers.js';
 
 const P = (ctx) => ctx.pack.post;
 const sizeOf = (ctx, g) => ctx.pack.sizes.find((s) => s.id === g.size);
@@ -68,6 +69,8 @@ export function port(ctx, id, pid) {
   if (copy.model === 'f2p') copy.price = 0;
   copy.regionSold = {}; copy.dlcs = 0; copy.dlcQueue = []; copy.pass = false; copy.passDue = null; copy.service = null;
   for (const k in copy.peak) copy.peak[k] *= P(ctx).portSales;
+  copy.deal = g.deal || g.publisherId ? Pub.inheritDeal(ctx, g, P(ctx).portSales) : null; // port da aynı yayıncıyla, avanssız
+  if (copy.deal) copy.royalty = ctx.pack.publishing.net * copy.deal.pay / 100;
   delete copy.dif; copy.budget = false; copy.bulk = false; copy.cover = false; copy.coverUntil = 0; copy.festUntil = null;
   onRelease(ctx, copy, 'normal');
   g.ports = (g.ports || 0) + 1;

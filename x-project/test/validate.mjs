@@ -248,6 +248,12 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Port yeni oyun kaydı açar', !!target && g.port(game.id, target.id).ok && st.games.length === 2, target?.name || '');
   st.week = game.releasedWeek + 10;
   check('Ek paket projesi başlar', g.startExpansion(game.id).ok && st.projects[0].kind === 'ek');
+  const portG = st.games.find((x) => x.portOf === game.id);
+  check('Port aynı yayıncıyla, ayrı ve avanssız sözleşmeyle çıkar', portG?.deal && portG.deal !== game.deal && portG.deal.pubId === game.deal.pubId && portG.deal.owed === 0);
+  const ex = st.projects[0];
+  while (ex.status === 'dev') { st.pending = []; g.tick(); }
+  const exr = g.release({ projectId: ex.id, publisherId: null, price: 10 });
+  check('Ek paket ana oyunun yayıncısıyla çıkar (araştırmasız)', exr.ok && exr.game.deal?.pubId === game.deal.pubId, exr.msg || '');
 }
 
 // 18) Eleştirmen yorumları: her kademede 5 farklı yorum, her türde 5 yorum, panelde tekrar yok

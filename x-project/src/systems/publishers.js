@@ -600,11 +600,30 @@ export function directDeal(ctx, pid, pubId, kind = 'tam') {
   return sign(ctx, o.id);
 }
 
+// Ek paket ve port, ana oyunun yayıncısıyla çıkar: avanssız, aynı pay (tek seferlik satılmış oyunda yayıncı taban payı verir).
+export function inheritDeal(ctx, base, k = 1) {
+  if (!base) return null;
+  const d = base.deal;
+  const pubId = d ? d.pubId : base.publisherId;
+  if (!pubId || d?.bargain) return null;
+  const pub = byId(ctx, pubId);
+  const legacyPay = base.royalty ? Math.round(base.royalty / P(ctx).net * 100) : null;
+  const pay = Math.round(clamp(d && d.kind !== 'tek' ? d.pay : legacyPay ?? (pub ? basePay(ctx, pub) : P(ctx).payBase - 3), P(ctx).payMin, P(ctx).payMax));
+  return { pubId, pubName: d?.pubName || base.publisherName || pubName(ctx, pubId), power: pub?.power ?? d?.power ?? base.publisherPower ?? 50, kind: 'tam', mode: 'bitmis', pay, adv: 0, buyout: 0, fund: 0,
+    rights: d?.rights || 'sende', promo: 0, expUnits: Math.round((d?.expUnits || 0) * k), paid: 0, owed: 0, dist: !!d?.dist, ms: 0, signed: ctx.state.week, hit: false, multi: false, due: ctx.state.week + 99, inherited: true };
+}
+
 // ---------- Yayın: sözleşmeyi oyuna işle
 // publisherId: null = kendi yayının; 'kelepir' = ucuz dağıtıcıya peşin satış; aksi hâlde imzalı sözleşme gerekir.
 export function forRelease(ctx, pj, publisherId, selfPower) {
   const s = pubState(ctx.state), B = P(ctx);
   if (pj.hold && ctx.state.week < pj.hold) return { ok: false, msg: `Çıkış ${pj.hold - ctx.state.week} hafta sonra (${pj.deal?.pubName || 'yayıncı'} isteği).` };
+  if (!pj.deal && pj.kind === 'ek') {
+    const base = ctx.state.games.find((g) => g.id === pj.baseGameId);
+    const d = inheritDeal(ctx, base, ctx.pack.post.expansionSales);
+    if (d) pj.deal = d;
+    else if (base && !base.deal && !base.publisherId) return { ok: true, pub: null, self: selfPower }; // ana oyun kendi yayınındı
+  }
   if (!pj.deal && publisherId !== 'kelepir') {
     const ord = s.orders.find((x) => x.genre === pj.genre && x.topic === pj.topic && pj.platforms.includes(x.platform));
     if (ord) pj.deal = orderDeal(ctx, ord);
