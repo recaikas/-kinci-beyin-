@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern } from '../src/game.js';
+import { createState, makeGame, newGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts } from '../src/game.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
@@ -239,7 +239,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Rapor üretilir ve bilgi birikir', res.report.length >= 3 && Know.known(g.ctx).topicGenre('uzay', 'aksiyon') === 10, res.report.length + ' satır');
   const game = res.game;
   for (let i = 0; i < 3; i++) { st.pending = []; g.tick(); }
-  const w = game.weeks; check('Güncelleme satış ömrünü uzatır', g.patch(game.id).ok && game.weeks < w);
+  const F0 = game.dif.F; check('Güncelleme satışı canlandırır (yeni alıcı)', g.patch(game.id).ok && game.dif.F < F0);
   const pr = game.price; check('Fiyat indirimi', g.priceDrop(game.id).ok && game.price < pr);
   st.week = Math.round(8 * 48 * st.lengthMult);
   const target = Post.portTargets(g.ctx, game)[0];
@@ -522,8 +522,8 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Agresif para kazanma notu düşürür', ag.review.score < fr.review.score, `${ag.review.score} < ${fr.review.score}`);
   tick(b, 20);
   check('Agresif daha çok kazandırır', ag.game.revenue > fr.game.revenue, `${Math.round(ag.game.revenue)} > ${Math.round(fr.game.revenue)}`);
-  const c = mk(50), pr = ship(c, {}); tick(c, 20);
-  check('Mobilde ücretsiz oyun, ücretli sürümden çok kazandırır', fr.game.revenue > pr.game.revenue, `${Math.round(fr.game.revenue)} > ${Math.round(pr.game.revenue)}`);
+  const c = mk(50), pr = ship(c, {}); tick(c, 20); tick(a, 20); tick(c, 20);
+  check('Mobilde ücretsiz oyun, ücretli sürümden çok kazandırır (40 hafta)', fr.game.revenue > pr.game.revenue, `${Math.round(fr.game.revenue)} > ${Math.round(pr.game.revenue)}`);
   // DLC ve sezon kartı
   const d = mk(51), dg = ship(d, { platforms: ['pc'], rel: { price: 30 } }).game;
   const r0 = dg.revenue; tick(d, 2);
@@ -552,6 +552,68 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   // Yayıncı anahtarları yalnız o oyunu etkiler
   const y = mk(55), yg = ship(y, { platforms: ['pc'], rel: { price: 30 } }).game;
   check('Yayıncı anahtarları yalnız o oyunu etkiler', y.streamKeys(yg.id).ok && y.state.gameMods.at(-1).gameId === yg.id);
+}
+
+// 31) Satış listesi (Konu A): yayılma eğrisi, mevsim, gerçek sıra, raf, basım, ödüller, takvim
+{
+  const C = PACK.charts;
+  // Yayılma: toplam pay 1'i aşmaz; ömür boyu satış hedefle aynı (zirve haftası cinsinden)
+  const ctx = ctxAt(1990);
+  for (const [p, q] of [[0.22, 0.05], [0.05, 0.22], [0.008, 0.3], [0.012, 0.09]]) {
+    const g = { peak: 1, weeks: 0, genre: 'aksiyon', topic: 'uzay' };
+    Charts.initDif(ctx, g, { p, q }, C.diffusion.lifeWeeks);
+    let tot = 0;
+    for (let t = 0; t < 900; t++) { const st = Charts.step({ ...ctx, state: { ...ctx.state, week: 0 } }, g); if (Charts.ended(ctx, g, st)) break; tot += st.k; Charts.commit(ctx, g, st.s); g.weeks++; }
+    check(`Yayılma p=${p} q=${q}: toplam satış ≈ ${C.diffusion.lifeWeeks} zirve haftası, pay ≤ 1`, Math.abs(tot - C.diffusion.lifeWeeks) / C.diffusion.lifeWeeks < 0.12 && g.dif.F <= 1.0000001, tot.toFixed(2));
+  }
+  const avg = C.season.reduce((a, b) => a + b, 0) / 12;
+  check('Mevsim çarpanlarının ortalaması ≈ 1', Math.abs(avg - 1) < 0.03, avg.toFixed(3));
+  check('Kasım ve Aralık yılın en yüksek ayları', C.season[11] === Math.max(...C.season) && C.season[10] > C.season[9]);
+  // Gerçek sıra: çok satan asla daha kötü sırada olmaz; dolgu oyunlar sırayı aşağı iter
+  const g1 = newGame({ seed: 61, difficulty: 'orta' });
+  for (let i = 0; i < 30; i++) { g1.state.pending = []; g1.tick(); }
+  const m = Charts.mkt(g1.state), ent = [];
+  const ranks = [10, 100, 1000, 10000].map((x) => Charts.rankOf(g1.ctx, x, ent));
+  check('Daha çok satan oyun daha iyi (ya da eşit) sırada', ranks.every((r, i) => i === 0 || r <= ranks[i - 1]), ranks.join(' ≥ '));
+  check('1976 pazarında dolgu oyunlar var, toplam ~50', m.N >= 30 && m.total >= 40 && m.total <= 120, `${m.N} dolgu / ${m.total} toplam`);
+  const top = g1.state.top;
+  check('İlk 10 listesi dolu (gerçek ve küçük stüdyo oyunları)', top.length === 10 && top.every((t, i) => i === 0 || t.units <= top[i - 1].units), top.map((t) => t.units).join(','));
+  const v = Charts.listView(g1.ctx, 'tur', 'aksiyon');
+  check('Tür listesi çalışır', Array.isArray(v.rows) && v.total >= v.rows.filter((r) => !r.filler).length);
+  // Kendi yayınlanan fiziksel oyun basılır; stok biterse satış stokla sınırlı
+  const g2 = newGame({ seed: 62, difficulty: 'orta' }); const s2 = g2.state;
+  s2.research.done.oz_yayin = 1; s2.cash = 1e6;
+  const pj = g2.startProject({ name: 'Basım', genre: 'aksiyon', topic: 'uzay', audience: 'herkes', platforms: ['pc'], size: 'kucuk' }).project;
+  while (s2.projects[0]?.status === 'dev') { s2.pending = []; g2.tick(); }
+  const rel = g2.release({ projectId: pj.id, publisherId: null, price: 20, printRun: 'temkinli' });
+  const gm = rel.game;
+  check('Fiziksel dönemde kendi yayının basılır', rel.ok && gm.printed && gm.stock > 0 && (s2.ledger.total.basim || 0) < 0, rel.msg || '');
+  gm.printAuto = false; gm.stock = 3;
+  s2.pending = []; g2.tick();
+  check('Stok bitince satış stokla sınırlı ve "tükendi"', gm.lastWeek <= 3 && gm.soldOut);
+  check('Yeniden basım baskı kuyruğuna girer', g2.reprint(gm.id).ok && gm.printQ.length === 1);
+  // Raf: fiziksel dönemde liste dışında kalan oyun raftan iner; 2008 sonrası raf kuralı yok
+  gm.rank = 9999; gm.shelfMiss = 5; gm.offShelf = true;
+  check('Ucuz Raf Serisi raftan inen oyunu geri getirir, fiyatı düşer', g2.budgetLine(gm.id).ok && !gm.offShelf && gm.price < 20 && !g2.budgetLine(gm.id).ok);
+  const g3 = newGame({ seed: 63, difficulty: 'orta' }); g3.state.week = Math.round((2012 - 1976) * 48 * g3.state.lengthMult);
+  check('2008 sonrası basım ve raf yok', !Charts.printable(g3.ctx, { royalty: null, model: 'satis' }) && Charts.isDigital(g3.ctx));
+  // Ödüller oyun başına bir kez
+  gm.aw = {}; gm.lastWeek = 1e7; gm.units = 1e7; s2.fans = 1000;
+  Charts.weeklyCharts(g2.ctx); const fa = s2.fans;
+  Charts.weeklyCharts(g2.ctx); const fb = s2.fans;
+  check('Liste ödülü (ilk 10, zirve) oyun başına bir kez verilir', fa > 1000 && fb === fa && gm.aw.no1 && gm.aw.top10, `${fa} → ${fb}`);
+  // Takvim ve tarih duyurusu
+  const g4 = newGame({ seed: 64, difficulty: 'orta' });
+  for (let i = 0; i < 4; i++) { g4.state.pending = []; g4.tick(); }
+  check('Yaklaşan büyük çıkışlar listelenir', Charts.upcoming(g4.ctx).length > 0);
+  const p4 = g4.startProject({ name: 'Duyuru', genre: 'aksiyon', topic: 'uzay', audience: 'herkes', platforms: ['pc'], size: 'kucuk' }).project;
+  const h0 = p4.hype;
+  check('Tarih duyurusu kabul edilir, ikinci kez edilmez', g4.announce(p4.id, 8).ok && !g4.announce(p4.id, 12).ok);
+  for (let i = 0; i < 3; i++) { g4.state.pending = []; g4.tick(); }
+  check('Geri sayım hype verir', p4.hype > h0 - 1 && p4.annHype > 0, `${p4.annHype}`);
+  p4.announce = g4.state.week - 1; const fans4 = g4.state.fans;
+  g4.state.pending = []; g4.tick();
+  check('Kaçırılan tarih hayran kaybettirir', p4.annMissed && g4.state.fans <= fans4);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

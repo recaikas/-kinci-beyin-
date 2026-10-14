@@ -1,14 +1,15 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp, lerpTable } from '../kernel.js';
-import { review, peakWeekly, weekCurve, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS } from '../models.js';
+import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
 import { publishersAvailable, initWorld } from './world.js';
 import * as Modern from './modern.js';
+import * as Charts from './charts.js';
 export { publishersAvailable };
 
-export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null }) {
+export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null, printRun = 'normal' }) {
   const { state, pack, ledger, bus } = ctx;
   const pj = state.projects.find((p) => p.id === (projectId ?? state.projects.find((x) => x.status === 'debug')?.id));
   if (!pj || pj.status !== 'debug') return { ok: false, msg: 'Yayınlanacak hazır proje yok.' };
@@ -67,6 +68,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   Modern.crowdOnRelease(ctx, pj, rv.score);
   game.regionSplit = regionSplitOf(ctx, game);
   for (const id of game.platforms) game.sold[id] = 0;
+  Charts.onRelease(ctx, game, printRun);
 
   // Yayıncı avansı
   if (pub) {
@@ -132,29 +134,29 @@ function weekMult(ctx, game) {
   const s = pack.sales;
   let m = eraMult(ctx, 'salesMult');
   for (const mod of state.gameMods) if (mod.untilWeek > state.week && (!mod.gameId || mod.gameId === game.id)) m *= mod.mult;
-  const month = Math.floor((state.week % 48) / 4) + 1;
-  if (month === s.christmasMonth) m *= s.christmasMult;
   if (state.trend && (state.trend.genre === game.genre || state.trend.topic === game.topic)) m *= s.trendMult;
-  // Rekabet: son 4 haftada aynı türde senden iyi not almış bir rakip çıktıysa satış biraz düşer.
-  const recentRival = state.charts.some((c) => !c.mine && c.genre === game.genre && state.week - c.week < 4 && c.score >= game.score);
-  if (recentRival) m *= s.rivalSameGenreMult;
   const newer = state.games.find((g) => g !== game && g.ipId === game.ipId && g.releasedWeek > game.releasedWeek && g.active);
   if (newer) m *= s.sequelOverlapMult;
   if (state.flags.lootbox) m *= 1.1;
   return m;
 }
 
+// Haftalık satış: yayılma eğrisinin bu haftaki adımı (charts.js) × platform zirvesi × dönem/trend çarpanları.
+// Fiziksel dönemde kendi yayınladığın oyun önceden basılır: stok biterse satış kaçar.
 export function weeklySales(ctx) {
   const { state, pack, ledger, bus } = ctx;
   const s = pack.sales;
   let total = 0;
+  Charts.prepWeek(ctx);
+  Charts.weeklyFees(ctx);
   for (const g of state.games) {
     if (!g.active) continue;
     const f2p = g.model === 'f2p';
-    const curve = weekCurve(ctx, g.weeks, g.pirated);
-    if (!f2p && curve < s.stopAt) {
+    const st = Charts.step(ctx, g);
+    if (!f2p && Charts.ended(ctx, g, st)) {
       g.active = false;
-      ctx.news(`📉 "${g.name}" raflardan kalktı. Toplam ${g.units.toLocaleString('tr-TR')} kopya.`, 'info');
+      const left = g.printed && g.stock > 0 ? ` Depoda ${g.stock.toLocaleString('tr-TR')} basılı kopya kaldı.` : '';
+      ctx.news(`📉 "${g.name}" ${Charts.isDigital(ctx) ? 'mağazalarda artık satmıyor' : 'raflardan kalktı'}. Toplam ${g.units.toLocaleString('tr-TR')} kopya.${left}`, 'info');
       continue;
     }
     if (f2p && g.weeks > pack.modern.f2p.minWeeks && (g.players || 0) < pack.modern.f2p.minPlayers) {
@@ -163,18 +165,32 @@ export function weeklySales(ctx) {
       continue;
     }
     const mult = weekMult(ctx, g);
+    const want = {};
+    let demand = 0;
+    for (const id of g.platforms) {
+      const p = platformById(ctx, id);
+      const cap = s.capShare * platformBase(ctx, p) * 1e6;
+      want[id] = Math.max(0, Math.min(Math.round(g.peak[id] * st.k * mult), cap - g.sold[id]));
+      demand += want[id];
+    }
+    // Basılı stok: talep stoku aşarsa satış stokla sınırlı; karşılanmayan alıcıların bir kısmı vazgeçer.
+    const stock = Charts.stockFor(ctx, g);
+    const f = demand > stock ? stock / demand : 1;
+    if (f < 1 && !g.soldOut) { g.soldOut = true; g.dif.kick += pack.charts.print.sellOutKick; ctx.news(`🔥 "${g.name}" TÜKENDİ! Dükkânlar yeni baskıyı bekliyor.`, 'warn'); }
     let units = 0, rev = 0;
     const newBy = {};
     for (const id of g.platforms) {
       const p = platformById(ctx, id);
-      const cap = s.capShare * platformBase(ctx, p) * 1e6;
-      let u = Math.round(g.peak[id] * curve * mult);
-      u = Math.max(0, Math.min(u, cap - g.sold[id]));
+      const u = f < 1 ? Math.floor(want[id] * f) : want[id];
       g.sold[id] += u; units += u;
       if (f2p) { newBy[p.kind] = (newBy[p.kind] || 0) + u; continue; }
       const price = gamePrice(ctx, g, p);
-      rev += g.royalty != null ? u * price * g.royalty : u * (price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5);
+      rev += g.royalty != null ? u * price * g.royalty
+        : g.printed ? u * price * (1 - s.retailCut)
+        : u * (price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5);
     }
+    if (g.printed) g.stock = Math.max(0, g.stock - units);
+    Charts.commit(ctx, g, f < 1 ? st.s * (f + (1 - f) * pack.charts.print.lostShare) : st.s);
     if (f2p) rev = Modern.weeklyF2P(ctx, g, newBy).rev;
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);
@@ -227,7 +243,10 @@ export function initRivals(ctx) {
     const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + 5, r.scoreSpread), 20, 95));
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
-    state.rivalGames.push({ id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: rng.pick(pack.genres).id, weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true });
+    const rg = { id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: rng.pick(pack.genres).id, weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true };
+    Charts.tagRival(ctx, rg, { owner: rv.hw ? rv.cid : null });
+    Charts.advanceRival(ctx, rg, rg.weeks);
+    state.rivalGames.push(rg);
   }
 }
 export function rivalPrice(ctx, rv) {
@@ -257,49 +276,32 @@ export function weeklyRivals(ctx) {
     if (--rv.nextRelease > 0) continue;
     rv.nextRelease = rng.int(...r.releaseWeeks);
     if (!top.has(rv.id) && !rv.acquired) continue;
+    // Sakin aylarda bazen bekler: çıkışlar yılsonuna yığılır.
+    if (Charts.rivalPostpones(ctx)) { rv.nextRelease = 4; continue; }
+    const genre = rng.pick(pack.genres).id;
+    // Aynı tür ve yakın tarihte duyurulmuş güçlü bir oyundan kaçabilir.
+    if (Charts.rivalDodges(ctx, rv, genre)) { rv.nextRelease = pack.charts.announce.dodgeWeeks * 2 + 1; continue; }
     const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + r.scoreBias, r.scoreSpread), 15, 97));
     rv.drift = clamp((rv.drift || 0) * 0.7 + (score - 70) / 12, -15, 15);
     rv.rep = clamp(rv.rep + (score - 70) / 12, 5, 99);
     rv.games++; rv.lastScore = score;
-    const genre = rng.pick(pack.genres).id;
     const name = `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}${rng.chance(0.3) ? ' ' + rng.int(2, 5) : ''}`;
     state.charts.unshift({ name, studio: rv.name + (rv.acquired ? ' (sizin)' : ''), score, week: state.week, mine: rv.acquired, genre });
     // Satış listesi için rakip oyunun haftalık satış zirvesi (stüdyo gücü + not + pazar büyüklüğü)
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
-    state.rivalGames.push({ id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true });
+    state.rivalGames.push(Charts.tagRival(ctx, { id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true }, { owner: rv.hw ? rv.cid : null }));
     if (!rv.hw && !rv.acquired) ctx.bus.fire('rivalRelease', { studio: rv.name, name, big: false, cid: rv.cid });
   }
   if (state.charts.length > 40) state.charts.length = 40;
   // Rakip oyunların bu haftaki satışı
-  const mult = eraMult(ctx, 'salesMult');
-  for (const g of state.rivalGames) {
-    if (!g.active) continue;
-    const c = weekCurve(ctx, g.weeks, false);
-    if (c < pack.sales.stopAt) { g.active = false; g.lastWeek = 0; continue; }
-    g.lastWeek = Math.round(g.peak * c * mult); g.units += g.lastWeek; g.weeks++;
-  }
+  Charts.sellRivals(ctx, eraMult(ctx, 'salesMult'));
   state.rivalGames = state.rivalGames.filter((g) => g.active || state.week - g.weeks < 200).slice(-80);
 }
 
-// MGT tarzı haftalık satış listesi: oyuncunun ve rakiplerin satıştaki oyunları bu haftaki satışa göre sıralanır.
-export function weeklyCharts(ctx) {
-  const { state, pack } = ctx;
-  const entries = [
-    ...state.games.filter((g) => g.active && g.weeks > 0).map((g) => ({ ref: g, studio: state.companyName, mine: true })),
-    ...state.rivalGames.filter((g) => g.active && g.weeks > 0).map((g) => ({ ref: g, studio: g.studio, mine: false })),
-  ].sort((a, b) => b.ref.lastWeek - a.ref.lastWeek);
-  for (const g of state.games) if (!g.active) g.rank = null;
-  entries.forEach((e, i) => {
-    const g = e.ref;
-    g.prevRank = g.rank ?? null; g.rank = i + 1;
-    g.bestRank = Math.min(g.bestRank ?? 999, g.rank);
-    if (e.mine) { (g.rankHist ||= []).push(g.rank); if (g.rankHist.length > pack.rivals.rankHistMax) g.rankHist.shift(); }
-    if (e.mine && g.weeks === 1) ctx.news(`📊 "${g.name}" satış listesine #${g.rank}'den girdi!`, g.rank <= 3 ? 'good' : 'info');
-    if (e.mine && g.rank === 1 && g.prevRank && g.prevRank > 1) ctx.news(`👑 "${g.name}" listenin zirvesinde!`, 'good');
-  });
-  state.top = entries.slice(0, pack.rivals.topN).map((e) => ({ id: e.ref.id, name: e.ref.name, studio: e.studio, units: e.ref.lastWeek, mine: e.mine, rank: e.ref.rank, prev: e.ref.prevRank }));
-}
+// Haftalık satış listesi: dolgu oyunlarla gerçek sıra, raf, ödüller (charts.js).
+export const weeklyCharts = (ctx) => Charts.weeklyCharts(ctx);
+
 export function monthlySubsidiaries(ctx) {
   const { state, pack, ledger } = ctx;
   for (const rv of state.rivals) {

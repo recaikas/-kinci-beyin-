@@ -75,10 +75,44 @@ export const PACK = {
     yA: 0.15, yB: 0.85, stA: 0.3, stB: 0.7, stCap: 5, iA: 0.5, iB: 0.5, ipK: 0.2,
     curve: [0.6, 0.85, 1.0], tailA: 0.85, tailB: 0.95, tailBPirated: 0.91, stopAt: 0.02,
     capShare: 0.35, // V/P pazar tavanı
-    christmasMonth: 12, christmasMult: 1.5, // L
-    sequelOverlapMult: 0.8, trendMult: 1.25, rivalSameGenreMult: 0.88, overusedMult: 0.85,
+    sequelOverlapMult: 0.8, trendMult: 1.25, overusedMult: 0.85, // mevsim ve rekabet: charts
     selfPublishPowerBase: 10, selfPublishFansPerPower: 5000, selfPublishPowerCap: 95,
     retailCut: 0.45, unitCost: 2,
+  },
+
+  // Satış listesi ve pazar dinamiği (Konu A, P). Yayılma (Bass) eğrisi: p merak, q ağızdan ağıza.
+  // lifeWeeks: ömür boyu satış, zirve haftası cinsinden (eski tek eğrinin toplamı: 19,07; korsanlıkta 11,68).
+  charts: {
+    _tag: 'P',
+    diffusion: {
+      pBase: 0.008, pHype: 0.07, pPub: 0.025, pIp: 0.03, pFans: 0.015, pMin: 0.004, pMax: 0.3,
+      qBase: 0.03, qScore: 0.3, qScoreFrom: 40, qScoreSpan: 55, qBug: 1.5, qBugMax: 0.4, qSocial: { casual: 0.03 }, qMin: 0.02, qMax: 0.42,
+      piracyQ: 0.85, lifeWeeks: 19.07, lifeWeeksPirated: 11.68, kickDecay: 0.75, reviveWeek: 0.025, reviveKick: 0.02,
+      ageWeeks: 110, ageWeeksDigital: 200, stopAt: 0.02, stopDigitalK: 0.25, minWeeks: 4,
+      rivalP: [0.03, 0.12], histP: [0.1, 0.2],
+    },
+    season: [0.8, 0.8, 0.9, 0.85, 0.85, 0.9, 0.85, 0.9, 1.0, 1.1, 1.45, 1.7], // Oca..Ara, ortalama ≈ 1
+    seasonTopic: { spor: [8, 1.15], korku: [9, 1.15] }, // [ay indeksi, çarpan]
+    rivalSeasonK: 0.5, // sakin aylarda rakibin çıkışı erteleme olasılığı ölçeği
+    competition: { segW: 0.7, allW: 0.3, min: 0.55, max: 1.35, ema: 0.02 },
+    filler: [[1976, 40], [1980, 120], [1983, 400], [1985, 150], [1990, 500], [1995, 900], [2000, 1200], [2005, 1500], [2010, 4000], [2015, 10000], [2020, 20000], [2025, 30000]],
+    rivalScale: 2.5, // rakiplerin liste satışı ölçeği (yalnız sırayı etkiler; oyuncunun gelirini değiştirmez)
+    zipf: 1.0, fillerAnchor: 2, fillerTopK: 0.95, discoverRef: 2000, discoverExp: 0.3, // en iyi dolgu oyun ≈ 3. rakip kadar satar; k'ıncı dolgu bunun 1/k'sı
+    visibility: [[1, 1.25], [3, 1.15], [10, 1.08]], showcase: { rank: 20, mult: 1.15 },
+    digitalYear: 2008,
+    shelf: { size: [[1976, 40], [1980, 80], [1985, 120], [1990, 250], [2000, 500], [2007, 700]], missWeeks: 4, offMult: 0.7, fee: 1500, budgetPrice: 0.5, budgetRevive: 0.1, budgetKick: 0.04, budgetCost: 4000, budgetMinWeeks: 30 },
+    festival: { months: [5, 11], minWeeks: 26, price: 0.6, weeks: 2, revive: 0.08, kick: 0.05 },
+    bulk: { share: 0.5, minCopies: 100, costK: 0.6, scandal: 0.15, scandalFans: 0.05, scandalKaos: 8, maxWeeks: 2 },
+    cover: { cost: 12000, weeks: 4, mult: 1.3, scandal: 0.1, scandalFans: 0.02, scandalKaos: 4 },
+    print: { runs: { temkinli: 4, normal: 8, cesur: 16 }, reprintWeeks: 4, delay: 2, lostShare: 0.3, sellOutKick: 0.02 },
+    announce: { options: [8, 12, 24], hypePerWeek: 0.5, hypeCap: 15, missFans: 0.03, missKaos: 3, dodge: 0.5, dodgeWeeks: 3 },
+    calendar: { aheadMonths: 3, slip: 0.25, slipMonths: [1, 2], slipNotice: 2, slipTopRanks: 5 },
+    rewards: {
+      // fansOfUnits: o ana kadar satılan kopyaların bu kadarı hayrana dönüşür (yüzde değil, birikmez)
+      top40: { morale: 3 }, top10: { fansOfUnits: 0.008, morale: 5, pubRel: 5 }, no1: { fansOfUnits: 0.015, hypeBank: 10 }, genre1: { fansOfUnits: 0.004, genreRep: 5 },
+      classicRun: 10, classicQ: 0.03, yearTop: { prestige: 0.5 }, allTime: { ip: 0.1 },
+    },
+    lists: { top: 10, show: 40, playDecay: 0.94, allTimeMax: 100 },
   },
 
   // Oyun boyutları. weeks/target/sales: P · MGT2 boyut cezası: V

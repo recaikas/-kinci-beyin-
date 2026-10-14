@@ -12,6 +12,7 @@ import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
 import * as War from '../src/systems/war.js';
 import * as Modern from '../src/systems/modern.js';
+import * as Charts from '../src/systems/charts.js';
 
 const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
   'f_kaydirma', 'oz_yayin', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
@@ -202,7 +203,13 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     for (const pj of [...state.projects]) {
       if (pj.status === 'debug') {
         const pts = Object.values(pj.points).reduce((a, b) => a + b, 0);
-        if (pj.bugs / Math.max(1, pts) < 0.02 || state.week - pj.startedWeek > pj.totalWeeks + 6) {
+        const late = state.week - pj.startedWeek > pj.totalWeeks + 6;
+        // Çıkış zamanlaması: aynı türde dev bir çıkışla çakışma ya da yılsonu yaklaşıyorsa biraz bekle (en çok 6 hafta)
+        const clash = Charts.upcoming(ctx).some((h) => h.genre === pj.genre && h.rank < 4 && h.weeks <= 3);
+        const mo = Charts.monthIdx(ctx), soonQ4 = mo === 9 && Charts.seasonMult(ctx, pj, 10) > Charts.seasonMult(ctx, pj, mo) * 1.2;
+        pj.waited ||= 0;
+        if (!late && pj.waited < 6 && runway() > 6 && (clash || soonQ4)) { pj.waited++; continue; }
+        if (pj.bugs / Math.max(1, pts) < 0.02 || late) {
           const pubs = publishersAvailable(ctx).filter((p) => state.fans >= p.minFans).sort((a, b) => b.power * b.royalty - a.power * a.royalty);
           const selfP = M.selfPublishPower(ctx);
           const self = state.research.done.oz_yayin && (!pubs[0] || selfP >= pubs[0].power * 0.7);
@@ -268,6 +275,11 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         if (!(cand && cand.skills.donanim >= pack.console.hwSkillMin && g.moveStaff(cand.id, lab.id).ok)) hireFor(lab.id, (p) => (p.skills?.donanim || 0) >= pack.console.hwSkillMin);
       }
       if (lab) consolePlan();
+      // Satış listesi: raftan inen iyi oyunu Ucuz Raf Serisi'ne al, dijitalde festivale katıl
+      for (const gm of state.games.filter((x) => x.active && x.score >= 65)) {
+        if (gm.offShelf && Charts.budgetAllowed(ctx, gm) && state.cash > Charts.budgetCost(ctx, gm) * 10 + burn() * 6) g.budgetLine(gm.id);
+        if (Charts.festivalAllowed(ctx, gm)) g.festival(gm.id);
+      }
       // Yayın sonrası: iyi oyunlara indirilebilir içerik (en fazla 2) ve yayıncı anahtarları
       for (const gm of state.games.filter((x) => x.active && x.score >= 75 && (x.dlcs || 0) < 2 && x.weeks > 8)) if (Modern.dlcAllowed(ctx, gm) && state.cash > Modern.dlcCost(ctx, gm) * 6 + burn() * 6) g.releaseDLC(gm.id);
       for (const gm of state.games.filter((x) => x.active && x.score >= 70 && x.weeks < 6 && !x.streamed)) if (M.tableYear(ctx) >= pack.modern.stream.year && state.cash > Modern.streamCost(ctx, gm) * 10 + burn() * 6) g.streamKeys(gm.id);

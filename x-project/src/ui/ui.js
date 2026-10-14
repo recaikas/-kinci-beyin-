@@ -1,7 +1,7 @@
 // Arayüz (GDT/Kairosoft esinli): tam ekran sahne, üstte HUD ve proje sayacı, altta ikonlu menü,
 // menüden açılan pencereler (açıkken oyun durur), adım adım yeni oyun sihirbazı, faz başında dağılım
 // penceresi, yayında eleştirmen ekranı. Oyun mantığı game.js'te; burası yalnızca çağırır ve gösterir.
-import { newGame, loadGame, M, Staff, Co } from '../game.js';
+import { newGame, loadGame, M, Staff, Co, Charts } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { makeRenderer, menuIcon } from './render.js';
 import { money } from '../kernel.js';
@@ -163,11 +163,12 @@ export function boot(root, hotData = {}) {
     // proje sayacı (GDT): yapı yalnızca proje değişince kurulur
     const pj = s.projects[0], slot = f('proj');
     const best = !pj && s.games.filter((g) => g.active && g.rank).sort((a, b) => a.rank - b.rank)[0];
-    const key = pj ? `p${pj.id}:${s.projects.length}` : best ? `s${best.id}:${best.rank}:${best.lastWeek}` : 'none';
+    const key = pj ? `p${pj.id}:${s.projects.length}` : best ? `s${best.id}:${best.rank}:${best.lastWeek}:${s.mkt?.total}` : 'none';
+    const bl = best && Charts.rankLabel(G().ctx, best);
     if (slot.dataset.key !== key) {
       slot.dataset.key = key;
       slot.innerHTML = pj ? `<button class="proj" data-open="gelistir"><span class="pname"></span>${s.projects.length > 1 ? `<em class="more">+${s.projects.length - 1} proje</em>` : ''}<span class="counters">${['oyn', 'gfx', 'ses', 'tek'].map((d) => `<b class="num c-${d}" title="${discName(d)}" data-d="${d}"></b>`).join('')}<b class="num c-bug" title="Hata" data-d="bug"></b></span><span class="bar prog"><i></i></span></button>`
-        : best ? `<button class="proj sale" data-open="gelistir"><span class="pname">Satışta: ${esc(best.name)}</span><span class="rk">#${best.rank} ${move({ rank: best.rank, prev: best.prevRank })}</span><small class="muted">${fmt(best.lastWeek)} kopya bu hafta · toplam ${fmt(best.units)} · yeni oyun başlat</small></button>`
+        : best ? `<button class="proj sale" data-open="gelistir"><span class="pname">Satışta: ${esc(best.name)}</span><span class="rk ${bl.cls}">${bl.text} ${bl.cls === 'off' ? '' : move({ rank: best.rank, prev: best.prevRank })}</span><small class="muted">${fmt(best.lastWeek)} kopya bu hafta · ${esc(bl.sub)}</small></button>`
         : '<button class="proj idle" data-open="gelistir"><span>Proje yok</span><small>Yeni oyun başlat</small></button>';
     }
     if (pj) {
@@ -196,10 +197,14 @@ export function boot(root, hotData = {}) {
     const head = `<button class="phead" data-panel="1" aria-expanded="${open}"><span>💰 Satışta <b class="num">${live.length}</b></span>${live.length ? `<span class="num ${total < 0 ? 'neg' : 'pos'}">${signed(total)}</span>` : ''}<i>${open ? '▸' : '◂'}</i></button>`;
     if (!open) return setHTML(el.market, head), el.market.classList.add('closed');
     el.market.classList.remove('closed');
+    const c = G().ctx;
     const cards = live.map((g) => {
       const cost = (g.devCost || 0) + (g.postCost || 0), profit = g.revenue - cost;
+      const lb = g.model === 'f2p' ? { text: '🆓', cls: 'mid', sub: 'ücretsiz oyun · oynananlar listesinde' } : Charts.rankLabel(c, g);
+      const stock = g.printed ? ` · stok ${fmt(g.stock || 0)}${g.printQ?.length ? '+' : ''}` : '';
       return `<button class="mcard" data-mgame="${g.id}" title="${esc(g.name)}">
-        <span class="rk ${g.rank && g.rank <= 3 ? 'top' : ''}">#${g.rank || '–'}</span><span class="nm">${esc(g.name)}</span><span class="wk">${g.weeks}. hf ${move({ rank: g.rank, prev: g.prevRank })}</span>
+        <span class="rk ${lb.cls}">${lb.text}</span><span class="nm">${esc(g.name)}</span><span class="wk">${g.weeks}. hf ${lb.cls === 'off' ? '' : move({ rank: g.rank, prev: g.prevRank })}</span>
+        <span class="lsub">${esc(Charts.curveWord(c, g))} · ${esc(lb.sub)}${stock}</span>
         <span class="row"><small>Maliyet</small><b class="num">${money(cost)}</b></span>
         <span class="row"><small>Gelir</small><b class="num">${money(g.revenue)}</b></span>
         <span class="row"><small>Kâr</small><b class="num ${profit < 0 ? 'neg' : 'pos'}">${signed(profit)}</b></span>
@@ -392,7 +397,7 @@ export function boot(root, hotData = {}) {
       case 'go-release': app.dialog = null; el.modal.hidden = true; app.sub.gelistir = 'oyun'; app.sel = pid; openWin('gelistir'); app.wasRunning = app.wasRunningD; app.wasRunningD = false; return;
       case 'release': {
         const v = (q) => root.querySelector(q)?.value;
-        const res = g.release({ projectId: pid, publisherId: v('#r-model') === 'f2p' ? null : v('#r-pub') || null, price: Math.max(1, +v('#r-price') || 20), model: v('#r-model') || 'satis', monet: v('#r-monet') || 'dengeli', service: v('#r-svc') || null });
+        const res = g.release({ projectId: pid, publisherId: v('#r-model') === 'f2p' ? null : v('#r-pub') || null, price: Math.max(1, +v('#r-price') || 20), model: v('#r-model') || 'satis', monet: v('#r-monet') || 'dengeli', service: v('#r-svc') || null, printRun: v('#r-print') || 'normal' });
         if (!res.ok) return run(res);
         app.sel = null;
         const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true;
@@ -411,6 +416,16 @@ export function boot(root, hotData = {}) {
       case 'stream': return run(g.streamKeys(+id));
       case 'patch': return run(g.patch(+id));
       case 'pricedrop': return run(g.priceDrop(+id));
+      case 'budget': return run(g.budgetLine(+id));
+      case 'shelfpay': return run(g.shelfPay(+id));
+      case 'festival': return run(g.festival(+id));
+      case 'bulk': return twice('bulk' + id, () => g.bulkBuy(+id));
+      case 'cover': return run(g.buyCover(+id));
+      case 'reprint': return run(g.reprint(+id));
+      case 'printauto': return run(g.printAuto(+id));
+      case 'announce': return run(g.announce(pid, +id));
+      case 'ltab': app.listTab = { kind: id, key: null }; return renderWindow();
+      case 'lkey': app.listTab = { ...(app.listTab || { kind: 'genel' }), key: id }; return renderWindow();
       case 'port': return run(g.port(+id, root.querySelector('#port-sel').value));
       case 'expansion': { const r = g.startExpansion(+id); if (!r.ok) return run(r); app.selGame = null; const resume = app.wasRunning; app.wasRunning = false; closeWin(); app.wasRunningD = resume || true; return phaseDialog(r.project); }
       case 'contract': return run(g.acceptContract(+id));

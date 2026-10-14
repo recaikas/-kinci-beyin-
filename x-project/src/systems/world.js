@@ -3,6 +3,7 @@
 import { COMPANIES, YEARS } from '../data/history.js';
 import { lerpTable, clamp } from '../kernel.js';
 import { tableYear, Pz, S, difficulty, inflation, activePlatforms } from '../models.js';
+import { tagRival, pickMonths } from './charts.js';
 
 export const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 export const companyById = (id) => COMPANIES.find((c) => c.id === id);
@@ -62,8 +63,7 @@ function scheduleYear(ctx, year) {
   const d = YEARS[year];
   state.world.year = year;
   if (!d) return;
-  const months = [...Array(12).keys()];
-  for (let i = 11; i > 0; i--) { const j = rng.int(0, i); [months[i], months[j]] = [months[j], months[i]]; }
+  const months = pickMonths(ctx, d.g.length); // yılsonu ayları daha olası (mevsim)
   d.g.forEach((g, i) => state.world.queue.push({ name: g[0], cid: g[1], genre: g[2], score: g[3], rank: i, at: year + (months[i] + rng.range(0.1, 0.9)) / 12 }));
   state.world.queue.sort((a, b) => a.at - b.at);
 }
@@ -86,7 +86,7 @@ function releaseHit(ctx, h) {
   const power = Math.max(W.hitPower, c ? companyRep(c, tableYear(ctx)) : 60) / 100;
   const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * 1.7 * pack.rivals.salesPeakK * W.hitPeakK * (1 - W.hitRankDecay * h.rank) * rng.range(0.85, 1.15);
   state.charts.unshift({ name: h.name, studio, score, week: state.week, mine: false, genre: h.genre, hist: true });
-  state.rivalGames.push({ id: state.nextId++, name: h.name, studio, score, genre: h.genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true, hist: true });
+  state.rivalGames.push(tagRival(ctx, { id: state.nextId++, name: h.name, studio, score, genre: h.genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true, hist: true }, { rank: h.rank, owner: c?.kind.includes('hw') ? h.cid : null }));
   const r = state.rivals.find((x) => x.cid === h.cid);
   if (r) { r.games++; r.lastScore = score; }
   state.world.hits.unshift({ name: h.name, studio, score, genre: h.genre, year: Math.floor(tableYear(ctx)), week: state.week });

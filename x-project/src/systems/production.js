@@ -2,6 +2,7 @@
 import { clamp, lerpTable } from '../kernel.js';
 import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL } from '../models.js';
 import { weeklyOutput } from './staff.js';
+import { consumeHypeBank } from './charts.js';
 
 // --- Proje (MGT: her geliştirme odası kendi oyununu yapar; uzman odalar ve QA tüm projelere bölünür)
 export function newProject(ctx, o) {
@@ -13,7 +14,7 @@ export function newProject(ctx, o) {
     kind: o.kind || 'oyun', baseGameId: o.baseGameId ?? null, regions: o.regions?.length ? [...o.regions] : baseRegions(ctx),
     alloc: o.alloc || pack.genres.find((g) => g.id === o.genre).hint.map((v) => Math.max(20, v)),
     week: 0, totalWeeks: Math.round(size.weeks * (o.kind === 'ek' ? pack.post.expansionWeeks : 1)), phase: 0, status: 'dev',
-    points: { oyn: 0, gfx: 0, ses: 0, tek: 0 }, bugs: 0, hype: 0, startedWeek: state.week, mmo: !!size.mmo && o.kind !== 'ek', outsourced: 0,
+    points: { oyn: 0, gfx: 0, ses: 0, tek: 0 }, bugs: 0, hype: o.kind === 'ek' ? 0 : consumeHypeBank(state), startedWeek: state.week, mmo: !!size.mmo && o.kind !== 'ek', outsourced: 0,
   };
 }
 

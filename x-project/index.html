@@ -190,6 +190,8 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .mcard:hover, .mcard:focus-visible { border-color: var(--candy); }
 .mcard .rk { font-family: var(--font-num); font-size: 1.45rem; line-height: 1; color: var(--amber); min-width: 30px; }
 .mcard .rk.top { color: var(--candy); }
+.mcard .rk.off, .proj.sale .rk.off { color: var(--ink-2); font-size: 1.1rem; }
+.mcard .lsub { grid-column: 1 / -1; font-size: 0.72rem; color: var(--ink-2); line-height: 1.25; margin: 1px 0 3px; }
 .mcard .nm { font-size: var(--s-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mcard .wk { font-family: var(--font-num); font-size: 0.95rem; color: var(--ink-2); white-space: nowrap; }
 .mcard .wk i { font-style: normal; margin-left: 3px; }
@@ -218,6 +220,12 @@ h3.sub { margin: 10px 0 4px; font-size: var(--s-1); color: var(--ink-2); }
 .toplist li.mine { background: color-mix(in srgb, var(--candy) 14%, transparent); }
 .toplist .r { font-family: var(--font-num); font-size: 1.4rem; color: var(--amber); text-align: right; }
 .toplist small { color: var(--ink-2); display: block; }
+.toplist li.filler { opacity: 0.62; }
+.toplist li.gap { border-bottom: 0; }
+.toplist li > i { font-style: normal; color: var(--ink-2); font-size: var(--s-1); }
+.ltabs { margin-bottom: 6px; }
+.ltabs button { min-height: 32px; padding: 4px 10px; font-size: var(--s-1); }
+.ltabs button.on { background: var(--candy); color: var(--night); border-color: var(--candy); }
 .stats4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .stats4 > div { display: grid; padding: 8px; border: 2px solid var(--line); background: var(--panel-2); }
 .stats4 small { color: var(--ink-2); font-size: var(--s-1); }

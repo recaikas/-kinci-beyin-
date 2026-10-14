@@ -2,6 +2,7 @@
 // erken erişim, abonelik servisi anlaşmaları, fenomenler (yayıncılar) ve kitle fonlama.
 import { clamp, makeRng } from '../kernel.js';
 import { inflation, tableYear, review } from '../models.js';
+import { revive } from './charts.js';
 
 const X = (ctx) => ctx.pack.modern;
 const sizeOf = (ctx, id) => ctx.pack.sizes.find((s) => s.id === id);
@@ -52,7 +53,7 @@ export function releaseDLC(ctx, id) {
   const attach = d.attach * Math.pow(d.attachDecay, g.dlcs - 1) * clamp(g.score / 75, 0.4, 1.4);
   const price = (g.model === 'f2p' ? d.f2pPrice : g.price * d.priceShare) * (g.model === 'f2p' ? inflation(ctx) ** 0.4 : 1);
   queueRevenue(g, owners * attach * price, d.weeks);
-  g.weeks = Math.max(0, g.weeks - d.weeksBack);
+  revive(ctx, g, d.weeksBack);
   if (g.passDue && g.dlcs >= g.passNeed) { g.passDue = null; ctx.news(`🎫 "${g.name}" sezon kartı sözü tutuldu. Oyuncular memnun.`, 'good'); state.fans += Math.round(state.fans * d.passKeptFans); }
   ctx.news(`🧩 "${g.name}" için yeni içerik yayında.`, 'good');
   return { ok: true };

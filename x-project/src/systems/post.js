@@ -1,5 +1,6 @@
 // Yayın sonrası (MGT/GDT): güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket.
 import { inflation, peakWeekly, platformById, activePlatforms } from '../models.js';
+import { revive, onRelease } from './charts.js';
 
 const P = (ctx) => ctx.pack.post;
 const sizeOf = (ctx, g) => ctx.pack.sizes.find((s) => s.id === g.size);
@@ -16,7 +17,7 @@ export function patch(ctx, id) {
   ledger.post('guncelleme', -cost, g.name);
   g.postCost = (g.postCost || 0) + cost;
   g.patches++;
-  g.weeks = Math.max(0, g.weeks - Math.round(p.patchWeeksBack / g.patches));
+  revive(ctx, g, Math.round(p.patchWeeksBack / g.patches));
   const fans = Math.round(state.fans * p.patchFansPct * Math.min(1, (g.bugRate || 0) * 10 + 0.3));
   state.fans += fans;
   ctx.news(`🩹 "${g.name}" güncellendi. Satışlar canlandı, +${fans.toLocaleString('tr-TR')} hayran.`, 'good');
@@ -34,7 +35,7 @@ export function priceDrop(ctx, id) {
   const k = Math.pow(g.price / next, ctx.pack.sales.priceExp);
   for (const pid in g.peak) g.peak[pid] *= k;
   g.price = next;
-  g.weeks = Math.max(0, g.weeks - p.priceDropWeeksBack);
+  revive(ctx, g, p.priceDropWeeksBack);
   ctx.news(`🏷️ "${g.name}" artık ${next} $. Raflarda yeniden hareket var.`, 'info');
   return { ok: true };
 }
@@ -67,6 +68,8 @@ export function port(ctx, id, pid) {
   if (copy.model === 'f2p') copy.price = 0;
   copy.regionSold = {}; copy.dlcs = 0; copy.dlcQueue = []; copy.pass = false; copy.passDue = null; copy.service = null;
   for (const k in copy.peak) copy.peak[k] *= P(ctx).portSales;
+  delete copy.dif; copy.budget = false; copy.bulk = false; copy.cover = false; copy.coverUntil = 0; copy.festUntil = null;
+  onRelease(ctx, copy, 'normal');
   g.ports = (g.ports || 0) + 1;
   state.games.push(copy);
   state.charts.unshift({ name: copy.name, studio: state.companyName, score: copy.score, week: state.week, mine: true, genre: copy.genre });

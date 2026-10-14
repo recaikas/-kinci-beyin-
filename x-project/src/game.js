@@ -16,6 +16,7 @@ import * as People from './systems/people.js';
 import * as Co from './systems/company.js';
 import * as War from './systems/war.js';
 import * as Modern from './systems/modern.js';
+import * as Charts from './systems/charts.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -51,6 +52,7 @@ function migrate(state) {
   state.designs ||= {};
   state.vacationPolicy ||= 'planli';
   state.rel ||= {};
+  Charts.mkt(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -109,6 +111,7 @@ export function makeGame(state, pack = PACK) {
       Modern.weeklyModern(ctx);
       Market.weeklyTrend(ctx);
       World.weeklyWorld(ctx);
+      Charts.weeklyCalendar(ctx);
       Market.weeklyRivals(ctx);
       Market.weeklyCharts(ctx);
       // ekonomi
@@ -197,6 +200,15 @@ export function makeGame(state, pack = PACK) {
     patch: (id) => Post.patch(ctx, id),
     priceDrop: (id) => Post.priceDrop(ctx, id),
     port: (id, pid) => Post.port(ctx, id, pid),
+    // --- Satış listesi hamleleri (Konu A)
+    budgetLine: (id) => Charts.budgetLine(ctx, id),
+    shelfPay: (id) => Charts.toggleShelfPay(ctx, id),
+    festival: (id) => Charts.festival(ctx, id),
+    bulkBuy: (id) => Charts.bulkBuy(ctx, id),
+    buyCover: (id) => Charts.buyCover(ctx, id),
+    reprint: (id) => Charts.reprint(ctx, id),
+    printAuto: (id) => Charts.togglePrintAuto(ctx, id),
+    announce: (pid, weeks) => Charts.announce(ctx, pid, weeks),
     startExpansion(gid) {
       const g = state.games.find((x) => x.id === gid);
       if (!Post.expansionAllowed(ctx, g)) return { ok: false, msg: 'Bu oyuna ek paket yapılamaz (çok eski ya da zaten yapılıyor).' };
@@ -285,4 +297,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts };

@@ -1,5 +1,5 @@
 // Geliştir: proje listesi, yeni oyun sihirbazı, proje ayrıntısı, sözleşmeler.
-import { M, Prod, Market, Staff, Know, Modern } from '../game.js';
+import { M, Prod, Market, Staff, Know, Modern, Charts } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
@@ -14,6 +14,22 @@ export function make(u) {
     return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
   }
   const badgeOf = (v) => (v == null ? '' : `<em class="kn k${v}">${Know.rating(v)[0]}</em>`);
+  // Yayın zamanlaması (Konu A): bu ayın talebi ve yakın tarihte aynı türde çıkacak büyük oyunlar
+  function releaseTiming(pj) {
+    const c = ctx(), mult = Charts.seasonMult(c, pj);
+    const clash = Charts.upcoming(c).filter((h) => h.genre === pj.genre && h.weeks <= 6);
+    const nameOf = (id) => PACK.genres.find((x) => x.id === id)?.name.toLowerCase() || '';
+    return `<p class="small">📅 Bu ay talep ×${mult.toFixed(2).replace('.', ',')}${mult >= 1.3 ? ' (yılsonu: talep yüksek ama rakip de çok)' : mult < 0.9 ? ' (sakin ay: talep düşük, rakip az)' : ''}.${clash.length ? ` ⚠️ ${clash.map((h) => `${h.weeks} hafta sonra ${esc(h.studio)} "${esc(h.name)}"`).join(', ')} çıkıyor (${nameOf(pj.genre)}).` : ''}</p>`;
+  }
+  function announceBox(pj) {
+    const s = G().state, a = PACK.charts.announce;
+    if (pj.announce) return `<p class="small">📣 Çıkış tarihi duyuruldu: ${Math.max(0, pj.announce - s.week)} hafta sonra. Geri sayım hype veriyor; tarihi kaçırırsan hayranlar kızar.</p>`;
+    if (pj.annMissed) return '<p class="muted small">Duyurulan tarih kaçırıldı; yeni tarih verilemez.</p>';
+    if (!Charts.announceAllowed(ctx(), pj)) return '';
+    const left = pj.status === 'dev' ? pj.totalWeeks - pj.week : 0;
+    return `<p class="muted small">Çıkış tarihi duyur: geri sayım haftada +${String(a.hypePerWeek).replace('.', ',')} hype verir (en çok ${a.hypeCap}) ve aynı türdeki rakipler tarih kaydırabilir. Kalan geliştirme ~${left} hafta.</p>
+      <div class="btns">${a.options.map((w) => `<button data-act="announce" data-pid="${pj.id}" data-id="${w}" ${w < left ? 'class="warn"' : ''}>${w} hafta sonra<small>${w < left ? 'riskli' : 'güvenli'}</small></button>`).join('')}</div>`;
+  }
   function winDevelop(sub) {
     if (sub === 'sozlesme') return contractsView();
     const s = G().state;
@@ -112,6 +128,8 @@ export function make(u) {
         ${(() => { const offers = Modern.serviceOffers(c, pj, G().previewReview(pid).score); return offers.length ? `<label class="wide">Abonelik servisi<select id="r-svc"><option value="">Servise girme</option>${offers.map((o) => `<option value="${o.id}">${esc(o.name)} · önden ${money(o.pay)} · satış ×${PACK.modern.services.salesMult}</option>`).join('')}</select></label>` : ''; })()}</div>
         ${pj.ea ? `<p class="small">🧪 Erken erişimde ${pj.ea.weeks} hafta: ${fmt(pj.ea.units)} kopya, ${money(pj.ea.revenue)}.${pj.ea.weeks >= PACK.modern.ea.polishWeeks ? ` Not +${PACK.modern.ea.polishBonus}.` : ''} İlk satışlar %${Math.round(PACK.modern.ea.peakCut * 100)} az olur.</p>` : ''}
         ${pj.crowd ? `<p class="small">💰 Destekçiler ${money(pj.crowd)} verdi; not ${PACK.modern.crowd.angryBelow}'in altında kalırsa öfkelenirler.</p>` : ''}
+        ${!Charts.isDigital(c) && s.research.done.oz_yayin ? `<div class="form"><label class="wide">Basım adedi (kendi yayınında)<select id="r-print">${Object.entries(PACK.charts.print.runs).map(([k, w]) => `<option value="${k}" ${k === 'normal' ? 'selected' : ''}>${{ temkinli: 'Temkinli', normal: 'Normal', cesur: 'Cesur' }[k]} · ilk ${w} haftalık tahmin</option>`).join('')}</select></label></div>` : ''}
+        ${releaseTiming(pj)}
         <div class="foot"><span class="muted small">${fmt(pj.bugs)} hata kaldı. Beklemek hataları azaltır, maaş yer.</span><button class="primary big" data-act="release" data-pid="${pid}">Yayınla</button></div></section>`;
     }
     return `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div>
@@ -122,7 +140,7 @@ export function make(u) {
       <section class="box"><h3>Hedefe ulaşma</h3>${discs}<p class="muted small">${pv.notes.map(esc).join(' · ') || 'Ceza yok'} · Uyum ×${pv.F.toFixed(2)} · Hiza ×${pv.hiza.toFixed(2)} · Hype ${Math.round(pj.hype)}</p>
         ${pj.status === 'dev' ? `<div class="foot"><button data-act="phase" data-pid="${pid}">Zaman dağılımını ayarla</button></div>` : ''}</section>
       <section class="box"><h3>Bölgeler</h3><div class="btns">${PACK.regions.list.map((r) => { const on = (pj.regions || []).includes(r.id), st = Prod.regionStatus(c, r.id); return on ? `<span class="pill">✓ ${esc(r.short)}</span>` : `<button data-act="localize" data-pid="${pid}" data-id="${r.id}" ${st.ok ? '' : 'disabled'}>${esc(r.short)}<small>${st.ok ? money(Prod.locCost(c, r.id, pj.size)) : st.why}</small></button>`; }).join('')}</div></section>
-      <section class="box"><h3>Pazarlama</h3><div class="btns">${camps}</div></section>
+      <section class="box"><h3>Pazarlama</h3><div class="btns">${camps}</div>${announceBox(pj)}</section>
       ${pj.status === 'dev' && (Modern.eaAllowed(c, pj) || pj.ea || Modern.crowdAllowed(c, pj) || pj.crowd || M.tableYear(c) >= PACK.modern.ea.year) ? `<section class="box"><h3>Erken erişim ve fonlama</h3>
         <div class="foot"><span class="muted small">${pj.ea ? `Erken erişimde ${pj.ea.weeks} hafta · ${fmt(pj.ea.units)} kopya · ${money(pj.ea.revenue)}` : 'Projenin üçte biri bitince yarım oyunu satışa aç: para ve geri bildirim (hata azalır, not artar), ama tam çıkışta ilk satışlar azalır.'}</span>${pj.ea ? '' : `<button data-act="ea" data-pid="${pid}" ${Modern.eaAllowed(c, pj) ? '' : 'disabled'}>Erken erişime aç</button>`}</div>
         ${M.tableYear(c) >= PACK.modern.crowd.from && M.tableYear(c) < PACK.modern.crowd.to ? `<div class="foot"><span class="muted small">${pj.crowd ? `Kitle fonlamada ${money(pj.crowd)} toplandı.` : `Kitle fonlama: hayranlarından önden para (~${money(Modern.crowdAmount(c, pj))}). Not düşük çıkarsa destekçiler öfkelenir.`}</span>${pj.crowd ? '' : `<button data-act="crowd" data-pid="${pid}" ${Modern.crowdAllowed(c, pj) ? '' : 'disabled'}>Kampanya aç</button>`}</div>` : ''}</section>` : ''}
