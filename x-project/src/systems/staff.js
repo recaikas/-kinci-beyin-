@@ -1,5 +1,6 @@
 // Kadro sistemi: odalar (MGT2), kariyerler (Kairosoft), işe alım, maaş, stres, moral, tükenmişlik, istifa, transfer, eğitim.
 import { clamp } from '../kernel.js';
+import * as Regions from './regions.js';
 import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel, designOf, relAvg } from '../models.js';
 import { genSkills, growSkills, weeklyVacations, weeklyRelations, ensureSkills } from './people.js';
 
@@ -125,6 +126,13 @@ export function genApplicants(ctx) {
   const g = ctx.pack.staffGen;
   const n = g.applicantsBase + g.applicantsPerTier * (ctx.state.office.tier - 1);
   ctx.state.applicants = Array.from({ length: n }, () => makePerson(ctx));
+  // Bölge ofisi olan yerlerden yerel adaylar: maaş o bölgenin ücret düzeyinde (Konu C)
+  for (const rid of Regions.offices(ctx)) {
+    const p = makePerson(ctx);
+    p.salary = Math.round(p.salary * Regions.payRatio(ctx, rid));
+    p.origin = rid; p.name = `${p.name} ${Regions.R(rid).flag}`;
+    ctx.state.applicants.push(p);
+  }
 }
 
 export function hire(ctx, id) {

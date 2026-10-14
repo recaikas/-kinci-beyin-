@@ -8,6 +8,7 @@
 import { clamp, lerpTable } from '../kernel.js';
 import { tableYear, inflation, platformBase, activePlatforms, regionMix, platformById, ALL_REGIONS } from '../models.js';
 import { COMPANIES } from '../data/history.js';
+import { seasonK } from './regions.js';
 
 const C = (ctx) => ctx.pack.charts;
 const D = (ctx) => ctx.pack.charts.diffusion;
@@ -77,7 +78,7 @@ export function visMult(ctx, g) {
 }
 export function seasonMult(ctx, g, m = monthIdx(ctx)) {
   const c = C(ctx);
-  let t = c.season[m];
+  let t = g && (g.regionSplit || g.genre) ? seasonK(ctx, g, m) : c.season[m]; // bölgesel takvim (Konu C)
   const ex = c.seasonTopic[g.topic];
   if (ex && ex[0] === m) t *= ex[1];
   return t;

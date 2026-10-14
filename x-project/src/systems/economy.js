@@ -1,13 +1,13 @@
 // Ekonomi: maaş, kira, kredi, iflas, ofis/istasyon yatırımı, motor lisansı, kaos ölçeri.
 import { clamp, lerpTable } from '../kernel.js';
-import { inflation, eraMult, salaryFor, tableYear, engineScore } from '../models.js';
+import { inflation, eraMult, salaryFor, tableYear, engineScore, homeRent } from '../models.js';
 import { seats, slots } from './staff.js';
 
 export const office = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
 
 export function rent(ctx) {
   const o = office(ctx);
-  return Math.round((o.rent + (ctx.state.office.floors || 0) * (o.floorRent || 0)) * inflation(ctx) * ctx.state.rentMult * designRentMult(ctx));
+  return Math.round((o.rent + (ctx.state.office.floors || 0) * (o.floorRent || 0)) * inflation(ctx) * ctx.state.rentMult * designRentMult(ctx) * homeRent(ctx));
 }
 // --- Ofis tasarımları: her binanın kendi tasarımı; kira çarpanı oda sayısına göre ağırlıklı.
 export const designById = (ctx, id) => ctx.pack.designs.find((d) => d.id === id) || ctx.pack.designs[0];

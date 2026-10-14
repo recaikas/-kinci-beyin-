@@ -6,6 +6,7 @@ import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
 import { initWorld } from './world.js';
 import * as Pub from './publishers.js';
+import * as Regions from './regions.js';
 import * as Modern from './modern.js';
 import * as Charts from './charts.js';
 export const publishersAvailable = (ctx) => Pub.list(ctx);
@@ -51,9 +52,13 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
     expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
-    devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [], regions: [...(pj.regions || ALL_REGIONS(ctx))], regionSold: {},
+    devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [], regions: [...(pj.regions || ALL_REGIONS(ctx))], regionSold: {}, loc: { ...(pj.loc || {}) }, badLoc: pj.badLoc ? { ...pj.badLoc } : undefined, kind: pj.kind,
   };
   if (model === 'f2p') { game.model = 'f2p'; game.monet = m.id; game.players = 0; game.price = pack.sales.priceRef; }
+  // Konu C: her bölgeye erişim (dağıtım ağı, dil, yayıncının bölgesi, sansür, korsanlık, konu zevki)
+  const pubInfo = deal && !deal.bargain ? { power: pub.power, region: (Pub.byId(ctx, deal.pubId) || {}).region || deal.region } : null;
+  if (deal && pubInfo) deal.region = pubInfo.region;
+  Regions.applyReach(ctx, game, pubInfo, deal);
   game.peak = peakWeekly(ctx, game);
   if (model === 'f2p') game.price = 0;
   if (isExp) for (const k in game.peak) game.peak[k] *= pack.post.expansionSales;
@@ -79,6 +84,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   const dFans = rv.score >= f.threshold ? (rv.score - f.threshold) * f.perPointAbove * Math.max(1, inflation(ctx) ** 0.5)
     : rv.score < f.lossBelow ? -(f.lossBelow - rv.score) * f.lossPerPoint * (hasRoom(ctx, 'musteri') ? pack.rooms.supportLossCut : 1) : 0;
   state.fans = Math.max(0, Math.round(state.fans + dFans));
+  Regions.onRelease(ctx, game, dFans);
   // Prestij
   if (rv.score >= pack.prestige.scoreForUp) state.prestige = Math.min(pack.prestige.max, state.prestige + 1);
   // IP gelişimi (12 ay kuralı)
@@ -138,6 +144,7 @@ function weekMult(ctx, game) {
   const newer = state.games.find((g) => g !== game && g.ipId === game.ipId && g.releasedWeek > game.releasedWeek && g.active);
   if (newer) m *= s.sequelOverlapMult;
   if (state.flags.lootbox) m *= 1.1;
+  if (game.reach) m *= Regions.weekK(ctx, game); // bölgesel bayram, kampanya, yasak
   return m;
 }
 
@@ -186,7 +193,10 @@ export function weeklySales(ctx) {
       g.sold[id] += u; units += u;
       if (f2p) { newBy[p.kind] = (newBy[p.kind] || 0) + u; continue; }
       const price = gamePrice(ctx, g, p);
+      const selfUnit = price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5;
+      const ds = g.deal?.regions ? Regions.dealShare(g) : 1; // bölgesel haklar: yayıncının bölgeleri telif, diğerleri kendi yayınım
       rev += g.deal?.dist ? u * (price * pack.publishing.net * g.deal.pay / 100 - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5)
+        : g.royalty != null && ds < 1 ? u * (ds * price * g.royalty + (1 - ds) * selfUnit)
         : g.royalty != null ? u * price * g.royalty
         : g.printed ? u * price * (1 - s.retailCut)
         : u * (price * (1 - s.retailCut) - s.unitCost * unitCostK(ctx, p) * inflation(ctx) ** 0.5);
@@ -194,6 +204,7 @@ export function weeklySales(ctx) {
     if (g.printed) g.stock = Math.max(0, g.stock - units);
     Charts.commit(ctx, g, f < 1 ? st.s * (f + (1 - f) * pack.charts.print.lostShare) : st.s);
     if (f2p) rev = Modern.weeklyF2P(ctx, g, newBy).rev;
+    if (g.reach && rev > 0) rev *= Regions.revK(ctx, g); // fiyat endeksi, kur, kampanya indirimi
     if (g.deal) rev = Pub.royaltyCash(ctx, g, rev);
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);

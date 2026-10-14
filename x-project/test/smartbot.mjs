@@ -7,6 +7,7 @@ import * as M from '../src/models.js';
 import { researchAvailable, researchInfo, devCapacity, projectCost, regionStatus, locCost } from '../src/systems/production.js';
 import { stationUpgradeCost, creditLimit, rent, designCost } from '../src/systems/economy.js';
 import * as Pub from '../src/systems/publishers.js';
+import * as Regions from '../src/systems/regions.js';
 import * as Staff from '../src/systems/staff.js';
 import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
@@ -14,7 +15,7 @@ import * as War from '../src/systems/war.js';
 import * as Modern from '../src/systems/modern.js';
 import * as Charts from '../src/systems/charts.js';
 
-const GAME_RESEARCH = ['alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
+const GAME_RESEARCH = ['ihracat', 'alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'kopya_koruma', 'oda_uzman',
   'f_kaydirma', 'tur_sim', 'tur_str', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
   'f_online', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
@@ -113,8 +114,11 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     }
     if (!draft.platforms.length) draft.platforms = ['pc'];
     // Yerelleştirme: açık bölgelerden türe ilgisi yeterli ve bedeli kasaya göre küçük olanlar
+    // Yerelleştirme: dağıtımı olan (ya da dijital) ve yeterince büyük bölgelere, bedeli kasaya göre küçükse
+    const wsh = M.regionShares(ctx);
     draft.regions = pack.regions.list.filter((r) => { const st = regionStatus(ctx, r.id); if (!st.ok) return false; if (st.free) return true;
-      return r.pref[pack.genres.indexOf(pick.gn)] >= 0.9 && locCost(ctx, r.id, size.id) < Math.max(0, state.cash) * 0.05; }).map((r) => r.id);
+      const reachable = Regions.netLevel(ctx, r.id) >= 1 || y >= 2008;
+      return reachable && wsh[r.id] >= 0.03 && r.pref[pack.genres.indexOf(pick.gn)] >= 0.85 && locCost(ctx, r.id, size.id, pick.gn.id) < Math.max(0, state.cash) * 0.04; }).map((r) => r.id);
     const eng = state.engines[state.engines.length - 1];
     if (eng) draft.engineId = eng.id;
     const ip = state.ips.filter((x) => x.value >= 1 && state.week - x.lastRelease >= pack.ip.waitWeeks).sort((a, b) => b.value - a.value)[0];
@@ -311,6 +315,17 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       }
     }
     if (monthly) {
+      // Dağıtım ağı (Konu C): büyük bölgelere önce posta, hayran birikince distribütör, zenginken ofis
+      const wsh = M.regionShares(ctx);
+      for (const rid of Regions.IDS.filter((r) => r !== Regions.home(ctx)).sort((a, b) => wsh[b] - wsh[a])) {
+        const lv = Regions.netLevel(ctx, rid) + 1;
+        if (lv > 3 || wsh[rid] < 0.02) continue;
+        const c = Regions.netCheck(ctx, rid, lv);
+        if (!c.ok) continue;
+        const k = lv === 1 ? 5 : lv === 2 ? 4 : 12;
+        if (lv === 3 && (state.staff.length < 20 || wsh[rid] < 0.15)) continue;
+        if (state.cash > c.cost * k + burn() * 6 && g.buyNet(rid).ok) break;
+      }
       // Çalışma koltukları: mola ve müşteri odası dışındakiler (mola odasına kimse yerleştirilmez)
       const seats = state.rooms.filter((r) => r.type !== 'mola' && r.type !== 'musteri').length * Staff.roomSeats(ctx);
       // Oda görevleri: ana proje + destek; kasa darsa bir oda sözleşmeye

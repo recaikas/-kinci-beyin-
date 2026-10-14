@@ -1,7 +1,7 @@
 // Kalibrasyon ve tutarlılık kontrolleri. Çalıştır: node test/validate.mjs
 // "Veri tekrarı" = PDF tablosunu birebir doğrular; "Kalibrasyon" = parametreler bu referansa göre seçildi.
 import { PACK } from '../src/data/pack.js';
-import { createState, makeGame, newGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub } from '../src/game.js';
+import { createState, makeGame, newGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub, Regions } from '../src/game.js';
 import { EXTRA_PUBS, TRAITS } from '../src/data/publishers.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
@@ -465,7 +465,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const c76 = ctxAt(1976), c25 = ctxAt(2025, 'kolay');
   const w76 = M.regionShares(c76), w25 = M.regionShares(c25);
   check('Bölge payları toplamı 1', Math.abs(Object.values(w25).reduce((a, b) => a + b, 0) - 1) < 1e-9);
-  check('1976: Dünya pazarı yok, 2025: Japonya’dan büyük', w76.row === 0 && w25.row > w25.jp, `${w25.row.toFixed(2)} > ${w25.jp.toFixed(2)}`);
+  check('1976: Asya küçük, 2025: Asya en büyük pazar', w76.asya < 0.02 && w25.asya > w25.na && w25.asya > w25.jp && w76.na > 0.5, `${w25.asya.toFixed(2)} > ${w25.na.toFixed(2)}`);
   const g = newGame({ seed: 40, difficulty: 'kolay', length: 50 });
   const st = g.state, ctx = g.ctx;
   st.week = (1995 - 1976) * 48; st.cash = 1e7;
@@ -473,11 +473,11 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   st.research.done.yerel_jp = 1; st.research.done.yerel_dunya = 1; st.research.done.tur_rpg = 1; st.stationTier = 2;
   const r = g.startProject({ name: 'J', genre: 'rpg', topic: 'fantezi', audience: 'genc', platforms: ['oi1'], size: 'kucuk' });
   const pj = r.project;
-  check('Varsayılan: İngilizce sürüm (K. Amerika + Avrupa)', pj.regions.join() === 'na,eu');
+  check('Varsayılan: stüdyonun dili (K. Amerika)', pj.regions.join() === 'na');
   const c0 = st.cash;
   check('Japonca yerelleştirme bedeli ödenir', g.localize(pj.id, 'jp').ok && st.cash < c0 && pj.regions.includes('jp'));
   const p = M.platformById(ctx, 'oi1');
-  const en = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu'] }, p), all = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu', 'jp', 'row'] }, p);
+  const en = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu'] }, p), all = M.regionFactor(ctx, { genre: 'rpg', regions: ['na', 'eu', 'jp', 'latam', 'asya', 'tr'] }, p);
   check('Tüm bölgeler yalnız İngilizceden çok satar', all > en * 1.2, `${all.toFixed(2)} > ${en.toFixed(2)}`);
   const jpRpg = M.regionMix(ctx, { genre: 'rpg', regions: ['jp'] }, p).jp, jpStr = M.regionMix(ctx, { genre: 'strateji', regions: ['jp'] }, p).jp;
   check('Japonya RPG’yi stratejiden çok sever', jpRpg > jpStr * 1.5);
@@ -633,7 +633,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const c = g.ctx, st = g.state, B = PACK.publishing;
   const at = (y) => Pub.list(c, y);
   const counts = [1976, 1985, 1990, 2000, 2010, 2020].map((y) => at(y).length);
-  check('Yayıncı sayısı döneme göre (üç kademe, 22 yeni yayıncı)', counts[0] >= 5 && counts[2] >= 25 && counts.every((n) => n >= 5) && EXTRA_PUBS.length === 24, counts.join('/'));
+  check('Yayıncı sayısı döneme göre (üç kademe, 22 yeni + 4 yerel yayıncı)', counts[0] >= 5 && counts[2] >= 25 && counts.every((n) => n >= 5) && EXTRA_PUBS.length === 28, counts.join('/'));
   check('Her yayıncının huyu, bölgesi ve odağı var', [1976, 1995, 2015].every((y) => at(y).every((p) => TRAITS[p.trait] && p.region?.length && p.focus?.length)));
   const ataro = Pub.byId(c, 'ataro'), mantar = Pub.byId(c, 'mantar');
   check('Kapı: 1976 Kırmızı Mantar açık, Ataro kapalı (tanışma ister)', Pub.door(c, mantar).open && !Pub.door(c, ataro).open && /tanımıyor/.test(Pub.door(c, ataro).why));
@@ -759,6 +759,67 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const n0 = st.news.length;
   Pub.joinShowcase(c, 'dergi');
   check('Dergi yarışmasına katılınır, kişi etkinlikte', st.staff.some((p) => p.status === 'etkinlik') && st.news.length > n0, st.news[0]?.t.slice(0, 60));
+}
+
+// 33) Bölgeler (Konu C): ana bölge, dağıtım ağı, dil, bayramlar, dönem olayları, kur, yasak, bölgesel haklar, kayıt taşıma
+{
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  check('Altı bölge, her birinin sesi, takvimi ve bayramları var', Regions.REGIONS.length === 6 && Regions.REGIONS.every((r) => r.host && r.soul && r.season.length === 12) && Regions.HOLIDAYS.length >= 30 && Regions.REGION_EVENTS.length >= 20);
+  const g = newGame({ seed: 81, difficulty: 'orta', length: 50 });
+  const c = g.ctx, st = g.state;
+  check('Garaj yalnız ana bölgede: Avrupa erişimi çok düşük', Regions.distReach(c, 'na') > 1 && Regions.distReach(c, 'eu') < 0.05 && Regions.langReach(c, 'jp') < 0.2);
+  check('Posta siparişi araştırmasız açılmaz', !g.buyNet('eu').ok);
+  st.research.done.ihracat = 1; st.cash = 1e6;
+  const c0 = st.cash;
+  check('Posta siparişi açılır, bedeli ödenir', g.buyNet('eu').ok && Regions.netLevel(c, 'eu') === 1 && st.cash < c0 && Math.abs(Regions.distReach(c, 'eu') - 0.25) < 1e-9);
+  check('Distribütör hayran ya da tanıdık yayıncı ister', !g.buyNet('eu').ok);
+  const pj = g.startProject({ name: 'Dünya', genre: 'rpg', topic: 'fantezi', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  check('Yeni proje yalnız stüdyonun dilinde', pj.regions.join() === 'na' && Object.keys(pj.loc).length === 0);
+  check('Japonca çeviri araştırma ister', !g.localizeLevel(pj.id, 'jp', 1).ok);
+  check('Avrupa çevirisi bedelli ve seviyeli', g.localizeLevel(pj.id, 'eu', 1).ok && pj.loc.eu === 1 && g.localizeLevel(pj.id, 'eu', 2).ok && pj.loc.eu === 2 && Regions.langReach(c, 'eu', pj.loc) > 1);
+  // Türkiye ana bölge: ucuz maaş ve kira
+  const gt = newGame({ seed: 82, difficulty: 'orta', home: 'tr' });
+  check('Türkiye ana bölge: maaş ve kira çok daha ucuz', M.salaryFor(gt.ctx, 50) < M.salaryFor(g.ctx, 50) * 0.5 && Eco.rent(gt.ctx) < Eco.rent(g.ctx) * 0.5 && Regions.isNative(gt.ctx, 'tr') && !Regions.isNative(gt.ctx, 'na'));
+  // Bayramlar: Ramazan Bayramı her yıl ~11 gün erken, 23 Nisan Türkiye'de talep artırır
+  const R = Regions.HOLIDAYS.find((h) => h.id === 'tr_ramazan'), s1 = Regions.holidayStart(R, 1990), s2 = Regions.holidayStart(R, 1991);
+  check('Ramazan Bayramı kayar (her yıl ~1–2 hafta erken)', s2 < s1 && s1 - s2 <= 2, `${s1} → ${s2}`);
+  gt.state.week = 15; // Nisan 4. hafta
+  const trGame = { genre: 'aksiyon', topic: 'kedi', audience: 'genc', platforms: ['pc'], regionSplit: { tr: 1 } };
+  check('23 Nisan Türkiye satışını artırır (kedi oyunu, genç kitle)', Regions.activeHolidays(gt.ctx).some((h) => h.id === 'tr_23nisan') && Regions.weekK(gt.ctx, trGame) > 1.5, Regions.weekK(gt.ctx, trGame).toFixed(2));
+  check('Türkiye fiyat endeksi gelir çarpanını düşürür', Regions.revK(gt.ctx, trGame) < 0.8, Regions.revK(gt.ctx, trGame).toFixed(2));
+  // Dönem olayları: kur krizi ve Asya konsol yasağı
+  const ge = newGame({ seed: 83, difficulty: 'kolay', length: 50 });
+  ge.state.week = Math.round((2001.6 - 1976) * 48); tick(ge, 1);
+  check('2001 Türkiye krizi kuru düşürür', ge.state.fxMods.some((f) => f.rid === 'tr' && f.v < 0.6));
+  const kGame = { genre: 'aksiyon', platforms: ['oi2'], regionSplit: { asya: 1 } };
+  check('Asya konsol yasağı konsol satışını durdurur', Regions.weekK(ge.ctx, kGame) < 0.2 && ge.state.bans.some((b) => b.rid === 'asya'));
+  check('Avrupa şiddet listesi yetişkin aksiyonu kısar, kültürelleştirme aşar', Regions.ratingK(ge.ctx, { genre: 'aksiyon', audience: 'yetiskin' }, 'eu') < 1 && Regions.ratingK(ge.ctx, { genre: 'aksiyon', audience: 'yetiskin' }, 'eu', { eu: 3 }) === 1);
+  // Yayın: erişim oyuna yazılır, hayranlar bölgelere dağılır
+  while (pj.status === 'dev') tick(g, 1);
+  st.research.done.oz_yayin = 1;
+  const rel = g.release({ projectId: pj.id, publisherId: null, price: 20 });
+  check('Yayında bölge erişimi ve dağılımı hesaplanır', rel.ok && rel.game.reach && rel.game.regionSplit.na > rel.game.regionSplit.jp && Object.values(st.fanMix).reduce((a, b) => a + b, 0) > 0.99);
+  // Kademeli çıkış: yayından sonra çeviri ikinci dalga getirir
+  st.research.done.yerel_jp = 1; st.cash = 1e6;
+  const pk = { ...rel.game.peak };
+  check('Yayından sonra yerelleştirme (kademeli çıkış) zirveyi büyütür', g.localizeGame(rel.game.id, 'jp', 1).ok && Object.keys(pk).some((k) => rel.game.peak[k] > pk[k]));
+  // Bölgesel haklar
+  const gb = newGame({ seed: 84, difficulty: 'kolay' });
+  gb.state.research.done.oz_yayin = 1;
+  const pb = gb.startProject({ name: 'Haklar', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  while (pb.status === 'dev') tick(gb, 1);
+  const o = { id: gb.state.nextId++, pid: pb.id, pubId: 'namko', pubName: 'Namko', kind: 'tam', mode: 'bitmis', pay: 14, adv: 1000, buyout: 0, fund: 0, rights: 'sende', promo: 0, expUnits: 1000, price: 20, votes: {}, margin: 40, est: 70, expires: gb.state.week + 4, rounds: 0, koz: 3 };
+  gb.state.pub.offers.push(o);
+  check('Bölgesel haklar hamlesi önerilir', Pub.negMoves(gb.ctx, o).some((m) => m.id === 'bolgesel'));
+  o.regions = ['jp'];
+  check('Bölgesel haklarla imza: yayıncı yalnız kendi bölgesini alır', gb.signOffer(o.id).ok && pb.deal.regions.join() === 'jp');
+  const rb = gb.release({ projectId: pb.id, price: 20 });
+  check('Gelir bölgelere göre ayrılır (yayıncı payı < 1)', rb.ok && Regions.dealShare(rb.game) < 0.95 && Regions.dealShare(rb.game) > 0 && rb.game.inDeal.join() === 'jp');
+  // Eski kayıt: dört bölgeli dünyadan
+  const old = JSON.parse(newGame({ seed: 85 }).save());
+  delete old.home; delete old.net; delete old.fanMix; old.games = [{ id: 1, name: 'Eski', regions: ['na', 'eu', 'row'], regionSplit: { na: 0.5, eu: 0.3, row: 0.2 }, regionSold: {}, active: false, units: 0 }];
+  const lg = loadGame(JSON.stringify(old));
+  check('Eski kayıt: ana bölge K. Amerika, Avrupa dağıtımı açık, "Dünya" bölünür', lg.state.home === 'na' && lg.state.net.eu === 2 && !lg.state.games[0].regions.includes('row') && lg.state.games[0].regionSplit.asya > 0);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

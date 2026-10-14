@@ -22,7 +22,8 @@ export function make(u) {
         <div class="split-bars">${sh.map((x) => `<div><span>${x.p.own ? '★ ' : ''}${esc(x.p.name)}<small class="muted"> ${x.p.own ? 'senin' : x.p.owner ? esc(World.companyById(x.p.owner)?.name || '') : x.p.kind === 'pc' ? 'bilgisayar' : ''}</small></span>${bar(x.share * 100, 'prog')}<b class="num">${x.b.toFixed(1)} M</b></div>`).join('')}</div>
         <p class="muted small">Yakında: ${PACK.platforms.filter((p) => p.from > M.tableYear(c) && p.from < M.tableYear(c) + 3).map((p) => `${esc(p.name)} (${p.from})`).join(', ') || '—'}</p>`;
     }
-    if (sub === 'bolgeler') {
+    if (sub === 'bolgeler') return u.regionsWorld();
+    if (sub === 'bolgeler_eski') {
       const w = M.regionShares(c);
       const plats = M.activePlatforms(c).filter((p) => M.platformBase(c, p) > 0);
       return `<p class="muted small">${y} yılında oyun pazarının bölgelere dağılımı, türlere ilgi ve her bölgede en güçlü platformlar. Oyunun hangi bölgelerde satılacağını yeni oyun sihirbazında seçersin; Japonya ve Dünya için araştırma ve yerelleştirme gerekir.</p>

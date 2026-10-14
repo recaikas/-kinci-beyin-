@@ -39,7 +39,7 @@ export const HIST_PROFILES = {
   eidoz: { region: ['eu'], focus: ['pc', 'konsol'], trait: 'kaprisli' },
   destan: { region: ['na'], focus: ['pc'], trait: 'comert' },
   soni: { region: ['jp', 'na', 'eu'], focus: ['konsol', 'el'], trait: 'burokratik' },
-  vana: { region: ['row', 'na', 'eu'], focus: ['pc'], trait: 'comert' },
+  vana: { region: ['na', 'eu', 'asya'], focus: ['pc'], trait: 'comert' },
   kayastar: { region: ['na', 'eu'], focus: ['konsol', 'pc'], trait: 'kaprisli' },
   mikroyumusak: { region: ['na'], focus: ['pc', 'konsol'], trait: 'burokratik' },
 };
@@ -48,7 +48,12 @@ const ALL = ['salon', 'konsol', 'pc', 'el', 'mobil', 'vr', 'bulut'];
 // Sabit ve yeni (kurgusal) yayıncılar: güç yıla göre [[yıl, güç]].
 export const EXTRA_PUBS = [
   { id: 'mantar', name: 'Kırmızı Mantar', from: 1976, to: 2200, power: [[1976, 55]], region: ['na'], focus: ALL, trait: 'kumarbaz', likes: [], dislike: null, fixed: true },
-  { id: 'morayi', name: 'Mor Ayı Indie', from: 2008, to: 2200, power: [[2008, 60]], region: ['row'], focus: ['pc', 'mobil'], trait: 'comert', likes: ['casual', 'macera'], dislike: null, fixed: true },
+  { id: 'morayi', name: 'Mor Ayı Indie', from: 2008, to: 2200, power: [[2008, 60]], region: ['asya', 'latam', 'na'], focus: ['pc', 'mobil'], trait: 'comert', likes: ['casual', 'macera'], dislike: null, fixed: true },
+  // Ana bölgelerin garaj dostu küçük yayıncıları (Konu C)
+  { id: 'kasetcicemil', name: 'Kasetçi Cemil Dağıtım', from: 1976, to: 1993, power: [[1976, 30], [1985, 38], [1993, 30]], region: ['tr'], focus: ['pc', 'salon', 'konsol'], trait: 'kumarbaz', likes: ['aksiyon', 'spor'], dislike: null },
+  { id: 'marti', name: 'Martı Yazılım', from: 1977, to: 1993, power: [[1977, 36], [1985, 46], [1993, 36]], region: ['eu'], focus: ['pc'], trait: 'kumarbaz', likes: ['strateji', 'macera'], dislike: null },
+  { id: 'kitsune', name: 'Kitsune Kaset', from: 1976, to: 1990, power: [[1976, 34], [1983, 44], [1990, 34]], region: ['jp'], focus: ['pc', 'konsol', 'salon'], trait: 'kumarbaz', likes: ['rpg', 'casual'], dislike: null },
+  { id: 'bogazici', name: 'Boğaziçi Dijital', from: 2003, to: 2200, power: [[2003, 48], [2015, 60], [2025, 62]], region: ['tr', 'eu'], focus: ['mobil', 'pc'], trait: 'sadik', likes: ['casual', 'aksiyon'], dislike: null },
   { id: 'postakutusu', name: 'Posta Kutusu Yazılım', from: 1977, to: 1992, power: [[1977, 38], [1984, 50], [1992, 40]], region: ['na'], focus: ['pc'], trait: 'sadik', likes: ['macera'], dislike: 'aksiyon' },
   { id: 'tektus', name: 'Tek Tuş Yapım', from: 1978, to: 1989, power: [[1978, 42], [1983, 52], [1989, 38]], region: ['na'], focus: ['salon', 'pc'], trait: 'kumarbaz', likes: ['aksiyon'], dislike: 'strateji' },
   { id: 'kasetpazari', name: 'Kaset Pazarı', from: 1980, to: 1994, power: [[1980, 45], [1986, 56], [1994, 42]], region: ['eu'], focus: ['pc'], trait: 'cimri', likes: ['aksiyon', 'casual'], dislike: 'rpg' },
@@ -56,21 +61,21 @@ export const EXTRA_PUBS = [
   { id: 'kuzeyruzgari', name: 'Kuzey Rüzgârı Yazılım', from: 1983, to: 2003, power: [[1983, 42], [1993, 58], [2003, 48]], region: ['eu'], focus: ['pc'], trait: 'burokratik', likes: ['strateji', 'simulasyon'], dislike: 'casual' },
   { id: 'atlas', name: 'Atlas Etkileşim', from: 1983, to: 2010, power: [[1983, 55], [1997, 74], [2010, 60]], region: ['na'], focus: ['pc', 'konsol'], trait: 'burokratik', likes: ['simulasyon'], dislike: 'macera' },
   { id: 'gumusdisket', name: 'Gümüş Disket', from: 1984, to: 1999, power: [[1984, 44], [1991, 57], [1999, 45]], region: ['eu'], focus: ['pc'], trait: 'kaprisli', likes: ['aksiyon'], dislike: 'simulasyon' },
-  { id: 'anadolukartus', name: 'Anadolu Kartuş', from: 1985, to: 1996, power: [[1985, 36], [1990, 44], [1996, 34]], region: ['row'], focus: ['konsol', 'pc'], trait: 'kumarbaz', likes: [], dislike: null },
+  { id: 'anadolukartus', name: 'Anadolu Kartuş', from: 1985, to: 1996, power: [[1985, 36], [1990, 44], [1996, 34]], region: ['tr'], focus: ['konsol', 'pc'], trait: 'kumarbaz', likes: [], dislike: null },
   { id: 'maviay', name: 'Mavi Ay Eğlence', from: 1986, to: 2012, power: [[1986, 58], [1998, 72], [2012, 60]], region: ['jp'], focus: ['konsol', 'el'], trait: 'kaprisli', likes: ['aksiyon', 'casual'], dislike: 'strateji' },
   { id: 'kale', name: 'Kale Yazılım', from: 1987, to: 2008, power: [[1987, 56], [1997, 70], [2008, 58]], region: ['eu'], focus: ['pc'], trait: 'seri', likes: ['strateji', 'rpg'], dislike: 'casual' },
   { id: 'dergiekleri', name: 'Dergi Ekleri', from: 1988, to: 2002, power: [[1988, 40], [1995, 48], [2002, 38]], region: ['eu'], focus: ['pc'], trait: 'cimri', likes: [], dislike: null },
-  { id: 'disketkulubu', name: 'Disket Kulübü', from: 1990, to: 2006, power: [[1990, 42], [1997, 55], [2006, 40]], region: ['row', 'na'], focus: ['pc'], trait: 'comert', likes: ['aksiyon', 'macera'], dislike: 'simulasyon' },
+  { id: 'disketkulubu', name: 'Disket Kulübü', from: 1990, to: 2006, power: [[1990, 42], [1997, 55], [2006, 40]], region: ['na', 'latam'], focus: ['pc'], trait: 'comert', likes: ['aksiyon', 'macera'], dislike: 'simulasyon' },
   { id: 'bolumbir', name: 'Bölüm Bir Yazılım', from: 1991, to: 2004, power: [[1991, 45], [1996, 56], [2004, 42]], region: ['na'], focus: ['pc'], trait: 'kumarbaz', likes: ['aksiyon'], dislike: 'strateji' },
   { id: 'geceyarisi', name: 'Gece Yarısı Yayınları', from: 1993, to: 2009, power: [[1993, 44], [2001, 54], [2009, 42]], region: ['eu'], focus: ['pc', 'konsol'], trait: 'vizyoner', likes: ['macera'], dislike: 'casual' },
   { id: 'turuncukutu', name: 'Turuncu Kutu', from: 1995, to: 2015, power: [[1995, 60], [2005, 72], [2015, 58]], region: ['na'], focus: ['konsol', 'pc'], trait: 'cimri', likes: ['aksiyon'], dislike: 'strateji' },
-  { id: 'yuksekskor', name: 'Yüksek Skor Dağıtım', from: 1998, to: 2020, power: [[1998, 60], [2008, 70], [2020, 58]], region: ['row', 'na', 'eu'], focus: ['konsol', 'el'], trait: 'cimri', likes: ['casual', 'aksiyon'], dislike: 'rpg' },
+  { id: 'yuksekskor', name: 'Yüksek Skor Dağıtım', from: 1998, to: 2020, power: [[1998, 60], [2008, 70], [2020, 58]], region: ['na', 'latam', 'eu'], focus: ['konsol', 'el'], trait: 'cimri', likes: ['casual', 'aksiyon'], dislike: 'rpg' },
   { id: 'sehirisiklari', name: 'Şehir Işıkları Dağıtım', from: 2002, to: 2200, power: [[2002, 42], [2015, 55], [2025, 52]], region: ['jp'], focus: ['pc', 'konsol'], trait: 'sadik', likes: ['rpg'], dislike: 'simulasyon' },
   { id: 'nordik', name: 'Nordik Oyun Evi', from: 2005, to: 2200, power: [[2005, 58], [2015, 70], [2025, 68]], region: ['eu'], focus: ['pc', 'konsol'], trait: 'sadik', likes: ['strateji', 'macera'], dislike: 'casual' },
-  { id: 'cepyayin', name: 'Cep Yayın', from: 2009, to: 2200, power: [[2009, 60], [2015, 74], [2025, 66]], region: ['row'], focus: ['mobil'], trait: 'kaprisli', likes: ['casual'], dislike: 'rpg' },
-  { id: 'kirikpiksel', name: 'Kırık Piksel Yayıncılık', from: 2012, to: 2200, power: [[2012, 45], [2020, 58], [2025, 56]], region: ['row'], focus: ['pc'], trait: 'vizyoner', likes: ['macera'], dislike: 'aksiyon' },
-  { id: 'yenidalga', name: 'Yeni Dalga Etkileşim', from: 2015, to: 2200, power: [[2015, 60], [2025, 79]], region: ['row', 'na'], focus: ['pc', 'konsol'], trait: 'seri', likes: ['macera', 'strateji'], dislike: null },
-  { id: 'bulutabone', name: 'Bulut Abone Yayın', from: 2018, to: 2200, power: [[2018, 66], [2025, 76]], region: ['row', 'na', 'eu'], focus: ['pc', 'konsol', 'bulut'], trait: 'burokratik', likes: ['casual', 'aksiyon'], dislike: null },
+  { id: 'cepyayin', name: 'Cep Yayın', from: 2009, to: 2200, power: [[2009, 60], [2015, 74], [2025, 66]], region: ['asya', 'latam'], focus: ['mobil'], trait: 'kaprisli', likes: ['casual'], dislike: 'rpg' },
+  { id: 'kirikpiksel', name: 'Kırık Piksel Yayıncılık', from: 2012, to: 2200, power: [[2012, 45], [2020, 58], [2025, 56]], region: ['eu', 'asya'], focus: ['pc'], trait: 'vizyoner', likes: ['macera'], dislike: 'aksiyon' },
+  { id: 'yenidalga', name: 'Yeni Dalga Etkileşim', from: 2015, to: 2200, power: [[2015, 60], [2025, 79]], region: ['asya', 'na'], focus: ['pc', 'konsol'], trait: 'seri', likes: ['macera', 'strateji'], dislike: null },
+  { id: 'bulutabone', name: 'Bulut Abone Yayın', from: 2018, to: 2200, power: [[2018, 66], [2025, 76]], region: ['na', 'eu', 'asya'], focus: ['pc', 'konsol', 'bulut'], trait: 'burokratik', likes: ['casual', 'aksiyon'], dislike: null },
 ];
 
 // Tarihî birleşmeler: ilişki puanları birleşen şirkete taşınır.

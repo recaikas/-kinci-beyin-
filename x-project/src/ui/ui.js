@@ -14,6 +14,7 @@ import { make as make_win_research } from './win_research.js';
 import { make as make_chart } from './chart.js';
 import { make as make_win_market } from './win_market.js';
 import { make as make_win_pub } from './win_pub.js';
+import { make as make_win_regions } from './win_regions.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
@@ -330,6 +331,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_chart(u));
   Object.assign(u, make_win_market(u));
   Object.assign(u, make_win_pub(u));
+  Object.assign(u, make_win_regions(u));
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
@@ -373,7 +375,7 @@ export function boot(root, hotData = {}) {
       case 'close-dialog': return closeDialog();
       case 'begin': {
         const v = (q) => root.querySelector(q).value;
-        return start(newGame({ companyName: v('#n-company') || 'X Project', founderName: v('#n-founder') || 'Sen', founderSpec: v('#n-spec'), difficulty: v('#n-diff'), length: +v('#n-len'), seed: +v('#n-seed') || 1976 }));
+        return start(newGame({ companyName: v('#n-company') || 'X Project', founderName: v('#n-founder') || 'Sen', founderSpec: v('#n-spec'), difficulty: v('#n-diff'), length: +v('#n-len'), seed: +v('#n-seed') || 1976, home: v('#n-home') || 'na' }));
       }
       case 'continue': { const j = store((s) => s.getItem(SAVE_KEY)); if (j) start(loadGame(j)); return; }
       case 'newgame': return setupScreen();
@@ -427,6 +429,10 @@ export function boot(root, hotData = {}) {
       case 'reprint': return run(g.reprint(+id));
       case 'printauto': return run(g.printAuto(+id));
       case 'announce': return run(g.announce(pid, +id));
+      // Bölgeler (Konu C)
+      case 'buynet': return run(g.buyNet(id));
+      case 'loclv': return run(g.localizeLevel(pid, id, +b.dataset.lv));
+      case 'gloc': return run(g.localizeGame(+id, b.dataset.regionId, 1));
       // Yayıncılar (Konu B)
       case 'pubpick': { const list = ((app.pubSel ||= {})[pid] ||= []); const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); else if (list.length < PACK.publishing.maxPitches) list.push(id); app.pubOpen = pid; return renderWindow(); }
       case 'pubfilter': app.pubFilter = id; return renderWindow();

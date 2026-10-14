@@ -1,5 +1,5 @@
 // Diyaloglar: olay, faz dağılımı, yayına hazır, eleştirmenler, kurulum.
-import { Staff, Know } from '../game.js';
+import { Staff, Know, Regions } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { SLOTS } from './system.js';
@@ -86,6 +86,8 @@ export function make(u) {
         <label>Stüdyo adı<input id="n-company" value="Piksel & Kaos"></label>
         <label>Kurucu adı<input id="n-founder" value="Sen"></label>
         <label>Kurucunun alanı<select id="n-spec">${PACK.disciplines.map((d) => `<option value="${d.id}">${d.name} · ${Staff.career({ pack: PACK }, PACK.careerRules.founderCareer[d.id]).name}</option>`).join('')}</select></label>
+        <label class="wide">Ana bölge (garajın nerede?)<select id="n-home">${Regions.HOMES.map((h) => `<option value="${h.id}" ${h.id === 'na' ? 'selected' : ''}>${Regions.R(h.id).flag} ${esc(h.title)} · ${esc(h.feel)}</option>`).join('')}</select></label>
+        <p class="muted small wide">${Regions.HOMES.map((h) => `<b>${Regions.R(h.id).flag} ${esc(Regions.R(h.id).name)}:</b> ${esc(h.text)}`).join('<br>')}</p>
         <label>Zorluk<select id="n-diff">${PACK.difficulties.map((d) => `<option value="${d.id}" ${d.id === 'kolay' ? 'selected' : ''}>${d.name} · ${money(d.startCash)}</option>`).join('')}</select></label>
         <label>Kariyer uzunluğu<select id="n-len">${Object.keys(PACK.meta.gameLengths).map((l) => `<option value="${l}" ${+l === PACK.meta.defaultLength ? 'selected' : ''}>${+l === 50 ? '50 yıl · tam tarih 1976–2025' : `${l} yıl`}</option>`).join('')}</select></label>
         <label>Tohum<input id="n-seed" type="number" value="${(Date.now() % 100000) | 0}"></label>

@@ -2,11 +2,20 @@
 // Hepsi saf fonksiyon; sayılar pack'ten gelir.
 import { lerpTable, logTable, clamp, calendar } from './kernel.js';
 import { CRITICS } from './data/critics.js';
+import { REGIONS as REGION_DATA } from './data/regions.js';
 
 export const tableYear = (ctx) => calendar(ctx.state, ctx.pack).tableYear;
 export const inflation = (ctx, y = tableYear(ctx)) => Math.pow(ctx.pack.economy.inflation, y - ctx.pack.meta.startYear);
 export const difficulty = (ctx) => ctx.pack.difficulties.find((d) => d.id === ctx.state.difficulty);
-export const salaryFor = (ctx, skill) => Math.round(ctx.pack.economy.salaryPerSkill * skill * inflation(ctx));
+// Ana bölgenin ücret düzeyi (Konu C); Türkiye'de kur krizinde maaşlar dolar olarak ucuzlar
+export function homePay(ctx) {
+  const st = ctx.state, r = REGION_DATA.find((x) => x.id === (st.home || 'na'));
+  let k = r ? lerpTable(r.pay, tableYear(ctx)) : 1;
+  for (const f of st.fxMods || []) if (f.rid === r?.id && f.pay && f.until > st.week) k *= f.v;
+  return k;
+}
+export const homeRent = (ctx) => REGION_DATA.find((x) => x.id === (ctx.state.home || 'na'))?.rent ?? 1;
+export const salaryFor = (ctx, skill) => Math.round(ctx.pack.economy.salaryPerSkill * skill * inflation(ctx) * homePay(ctx));
 
 // --- Productivity
 export function marketSkill(ctx, y = tableYear(ctx)) {
@@ -259,7 +268,10 @@ export function regionMix(ctx, game, p, y = tableYear(ctx)) {
   const gi = ctx.pack.genres.findIndex((x) => x.id === game.genre);
   const regs = game.regions || ALL_REGIONS(ctx);
   const out = {};
-  for (const r of ctx.pack.regions.list) if (regs.includes(r.id)) out[r.id] = w[r.id] * r.pref[gi] * regionBias(ctx, p, r.id);
+  for (const r of ctx.pack.regions.list) {
+    const acc = game.reach ? game.reach[r.id] || 0 : regs.includes(r.id) ? 1 : 0;
+    if (acc > 0) out[r.id] = w[r.id] * r.pref[gi] * regionBias(ctx, p, r.id) * acc;
+  }
   return out;
 }
 export const regionFactor = (ctx, game, p) => Object.values(regionMix(ctx, game, p)).reduce((a, b) => a + b, 0) / ctx.pack.regions.norm;
@@ -277,7 +289,8 @@ export function peakWeekly(ctx, game) {
   const size = ctx.pack.sizes.find((x) => x.id === game.size);
   const F = Math.max(1, 1 + s.fanK * Math.log10(Math.max(1, ctx.state.fans) / s.fanRef));
   const Hh = 1 + (s.hypeK * game.hype) / 100;
-  const Y = game.selfPub ? s.selfA + s.selfB * (game.publisherPower / 100) ** s.selfExp : (s.yA + (s.yB * game.publisherPower) / 100) * (s.pubReach ?? 1);
+  // Konu C: bölgesel erişim (game.reach) yayıncı ya da kendi yayın gücünü bölge bölge zaten içerir
+  const Y = game.reach ? 1 : game.selfPub ? s.selfA + s.selfB * (game.publisherPower / 100) ** s.selfExp : (s.yA + (s.yB * game.publisherPower) / 100) * (s.pubReach ?? 1);
   const St = s.stA + (s.stB * Math.min(studioStars(ctx), s.stCap)) / s.stCap;
   const I = s.iA + s.iB * Math.min(game.ipValue, 1);
   const ip = 1 + s.ipK * game.ipValue * diff.ipD;

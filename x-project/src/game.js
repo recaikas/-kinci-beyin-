@@ -18,8 +18,9 @@ import * as War from './systems/war.js';
 import * as Modern from './systems/modern.js';
 import * as Charts from './systems/charts.js';
 import * as Pub from './systems/publishers.js';
+import * as Regions from './systems/regions.js';
 
-export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn' } = {}) {
+export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
   return {
     version: 3, seed, rng: seed >>> 0, week: 0, lengthYears: length, lengthMult: PACK.meta.gameLengths[length], difficulty,
@@ -35,6 +36,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
     pending: [], eventCounts: {}, lastEvents: [], nextEventWeek: 20,
     news: [], gameOver: null, lastCombo: null,
     designs: {}, vacationPolicy: 'planli', rel: {},
+    home, net: {}, fanMix: { [home]: 1 },
   };
 }
 
@@ -54,6 +56,7 @@ function migrate(state) {
   state.vacationPolicy ||= 'planli';
   state.rel ||= {};
   Charts.mkt(state);
+  Regions.migrate(state);
   Pub.migrate(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
@@ -77,6 +80,7 @@ export function makeGame(state, pack = PACK) {
     queue(ev) { state.pending.push(ev); bus.fire('pending', ev); },
   };
   Pub.wire(ctx);
+  Regions.wire(ctx);
   const contracts = () => { Prod.genContracts(ctx); Pub.addTrial(ctx); };
 
   const api = {
@@ -119,6 +123,7 @@ export function makeGame(state, pack = PACK) {
       Market.weeklyRivals(ctx);
       Market.weeklyCharts(ctx);
       Pub.weekly(ctx);
+      Regions.weekly(ctx);
       // ekonomi
       if (newMonth) {
         Eco.monthlyEconomy(ctx);
@@ -170,6 +175,7 @@ export function makeGame(state, pack = PACK) {
       const pj = Prod.newProject(ctx, { ...o, roomId: room.id });
       pj.cost = cost;
       state.projects.push(pj);
+      for (const rid of o.regions || []) if (!Regions.isNative(ctx, rid)) Regions.localize(ctx, pj.id, rid, 1, false); // sihirbazda seçilen çeviriler
       bus.fire('projectStarted', pj);
       ctx.news(`🎮 Yeni proje: "${o.name}"`, 'info');
       return { ok: true, project: pj };
@@ -226,6 +232,10 @@ export function makeGame(state, pack = PACK) {
     fireAgent: () => Pub.fireAgent(ctx),
     orderDraft: (id) => Pub.orderDraft(ctx, id),
     buyRights: (ipId) => Pub.buyRights(ctx, ipId),
+    // --- Bölgeler (Konu C)
+    buyNet: (rid) => Regions.buyNet(ctx, rid),
+    localizeLevel: (pid, rid, lv) => Regions.localize(ctx, pid, rid, lv, false),
+    localizeGame: (gid, rid, lv) => Regions.localize(ctx, gid, rid, lv, true),
     startExpansion(gid) {
       const g = state.games.find((x) => x.id === gid);
       if (!Post.expansionAllowed(ctx, g)) return { ok: false, msg: 'Bu oyuna ek paket yapılamaz (çok eski ya da zaten yapılıyor).' };
@@ -314,4 +324,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions };

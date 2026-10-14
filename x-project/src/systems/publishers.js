@@ -7,6 +7,7 @@ import { TRAITS, HIST_PROFILES, EXTRA_PUBS, MERGERS, MEETING_QUESTIONS, SHOWCASE
 import { tableYear, inflation, review, peakWeekly, platformById, activePlatforms, platformBase } from '../models.js';
 import { companyRep, isActive } from './world.js';
 import * as Charts from './charts.js';
+import * as Regions from './regions.js';
 
 const P = (ctx) => ctx.pack.publishing;
 export const MEMBERS = [['urun', 'Ürün'], ['pazar', 'Pazar'], ['finans', 'Finans'], ['hukuk', 'Hukuk']];
@@ -153,12 +154,15 @@ function rightsOwner(ctx, pj) {
 export const defaultPrice = (ctx) => Math.max(10, Math.round(20 * inflation(ctx) ** 0.4));
 
 // Yayıncının gözünden beklenen satış: oyunun gölge kopyası yayılma eğrisiyle ilerletilir.
-function shadow(ctx, pj, power, score, promo = 0) {
+function shadow(ctx, pj, pubLike, score, promo = 0) {
+  const power = typeof pubLike === 'number' ? pubLike : pubLike.power;
   const st = ctx.state, pk = ctx.pack;
   const ipId = pj.sequelOf ?? null;
   const ip = ipId != null ? st.ips.find((x) => x.id === ipId) : null;
   const g = { score, price: defaultPrice(ctx), hype: Math.min(pk.hype.max, (pj.hype || 0) + promo), ipValue: ip?.value || 0, publisherPower: power, platforms: pj.platforms, size: pj.size,
     genre: pj.genre, audience: pj.audience, topic: pj.topic, regions: pj.regions, pirated: !st.research.done.kopya_koruma, bugRate: 0.01, weeks: 0 };
+  g.loc = pj.loc || {};
+  Regions.applyReach(ctx, g, typeof pubLike === 'number' ? { power } : pubLike, { pubId: 'x', power, regions: null }); // yayıncının bölgeleriyle
   g.peak = peakWeekly(ctx, g);
   if (pj.kind === 'ek') for (const k in g.peak) g.peak[k] *= pk.post.expansionSales;
   const D = pk.charts.diffusion;
@@ -189,7 +193,7 @@ export function terms(ctx, pub, pj, kind, mode, est) {
   if (s.multi && s.multi.pubId === pub.id && s.multi.left > 0) pay += B.multiPay;
   pay = Math.round(clamp(pay, B.payMin, B.payMax));
   const promo = promoOf(ctx, pub, pj);
-  const sh = shadow(ctx, pj, pub.power, est, promo);
+  const sh = shadow(ctx, pj, pub, est, promo);
   const perUnit = sh.price * B.net * pay / 100;
   const adv = kind === 'tam' && mode === 'bitmis' ? Math.round(sh.u12 * perUnit * (pub.tr.adv || 1)) : 0;
   const buyout = kind === 'tek' ? Math.round(sh.life * perUnit * B.buyoutShare) : 0;
@@ -201,7 +205,7 @@ export function preview(ctx, pub, pj) {
   if (!pj) return { pay: Math.round(clamp(basePay(ctx, pub), P(ctx).payMin, P(ctx).payMax)) };
   const est = trueEstimate(ctx, pj);
   const pay = Math.round(clamp(basePay(ctx, pub, pj.status === 'dev' ? 'erken' : 'bitmis') + (pub.tr.rights ? P(ctx).rightsPay : 0), P(ctx).payMin, P(ctx).payMax));
-  const sh = shadow(ctx, pj, pub.power, est, promoOf(ctx, pub, pj));
+  const sh = shadow(ctx, pj, pub, est, promoOf(ctx, pub, pj));
   const sd = errorSd(ctx, pub, pj.status === 'dev' ? 'erken' : 'bitmis', false);
   return { pay, adv: Math.round(sh.u12 * sh.price * P(ctx).net * pay / 100 * (pub.tr.adv || 1)), est, lo: Math.round(est - sd), hi: Math.round(est + sd), E: Math.round(threshold(ctx, pub)), retail: pay * P(ctx).net };
 }
@@ -470,6 +474,7 @@ export function negChance(ctx, o, move) {
     case 'date': p = N.dateBase + (t === 'burokratik' ? -20 : 0); break;
     case 'dagitim': p = 40 + rel(ctx, o.pubId) / 2 + (t === 'cimri' ? 10 : 0); break;
     case 'rakip': p = N.rival * 100; break;
+    case 'bolgesel': p = 45 + rel(ctx, o.pubId) / 2 + (t === 'seri' ? -15 : 0); break;
     default: return 0;
   }
   return clamp(Math.round(p), N.min, N.max);
@@ -482,6 +487,8 @@ export function negMoves(ctx, o) {
   if (o.adv > 0) mv.push({ id: 'adv', name: `Daha büyük avans (×1,5 → ${fmt$(o.adv * 1.5)})` });
   if (o.rights === 'yayinci') mv.push({ id: 'rights', name: 'Seri haklarım bende kalsın' });
   if (o.mode === 'erken') mv.push({ id: 'date', name: 'Tarih esnekliği (+8 hafta)' });
+  const pb = byId(ctx, o.pubId);
+  if (!o.regions && pb && pb.region.length < Regions.IDS.length && ctx.state.research.done.oz_yayin && !o.dist) mv.push({ id: 'bolgesel', name: `Yalnız kendi bölgelerini alsın (${pb.region.map((r) => Regions.R(r).short).join(', ')}); gerisi bende` });
   if (!o.dist && ctx.state.research.done.oz_yayin && rel(ctx, o.pubId) >= B.rel.tiers[0] && o.mode === 'bitmis') mv.push({ id: 'dagitim', name: `Dağıtım anlaşması (netin %${B.distPay}'i; basım ve reklam sende)` });
   const rival = s.offers.filter((x) => x.pid === o.pid && x.id !== o.id && x.kind === 'tam').sort((a, b) => b.pay - a.pay)[0];
   if (rival) mv.push({ id: 'rakip', name: `Rakip teklifi masaya koy (${rival.pubName}: %${rival.pay})` });
@@ -499,6 +506,7 @@ export function negotiate(ctx, offerId, move) {
     if (move === 'adv') o.adv = Math.round(o.adv * 1.5);
     if (move === 'rights') { o.rights = 'sende'; o.pay = Math.max(B.payMin, o.pay - B.rightsPay); }
     if (move === 'date') o.dateFlex = 8;
+    if (move === 'bolgesel') { o.regions = [...(byId(ctx, o.pubId)?.region || [])]; o.adv = Math.round(o.adv * 0.7); }
     if (move === 'dagitim') { o.dist = true; o.pay = B.distPay; o.adv = 0; o.promo = 0; }
     if (move === 'rakip') { const r = s.offers.filter((x) => x.pid === o.pid && x.id !== o.id && x.kind === 'tam').sort((a, b) => b.pay - a.pay)[0]; o.pay = Math.min(B.payMax, Math.max(o.pay, r.pay) + (ctx.rng.chance(0.5) ? 1 : 0)); }
     ctx.news(`🤝 ${o.pubName} pazarlıkta geri adım attı: ${mv.name}.`, 'good');
@@ -548,7 +556,8 @@ export function sign(ctx, offerId) {
   if (pj.deal) return { ok: false, msg: 'Bu oyun için zaten sözleşme var.' };
   const pub = byId(ctx, o.pubId);
   const deal = { pubId: o.pubId, pubName: o.pubName, power: pub?.power ?? 50, kind: o.kind, mode: o.mode, pay: o.pay, adv: o.adv, buyout: o.buyout, fund: o.fund, rights: o.rights,
-    promo: o.promo, expUnits: o.expUnits, paid: 0, owed: 0, dist: !!o.dist, ms: 0, signed: state.week, hit: false, multi: !!o.multi };
+    promo: o.promo, expUnits: o.expUnits, paid: 0, owed: 0, dist: !!o.dist, ms: 0, signed: state.week, hit: false, multi: !!o.multi,
+    region: pub?.region || null, regions: o.regions || null };
   const rest = o.mode === 'erken' ? pj.totalWeeks - pj.week : 0;
   deal.due = state.week + (o.mode === 'erken' ? rest + B.dueSlack - (o.ambitious ? 4 : 0) + (o.dateFlex || 0) : B.finishedDue);
   if (o.kind === 'tek') { ledger.post('yayinci', o.buyout, `${o.pubName}: "${pj.name}" tek seferlik satış`); deal.paid += o.buyout; }
@@ -610,7 +619,8 @@ export function inheritDeal(ctx, base, k = 1) {
   const legacyPay = base.royalty ? Math.round(base.royalty / P(ctx).net * 100) : null;
   const pay = Math.round(clamp(d && d.kind !== 'tek' ? d.pay : legacyPay ?? (pub ? basePay(ctx, pub) : P(ctx).payBase - 3), P(ctx).payMin, P(ctx).payMax));
   return { pubId, pubName: d?.pubName || base.publisherName || pubName(ctx, pubId), power: pub?.power ?? d?.power ?? base.publisherPower ?? 50, kind: 'tam', mode: 'bitmis', pay, adv: 0, buyout: 0, fund: 0,
-    rights: d?.rights || 'sende', promo: 0, expUnits: Math.round((d?.expUnits || 0) * k), paid: 0, owed: 0, dist: !!d?.dist, ms: 0, signed: ctx.state.week, hit: false, multi: false, due: ctx.state.week + 99, inherited: true };
+    rights: d?.rights || 'sende', promo: 0, expUnits: Math.round((d?.expUnits || 0) * k), paid: 0, owed: 0, dist: !!d?.dist, ms: 0, signed: ctx.state.week, hit: false, multi: false, due: ctx.state.week + 99, inherited: true,
+    region: pub?.region || d?.region || null, regions: d?.regions || null };
 }
 
 // ---------- Yayın: sözleşmeyi oyuna işle
@@ -634,7 +644,7 @@ export function forRelease(ctx, pj, publisherId, selfPower) {
     return { ok: true, pub: { id: pj.deal.pubId, name: pj.deal.pubName, power }, deal: pj.deal };
   }
   if (publisherId === 'kelepir') {
-    const sh = shadow(ctx, pj, B.bargain.power, trueEstimate(ctx, pj));
+    const sh = shadow(ctx, pj, { power: B.bargain.power }, trueEstimate(ctx, pj));
     const amt = Math.round(sh.life * sh.price * B.net * (B.payBase - B.payPowerK * B.bargain.power) / 100 * B.bargain.share);
     return { ok: true, pub: { id: 'kelepir', name: 'Kelepir Dağıtım', power: B.bargain.power }, deal: { pubId: 'kelepir', pubName: 'Kelepir Dağıtım', power: B.bargain.power, kind: 'tek', mode: 'bitmis', pay: 0, buyout: amt, paid: amt, owed: 0, bargain: true, expUnits: sh.life } };
   }
@@ -836,7 +846,7 @@ function genOrder(ctx) {
   const minScore = Math.round(clamp(O.scoreA + O.scoreK * pub.power, O.scoreMin, O.scoreMax));
   const fake = { platforms: [plat.id], size, genre, topic: topic[0], audience: pack.audiences[topic[3].indexOf(Math.max(...topic[3]))].id, regions: ['na', 'eu'], hype: 10, kind: 'oyun' };
   const pay = Math.round(clamp(basePay(ctx, pub), P(ctx).payMin, P(ctx).payMax));
-  const sh = shadow(ctx, fake, pub.power, minScore + 5, promoOf(ctx, pub, fake));
+  const sh = shadow(ctx, fake, pub, minScore + 5, promoOf(ctx, pub, fake));
   const adv = Math.round(sh.u12 * sh.price * P(ctx).net * pay / 100);
   const weeks = Math.round(sz.weeks * Math.max(1, 4 / Math.max(1, state.staff.length)) ** 0.5) + O.slackWeeks;
   s.offers.push({ id: state.nextId++, kind: 'siparis', pid: null, pubId: pub.id, pubName: pub.name, genre, topic: topic[0], topicName: topic[1], platform: plat.id, platformName: plat.name, size, audience: fake.audience,
@@ -1076,6 +1086,8 @@ export function wire(ctx) {
   bus.on('pubShow', (id) => joinShowcase(ctx, id));
   bus.on('pubMulti', (id) => acceptMulti(ctx, id));
   bus.on('pubFair', () => onFair(ctx));
+  bus.on('regRel', (x) => { const t = list(ctx).filter((p) => p.region[0] === x.rid).slice(0, 2); for (const p of t) refer(ctx, p.id, x.v, `${Regions.R(x.rid).name} fuarında standına uğradılar`); });
+  ctx.pubKnowsRegion = (rid) => list(ctx).some((p) => p.region[0] === rid && rel(ctx, p.id) >= P(ctx).rel.tiers[0]);
   bus.on('pubPrice', (a) => priceAnswer(ctx, a));
   bus.on('pubRel', (x) => relAdd(ctx, x.id, x.v, x.memo));
   bus.on('gameTop10', (g) => onTop10(ctx, g));

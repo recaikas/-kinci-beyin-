@@ -2,6 +2,8 @@
 // Kural: kod kural taşır, veri sayı taşır. Her blok _tag ile kaynağını söyler:
 //   V = doğrulanmış (PDF), L = sınırlı (oyuncu/rehber), P = bizim önerimiz / kalibrasyon.
 
+import { REGIONS, OWNER_BIAS } from './regions.js';
+
 export const PACK = {
   meta: {
     _tag: 'V/P',
@@ -175,6 +177,7 @@ export const PACK = {
     ['uzay', 'Uzay', [10, 9, 8, 9, 8, 7], [10, 10, 8], 1976],
     ['fantezi', 'Fantezi', [8, 10, 10, 6, 9, 7], [9, 9, 10], 1976],
     ['spor', 'Spor', [8, 6, 6, 10, 7, 10], [10, 10, 7], 1976],
+    ['futbol', 'Futbol', [7, 3, 4, 10, 9, 9], [10, 10, 7], 1976],
     ['yaris', 'Yarış', [10, 6, 6, 10, 6, 9], [10, 10, 8], 1976],
     ['zindan', 'Zindan', [9, 9, 10, 6, 8, 7], [8, 9, 10], 1976],
     ['korsan', 'Korsan', [9, 10, 8, 7, 8, 8], [10, 9, 8], 1976],
@@ -190,6 +193,7 @@ export const PACK = {
     ['tarih', 'Tarih', [7, 9, 9, 9, 10, 6], [7, 9, 10], 1982],
     ['muzik', 'Müzik', [7, 7, 6, 8, 6, 10], [10, 10, 7], 1983],
     ['kahraman', 'Süper Kahraman', [10, 8, 9, 6, 6, 8], [10, 10, 8], 1984],
+    ['okul', 'Okul Hayatı', [6, 9, 8, 7, 4, 9], [10, 8, 5], 1985],
     ['ofis', 'Ofis Hayatı', [6, 9, 7, 10, 7, 10], [7, 10, 9], 1985],
     ['zombi', 'Zombi', [10, 9, 8, 8, 8, 8], [9, 9, 10], 1985],
     ['siberpunk', 'Siberpunk', [10, 9, 10, 7, 8, 6], [8, 8, 10], 1986],
@@ -274,20 +278,10 @@ export const PACK = {
   // İngilizce sürüm Kuzey Amerika ve Avrupa'yı kapsar; Japonya ve Dünya için araştırma + yerelleştirme gerekir.
   regions: {
     _tag: 'P',
-    list: [
-      { id: 'na', name: 'Kuzey Amerika', short: 'K.Amerika', weight: [[1976, 0.55], [1990, 0.42], [2005, 0.38], [2025, 0.3]], pref: [1.2, 1.0, 0.9, 1.0, 0.85, 1.05], locCost: 0, base: true },
-      { id: 'eu', name: 'Avrupa', short: 'Avrupa', weight: [[1976, 0.3], [1990, 0.28], [2005, 0.3], [2025, 0.27]], pref: [1.0, 1.1, 0.9, 1.15, 1.25, 0.95], locCost: 0, base: true },
-      { id: 'jp', name: 'Japonya', short: 'Japonya', weight: [[1976, 0.15], [1990, 0.25], [2005, 0.17], [2025, 0.1]], pref: [0.9, 1.0, 1.45, 0.85, 0.8, 1.1], locCost: 9000, research: 'yerel_jp' },
-      { id: 'row', name: 'Dünya (Asya, Latin Amerika…)', short: 'Dünya', weight: [[1976, 0.0], [1990, 0.05], [2005, 0.15], [2025, 0.33]], pref: [1.1, 0.9, 1.0, 0.9, 0.95, 1.2], locCost: 7000, research: 'yerel_dunya' },
-    ],
-    // Platform sahibinin ya da türünün bölgelere göre gücü (ör. X-Kutu Japonya'da zayıf, bilgisayar Avrupa'da güçlü)
-    ownerBias: {
-      pandando: { na: 1.1, eu: 0.9, jp: 1.45, row: 0.9 }, segga: { na: 1.0, eu: 1.2, jp: 0.9, row: 1.3 }, soni: { na: 1.0, eu: 1.1, jp: 1.1, row: 1.0 },
-      mikroyumusak: { na: 1.35, eu: 1.0, jp: 0.3, row: 0.8 }, ataro: { na: 1.3, eu: 0.9, jp: 0.4, row: 0.8 }, hadson: { na: 0.6, eu: 0.5, jp: 1.8, row: 0.5 },
-      vana: { na: 1.1, eu: 1.1, jp: 0.6, row: 1.0 }, pc: { na: 1.0, eu: 1.3, jp: 0.6, row: 1.2 }, mobil: { na: 0.9, eu: 0.9, jp: 1.2, row: 1.4 },
-      sen: { na: 1.0, eu: 1.15, jp: 0.7, row: 1.0 },
-    },
-    norm: 1.0, // bütün bölgelerin ağırlıklı ortalaması ~1; yalnız İngilizce sürüm erken dönemde ~%85 satar
+    // Konu C: altı bölge ve tüm karakterleri data/regions.js'te
+    list: REGIONS.map((r) => ({ ...r, locCost: r.locBase })),
+    ownerBias: OWNER_BIAS,
+    norm: 1.0,
   },
 
   // Konsol savaşı (P): oyuncunun konsolu aynı segmentteki tarihsel platformlardan oyuncu çalar; rakipler tepki verir.
@@ -694,6 +688,7 @@ export const PACK = {
     { id: 'hw_tetik', name: 'Donanım: Adaptif tetik', rp: 160, cost: 6000000, weeks: 10, year: 2020, requires: 'hw_kablosuz', hw: true },
     { id: 'hw_oled', name: 'Donanım: OLED ekran', rp: 200, cost: 10000000, weeks: 12, year: 2021, requires: 'hw_hdekran', hw: true },
     { id: 'hw_yz', name: 'Donanım: Yapay zekâ hızlandırıcı', rp: 480, cost: 35000000, weeks: 22, year: 2024, requires: 'hw_soc', hw: true },
+    { id: 'ihracat', name: 'İhracat ve posta siparişi', rp: 8, cost: 3000, weeks: 2, year: 1977 },
     { id: 'yerel_jp', name: 'Japonca yerelleştirme', rp: 30, cost: 30000, weeks: 4, year: 1981 },
     { id: 'yerel_dunya', name: 'Dünya pazarları (çok dilli sürüm)', rp: 60, cost: 80000, weeks: 6, year: 1993 },
     { id: 'dlc', name: 'İndirilebilir içerik', rp: 60, cost: 80000, weeks: 6, year: 2005 },
