@@ -23,7 +23,7 @@ Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
 | Modeller | `src/models.js` | Üretim, değerlendirme (`T_d = H·D·τ·1,11^P`), satış (`zirve = B·Pz·Z·S(n)·…`) |
 | Sistemler | `src/systems/*.js` | Kadro, üretim, pazar, ekonomi, olaylar |
 | Oyun | `src/game.js` | Haftalık tik ve oyuncu eylemleri |
-| Arayüz | `src/ui/*.js`, `index.html` | Piksel ofis sahnesi ve paneller |
+| Arayüz | `src/ui/ui.js` (çekirdek: HUD, satış paneli, menü, olay dinleyicileri), `win_*.js` (pencere grupları), `dialogs.js`, `chart.js`, `util.js`, `render.js` (piksel sahne), `index.html` | Her pencere grubu ortak bağlam nesnesini alan bir fabrika |
 
 Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.random` yok; sistemler olay veriyoluyla haberleşir.
 
