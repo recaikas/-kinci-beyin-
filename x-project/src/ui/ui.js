@@ -19,14 +19,14 @@ const store = (fn) => { try { return fn(window.localStorage); } catch { return n
 const MENU = [['bilgisayar', 'Bilgisayar'], ['gunluk', 'Günlük']];
 const WIN_NAMES = { dunya: 'Oyun dünyası', bilgisayar: 'Bilgisayar', oda: 'Oda', insaat: 'Oda kur', reklam: 'Reklam ver', gelistir: 'Geliştir', personel: 'Personel', ofis: 'Ofis ve binalar', arge: 'Ar-Ge', pazar: 'Pazar', finans: 'Finans', gunluk: 'Günlük' };
 const ICON_OF = { oda: 'ofis', insaat: 'ofis', reklam: 'pazar', dunya: 'pazar' };
-const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Konsol']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']], finans: [['genel', 'Genel'], ['sirket', 'Şirket ve borsa']], dunya: [['yil', 'Bu yıl'], ['sirketler', 'Şirketler'], ['platformlar', 'Platformlar'], ['tarih', 'Tarih']] };
+const SUBS = { gelistir: [['oyun', 'Oyun'], ['sozlesme', 'Sözleşme']], arge: [['arastirma', 'Araştırma'], ['motor', 'Motor'], ['konsol', 'Donanım']], pazar: [['oyunlar', 'Oyunların'], ['liste', 'Satış listesi'], ['cikanlar', 'Son çıkanlar'], ['rakip', 'Rakipler']], finans: [['genel', 'Genel'], ['sirket', 'Şirket ve borsa']], dunya: [['yil', 'Bu yıl'], ['sirketler', 'Şirketler'], ['platformlar', 'Platformlar'], ['tarih', 'Tarih']] };
 // Liste sırası değişimi: ▲ yükseldi, ▼ düştü, YENİ ilk hafta.
 const move = (g) => (g.prev == null ? '<i class="new">YENİ</i>' : g.rank < g.prev ? `<i class="up">▲${g.prev - g.rank}</i>` : g.rank > g.prev ? `<i class="down">▼${g.rank - g.prev}</i>` : '<i>–</i>');
 
 export function boot(root, hotData = {}) {
   const app = {
     game: null, running: false, speed: 1, frame: 0, timer: null, win: null, sub: {}, wasRunning: false, wasRunningD: false, dialog: null,
-    draft: null, wiz: 1, engineSel: new Set(), engineName: 'Motor', consoleDraft: { name: 'X Kutu', type: 'konsol', cpu: '', media: '' },
+    draft: null, wiz: 1, engineSel: new Set(), engineName: 'Motor', consoleDraft: { type: 'konsol', series: 'yeni', seriesName: 'X Kutu', price: 'normal', parts: {} },
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
@@ -284,7 +284,8 @@ export function boot(root, hotData = {}) {
         ${tile('pazar', 'Satış listesi', 'liste')}
         ${tile('finans', 'Finans', '', money(s.cash))}
         ${tile('ofis', 'Ofis ve binalar', '', Eco.office(c).name)}
-        ${tile('arge', 'Motor ve konsol', 'motor')}
+        ${tile('arge', 'Donanım ve konsol', 'konsol', s.consoleJob ? 'yapım sürüyor' : `${(s.consoleSeries || []).length} aile`)}
+        ${tile('arge', 'Motor', 'motor')}
         ${tile('dunya', 'Oyun dünyası', 'yil', `${Math.floor(M.tableYear(c))} · ${s.rivals.length} şirket`)}
         ${tile('finans', 'Şirket ve borsa', 'sirket', Co.company(s).listed ? `hisse ${Co.company(s).price} $` : 'halka arz')}
       </div>`;
@@ -580,29 +581,65 @@ export function boot(root, hotData = {}) {
     }
     if (sub === 'konsol') return consoleView();
     const cur = s.research.current ? (() => { const it = PACK.research.find((r) => r.id === s.research.current.id); return `<section class="box hl"><h3>${esc(it.name)}</h3><p class="muted small">${s.research.current.weeksLeft} hafta kaldı</p></section>`; })() : '';
-    const av = Prod.researchAvailable(c).map((r) => {
+    const row = (r) => {
       const i = Prod.researchInfo(c, r), can = s.research.rp >= i.rp && !s.research.current;
-      return `<div class="row-item"><div><b>${esc(r.name)}</b><small>${i.rp} RP · ${i.weeks} hafta</small></div><button data-act="research" data-id="${r.id}" ${can ? '' : 'disabled'}>${money(i.cost)}</button></div>`;
-    }).join('');
+      return `<div class="row-item"><div><b>${esc(r.name.replace('Donanım: ', ''))}</b><small>${i.rp} RP · ${i.weeks} hafta</small></div><button data-act="research" data-id="${r.id}" ${can ? '' : 'disabled'}>${money(i.cost)}</button></div>`;
+    };
+    const all = Prod.researchAvailable(c), hw = all.filter((r) => r.hw), game = all.filter((r) => !r.hw);
+    const av = game.map(row).join('') + (hw.length ? `<h3 class="sub">Donanım (konsol bileşenleri)</h3>${hw.map(row).join('')}` : '');
     return `<div class="rp"><b class="num">${Math.floor(s.research.rp)}</b><span>araştırma puanı</span></div>${cur}
       <p class="muted small">Herkes üretiminin bir kısmını RP'ye çevirir; Araştırma odasındakiler çok daha fazla. RP kariyer seviyesine de harcanır.</p>${av || '<p class="muted">Şimdilik yeni bir şey yok. Yıllar geçtikçe açılır.</p>'}`;
   }
+  // ---------- DONANIM: tip, aile/nesil, dönemine göre bileşenler, fiyat stratejisi
+  function consoleDraft() {
+    const c = ctx(), d = app.consoleDraft;
+    d.parts ||= {}; d.series ||= 'yeni'; d.price ||= 'normal'; d.seriesName ??= 'X Kutu';
+    const pc = Con.consoleParts(c, d.type);
+    if (!pc.types.find((x) => x.t.id === d.type)?.ok) d.type = (pc.types.find((x) => x.ok) || pc.types[0]).t.id;
+    const parts = Con.consoleParts(c, d.type);
+    for (const [cat, list] of Object.entries(parts.cats)) {
+      const cur = list.find((x) => x.p.id === d.parts[cat]);
+      if (!cur || !cur.ok) { const ok = list.filter((x) => x.ok && !x.p.hwEng); d.parts[cat] = (ok[ok.length - 1] || list.find((x) => x.ok))?.p.id || ''; }
+    }
+    if (d.series !== 'yeni' && !(G().state.consoleSeries || []).some((x) => String(x.id) === String(d.series))) d.series = 'yeni';
+    return { d, parts };
+  }
   function consoleView() {
     const s = G().state, c = ctx(), cp = PACK.console;
-    const mine = s.consoles.filter((k) => k.launched).map((k) => `<div class="row-item"><div><b>${esc(k.name)}</b><small>Teknoloji ${k.tech} · ${fmt(k.sold)} adet · ${k.retired ? 'emekli' : k.ended ? 'üretim bitti' : 'piyasada'}</small></div></div>`).join('');
+    const typeName = (id) => Con.typeById(c, id)?.name || id;
+    const status = (k) => (k.retired ? 'emekli' : k.sunsetAt ? 'son dönem' : k.ended ? 'üretim bitti' : 'piyasada');
+    const series = (s.consoleSeries || []).map((sr) => {
+      const ks = s.consoles.filter((k) => k.seriesId === sr.id && k.launched);
+      return `<section class="box"><div class="head"><h3>${esc(sr.name)} ailesi</h3><span class="pill">${sr.gen} nesil · ${fmt(sr.sold || 0)} adet</span></div>
+        ${ks.map((k) => `<div class="row-item"><div><b>${esc(k.name)}</b><small>${esc(typeName(k.type))} · teknoloji ${k.tech} · ${Math.floor(k.launched)} · ${status(k)}</small><small>${fmt(k.sold)} satıldı · kurulu ${k.base.toFixed(2)} M oyuncu · gelir ${money(k.revenue || 0)}${k.lastWeek && !k.retired ? ` · bu hafta ${fmt(k.lastWeek)}` : ''}</small></div></div>`).join('') || '<p class="muted small">Henüz çıkan nesil yok.</p>'}</section>`;
+    }).join('');
+    const old = s.consoles.filter((k) => k.launched && !k.seriesId).map((k) => `<div class="row-item"><div><b>${esc(k.name)}</b><small>${esc(typeName(k.type))} · teknoloji ${k.tech} · ${fmt(k.sold)} adet · ${status(k)}</small></div></div>`).join('');
+    const soon = Con.upcomingParts(c).map((p) => `<span class="pill">${esc(p.name)} · ${p.year}</span>`).join(' ');
+    const lists = `${series}${old}${soon ? `<section class="box"><h3>Ufuktaki teknolojiler</h3><p class="btns">${soon}</p><p class="muted small">Yılı gelince Ar-Ge'de araştırılabilir.</p></section>` : ''}`;
     const job = s.consoles.find((k) => k.id === s.consoleJob);
-    if (job) return `<section class="box hl"><h3>${esc(job.name)} · ${cp.phases[job.phase]} (${job.phase + 1}/${cp.phases.length})</h3>${bar((job.points / job.need) * 100, 'prog')}<p class="muted small">${fmt(job.points)}/${fmt(job.need)} donanım puanı. Laboratuvardakiler üretir; mühendisler çok daha hızlı.</p></section>${mine}`;
+    if (job) return `<section class="box hl"><h3>${esc(job.name)} · ${typeName(job.type)} · ${cp.phases[job.phase]} (${job.phase + 1}/${cp.phases.length})</h3>${bar((job.points / job.need) * 100, 'prog')}
+      <p class="muted small">${fmt(job.points)}/${fmt(job.need)} donanım puanı. Laboratuvardakiler üretir; Donanım Mühendisleri ve donanım yeteneği yüksek olanlar çok daha hızlı.</p></section>${lists}`;
     const block = Con.consoleBlockers(c);
-    if (block.length) return `<p class="muted">Kendi konsolunu yapmak için eksikler:</p><ul class="todo">${block.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>${mine}`;
-    const parts = Con.consoleParts(c), d = app.consoleDraft;
-    if (!parts.cpus.some((x) => x.id === d.cpu)) d.cpu = parts.cpus[0]?.id || '';
-    if (!parts.media.some((x) => x.id === d.media)) d.media = parts.media[0]?.id || '';
+    if (block.length) return `<p class="muted">Kendi donanımını yapmak için eksikler:</p><ul class="todo">${block.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>${lists}`;
+    const { d, parts } = consoleDraft();
     const q = Con.consoleQuote(c, d);
-    const sel = (key, list) => `<select id="cn-${key}" data-con="${key}">${list.map((x) => `<option value="${x.id}" ${d[key] === x.id ? 'selected' : ''}>${x.name} · ${money(x.cost * cp.costScale)}</option>`).join('')}</select>`;
-    return `<div class="form"><label class="wide">Konsol adı<input id="cn-name" data-con="name" value="${esc(d.name)}" maxlength="24"></label>
-      <label>Tip${sel('type', parts.types)}</label><label>İşlemci${sel('cpu', parts.cpus)}</label><label class="wide">Medya${sel('media', parts.media)}</label></div>
-      ${q ? `<p class="muted small">Teknoloji ${q.tech} · aşama başına ${fmt(q.need)} donanım puanı. Yapım boyunca oyun çıkmazsa hayran kaybedersin. Yeni konsol eskisini emekli eder.</p>` : ''}
-      <div class="foot"><b class="num">${q ? money(q.cost) : ''}</b><button class="primary" data-act="console" ${q ? '' : 'disabled'}>Konsolu yap</button></div>${mine}`;
+    const tiles = parts.types.map(({ t, ok, why }) => `<button class="tile ${d.type === t.id ? 'on' : ''}" data-act="ctype" data-id="${t.id}" ${ok ? '' : 'disabled'}>${esc(t.name)}<small>${ok ? `${t.year}'den beri` : why}</small></button>`).join('');
+    const famOpts = `<option value="yeni" ${d.series === 'yeni' ? 'selected' : ''}>Yeni aile</option>${(s.consoleSeries || []).map((sr) => `<option value="${sr.id}" ${String(d.series) === String(sr.id) ? 'selected' : ''}>${esc(sr.name)} · ${sr.gen + 1}. nesil</option>`).join('')}`;
+    const sel = (cat, list) => `<label>${esc(cp.parts[cat].name)}<select id="cp-${cat}" data-cpart="${cat}">${list.map(({ p, ok, why }) => `<option value="${p.id}" ${d.parts[cat] === p.id ? 'selected' : ''} ${ok ? '' : 'disabled'}>${esc(p.name)}${ok ? `${p.tech != null && cp.parts[cat].w ? ` · tek ${p.tech}` : ''} · ${money(p.cost * cp.costScale)}` : ` (${why})`}</option>`).join('')}</select></label>`;
+    const gfit = q && !q.issues.length ? PACK.genres.map((g, i) => `<span class="pill ${q.genre[i] >= 10 ? '' : q.genre[i] <= 7 ? 'warn' : ''}">${g.name} ${q.genre[i]}</span>`).join(' ') : '';
+    const summary = q && !q.issues.length ? `<section class="box hl"><h3>${esc(q.name)} <small class="muted">${q.gen}. nesil · ${esc(typeName(d.type))}</small></h3>
+        <div class="kv"><span>Teknoloji</span><b class="num">${q.tech} <small class="muted">dönem beklentisi ${q.expected} · kalite ×${q.quality.toFixed(2)}</small></b>
+        <span>Yapım maliyeti</span><b class="num">${money(q.cost)}</b><span>İş yükü</span><b class="num">${cp.phases.length} × ${fmt(q.need)} puan</b>
+        <span>Adet başı kâr</span><b class="num ${q.margin < 0 ? 'neg' : ''}">${money(q.margin)}</b><span>Çekicilik</span><b class="num">×${q.appeal.toFixed(2)}</b><span>Korsan riski</span><b class="num">%${Math.round(q.piracy * 100)}</b></div>
+        <p class="small">Türlere uyum: ${gfit}</p></section>` : q ? `<p class="neg small">${q.issues.map(esc).join(' · ')}</p>` : '';
+    return `<p class="muted small">Tip, aile ve bileşenleri seç. Bileşenler yıllar geçtikçe değişir (kartuş → kaset/disket → CD → DVD → Blu-ray → dijital → bulut) ve Ar-Ge'de "Donanım:" araştırmalarıyla açılır. Aynı ailenin yeni nesli eskisinin ününü taşır; eski nesil bir yıl daha satılır.</p>
+      <h3 class="sub">Cihaz tipi</h3><div class="tiles">${tiles}</div>
+      <div class="form"><label>Aile<select id="cn-series" data-con="series">${famOpts}</select></label>
+        ${d.series === 'yeni' ? `<label>Aile adı<input id="cn-sname" data-con="seriesName" value="${esc(d.seriesName)}" maxlength="22"></label>` : ''}
+        ${Object.entries(parts.cats).map(([cat, list]) => sel(cat, list)).join('')}
+        <label>Fiyat stratejisi<select id="cn-price" data-con="price">${cp.prices.map((p) => `<option value="${p.id}" ${d.price === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label></div>
+      ${summary}
+      <div class="foot"><span class="muted small">Zararına satış kurulu tabanı büyütür (daha çok lisans geliri), premium az satar ama kârlıdır.</span><button class="primary" data-act="console" ${q && !q.issues.length ? '' : 'disabled'}>Üretime başla</button></div>${lists}`;
   }
 
   // ---------- GRAFİKLER: tek seri, ortak bir y ekseni, üzerine gelince çizgi + değer (kayıtlı veri app.charts'ta)
@@ -943,7 +980,8 @@ export function boot(root, hotData = {}) {
       case 'research': return run(g.startResearch(id));
       case 'engine': { const r = g.buildEngine(app.engineName || 'Motor', [...app.engineSel]); if (r.ok) app.engineSel.clear(); return run(r); }
       case 'licence': return run(g.toggleLicence(+id));
-      case 'console': return run(g.startConsole({ ...app.consoleDraft }));
+      case 'console': { const r = g.startConsole({ ...app.consoleDraft, parts: { ...app.consoleDraft.parts } }); if (r.ok) app.consoleDraft.series = String(r.console.seriesId); return run(r); }
+      case 'ctype': app.consoleDraft.type = id; return renderWindow();
       case 'loan': return run(g.takeLoan(+id));
       case 'acquire': return run(g.acquireRival(+id));
       case 'vacation': return run(g.sendVacation(+id));
@@ -961,7 +999,8 @@ export function boot(root, hotData = {}) {
     if (t.dataset.plat) { const set = new Set(app.draft.platforms); t.checked ? set.add(t.dataset.plat) : set.delete(t.dataset.plat); app.draft.platforms = [...set]; return; }
     if (t.dataset.feat) { t.checked ? app.engineSel.add(t.dataset.feat) : app.engineSel.delete(t.dataset.feat); return; }
     if (t.dataset.eng) { app.engineName = t.value; return; }
-    if (t.dataset.con) { app.consoleDraft[t.dataset.con] = t.value; if (t.dataset.con !== 'name') { t.blur(); renderWindow(); } return; }
+    if (t.dataset.con) { app.consoleDraft[t.dataset.con] = t.value; if (t.dataset.con !== 'seriesName') { t.blur(); renderWindow(); } return; }
+    if (t.dataset.cpart) { app.consoleDraft.parts[t.dataset.cpart] = t.value; t.blur(); return renderWindow(); }
     const id = +t.dataset.id;
     if (t.dataset.act === 'move') { t.blur(); return run(g.moveStaff(id, +t.value)); }
     if (t.dataset.act === 'mode') { t.blur(); return run(g.setRoomMode(id, t.value)); }
@@ -973,7 +1012,7 @@ export function boot(root, hotData = {}) {
     const t = e.target;
     if (t.dataset.alloc !== undefined) { G().setAlloc(app.dlgPid, +t.dataset.alloc, +t.value); updatePhasePct(); }
     if (t.dataset.draft === 'name') app.draft.name = t.value;
-    if (t.dataset.con === 'name') app.consoleDraft.name = t.value;
+    if (t.dataset.con === 'seriesName') app.consoleDraft.seriesName = t.value;
   });
   document.addEventListener('keydown', (e) => {
     if (!G()) return;

@@ -156,7 +156,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Grafik stüdyosu faz 1’de bile grafik üretir', pj.points.gfx > gfx0);
 }
 
-// 15) Özel konsol: engeller, yapım ve çıkış
+// 15) Özel donanım: engeller, dönemsel parçalar, aileler ve nesiller, salon jetonu
 {
   const g = newGame({ seed: 9, difficulty: 'kolay' });
   const st = g.state, ctx = g.ctx;
@@ -164,15 +164,50 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Konsol engelleri listelenir', Con.consoleBlockers(ctx).length === 3);
   st.cash = 1e9; st.office.tier = 3; st.research.done.donanim_lab = 1;
   g.buildRoom('donanim');
-  // Rastgele olaylar mühendisi götürmesin diye kurucu gibi işaretlenir (istifa/transfer/kovulma dışı).
   const eng = Staff.makePerson(ctx, { career: 'donanimci', level: 3, skill: 80 }); eng.room = st.rooms[1].id; eng.founder = true; st.staff.push(eng);
-  const res = g.startConsole({ name: 'Piksel Kutu', type: 'konsol', cpu: 'b32', media: 'cd' });
+  check('En az 8 donanım tipi', PACK.console.types.length >= 8, PACK.console.types.map((t) => t.name).join(', '));
+  const names = (cat, t = 'konsol') => Con.consoleParts(ctx, t).cats[cat].filter((x) => x.ok).map((x) => x.p.id);
+  check('1995: kartuş var, CD araştırmasız kapalı, DVD yok', names('media').includes('kartus') && !names('media').includes('cd') && !names('media').includes('dvd'));
+  st.research.done.hw_cd = 1; st.research.done.hw_32bit = 1;
+  check('Araştırma CD-ROM ve 32-bit açar', names('media').includes('cd') && names('cpu').includes('c_32'));
+  check('El konsolu araştırmasız kapalı', !Con.typeStatus(ctx, Con.typeById(ctx, 'tasinabilir')).ok);
+  const d = { type: 'konsol', series: 'yeni', seriesName: 'Piksel Kutu', price: 'normal', parts: { cpu: 'c_32', gpu: 'g_karakter', media: 'cd', ctrl: 'k_joy', net: 'n_yok' } };
+  const q = Con.consoleQuote(ctx, d);
+  check('Teklif: teknoloji ve maliyet hesaplanır', q && !q.issues.length && q.tech > 1 && q.cost > 0, q && `tech ${q.tech} · ${q.cost}`);
+  const res = g.startConsole(d);
   check('Konsol yapımı başlar', res.ok, res.msg || '');
-  for (let i = 0; i < 400 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
+  for (let i = 0; i < 600 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
   const k = st.consoles[0];
   check('Konsol piyasaya çıkar', !!k.launched, `${k.phase}/${PACK.console.phases.length}`);
   for (let i = 0; i < 20; i++) { while (st.pending.length) g.resolve(0); g.tick(); }
   check('Konsol satar ve platform olur', k.sold > 0 && M.activePlatforms(ctx).some((p) => p.id === k.id), k.sold.toLocaleString());
+  const sr = st.consoleSeries[0];
+  const d2 = { ...d, series: sr.id };
+  check('Sonraki nesil "Piksel Kutu 2" adını alır', Con.consoleQuote(ctx, d2).name === 'Piksel Kutu 2');
+  st.cash = 1e9; g.startConsole(d2);
+  for (let i = 0; i < 600 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); st.cash = 1e9; g.tick(); }
+  const k2 = st.consoles[1];
+  check('İkinci nesil çıkar, eskisi son dönemine girer', !!k2.launched && k.sunsetAt > 0 && !k.retired);
+  check('Seri ünü yeni nesli destekler', Con.seriesBoost(ctx, k2) > 1, Con.seriesBoost(ctx, k2).toFixed(2));
+  for (let i = 0; i < PACK.console.overlapWeeks + 2; i++) { while (st.pending.length) g.resolve(0); st.cash = 1e9; g.tick(); }
+  check('Eski nesil sonunda emekli olur', !!k.retired);
+}
+// 15b) Salon makinesi (1980): jeton geliri; 1980'de CD/3D yok
+{
+  const g = newGame({ seed: 10, difficulty: 'kolay' });
+  const st = g.state, ctx = g.ctx;
+  st.week = Math.round((1980.2 - 1976) * 48 * st.lengthMult);
+  st.cash = 1e9; st.office.tier = 3; st.research.done.donanim_lab = 1; g.buildRoom('donanim');
+  const p = Staff.makePerson(ctx, { skill: 70 }); p.skills.donanim = 90; p.founder = true; p.room = st.rooms[1].id; st.staff.push(p);
+  check('Donanım yeteneği yüksek çalışan yeterli', Con.consoleBlockers(ctx).length === 0);
+  const parts = Con.consoleParts(ctx, 'salon');
+  check('1980 salon: CD ve 3D seçilemez', !parts.cats.media.some((x) => x.ok && x.p.id === 'cd') && !parts.cats.gpu.some((x) => x.ok && x.p.id === 'g_3d'));
+  const r = g.startConsole({ type: 'salon', series: 'yeni', seriesName: 'Jeton Canavarı', price: 'normal', parts: { cpu: 'c_8', gpu: 'g_sprite', media: 'kartus', ctrl: 'k_joy' } });
+  check('Salon makinesi yapımı başlar', r.ok, r.msg || '');
+  for (let i = 0; i < 600 && st.consoleJob; i++) { while (st.pending.length) g.resolve(0); st.cash = 1e9; g.tick(); }
+  const before = st.ledger.total.jeton || 0;
+  for (let i = 0; i < 16; i++) { while (st.pending.length) g.resolve(0); st.cash = 1e9; g.tick(); }
+  check('Salon makineleri jeton geliri getirir', (st.ledger.total.jeton || 0) > before, Math.round(st.ledger.total.jeton || 0) + ' $');
 }
 
 // 16) Çoklu proje (MGT): her geliştirme odası kendi oyununu yapar

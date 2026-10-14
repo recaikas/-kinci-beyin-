@@ -8,7 +8,7 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 
 ```bash
 node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 138 kalibrasyon ve tutarlılık kontrolü
+node test/validate.mjs      # 151 kalibrasyon ve tutarlılık kontrolü
 ```
 
 Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
@@ -45,7 +45,9 @@ Alt menüde yalnızca **Bilgisayar** ve **Günlük** var. Yeni oyun, ek iş, per
 - **Odalar (MGT2)**: geliştirme, grafik ve ses stüdyosu, kalite güvence, araştırma, mola, donanım laboratuvarı. Koltuklar odalardan gelir; geliştirme odası oyun yokken sözleşme yapar
 - **Kariyerler (Game Dev Story)**: 8 kariyer × 5 seviye, RP ile seviye, ön koşullu ileri kariyerler (Yönetmen, Yapımcı, Donanım Mühendisi, Hacker), seviye başına maaş ×1,2
 - **Dış kaynak**: 20 dış çalışan, ücret arttıkça getirisi azalan kalite eğrisi
-- **Kendi konsolun**: tip, işlemci ve medya seç; iki aşamada üret, piyasaya çıkar, donanım ve lisans geliri topla. Yeni konsol eskisini emekli eder
+- **Kendi donanımın**: 8 cihaz tipi (salon makinesi/arcade, ev bilgisayarı, ev konsolu, el konsolu, VR başlığı, melez konsol, retro mini, bulut servisi), her biri kendi dönemiyle ve yıllara göre değişen pazar ilgisiyle (arcade 80'lerde zirve, sonra söner)
+- **Dönemsel bileşenler**: işlemci (TTL → 8-bit → 16-bit → 32-bit RISC → 64-bit → 128-bit → çok çekirdekli → APU → SoC), grafik (karakter jeneratörü → sprite → 3D → gölgelendirici → HD → 4K → ışın izleme), oyun ortamı (kartuş → kaset → disket → CD-ROM → DVD → Blu-ray → dijital → bulut akışı), ekran, kontrol (joystick → d-pad → analog → hareket algılama → adaptif tetik), bağlantı (modem → çevrimiçi → dijital mağaza → abonelik). 48 "Donanım:" araştırmasıyla açılır; her parça teknoloji, tür uyumu, çekicilik, kâr ve korsan riskini değiştirir
+- **Konsol aileleri ve nesiller**: "X Kutu", "X Kutu 2", "X Kutu 3"… Önceki nesillerin satışı yeni nesli destekler, geriye uyumluluk kurulu tabanı taşır, eski nesil bir yıl daha satılıp emekli olur. Fiyat stratejisi: zararına sat / normal / premium. Salon makineleri jeton, bulut servisi abonelik geliri getirir
 - **Çoklu proje (MGT)**: her geliştirme odası kendi oyununu yapar; bir oda "Destek" moduyla başka projeye katılabilir. Uzman odalar ve QA projelere bölünür
 - **Oyun raporu ve bilgi (GDT)**: her yayından sonra konu×tür, konu×kitle, platform×tür uyumu ve zaman dağılımı dersleri; sihirbazda rozet olarak görünür
 - **Yayın sonrası**: güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket

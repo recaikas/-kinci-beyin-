@@ -214,8 +214,8 @@ export function S(ctx, n) {
 export function ownPlatforms(ctx) {
   const c = ctx.pack.console;
   return (ctx.state.consoles || []).filter((k) => k.launched).map((k) => {
-    const type = c.types.find((t) => t.id === k.type);
-    return { id: k.id, name: k.name, from: k.launched, to: k.retired || 2200, tech: k.tech, genre: type.genre, aud: type.aud, licence: 0, devCost: c.ownDevCost, own: true };
+    const type = c.types.find((t) => t.id === k.type) || c.types.find((t) => t.id === 'konsol');
+    return { id: k.id, name: k.name, kind: type.kind, from: k.launched, to: k.retired || 2200, tech: Math.min(7, Math.round(k.tech)), genre: k.genre || type.genre, aud: k.aud || type.aud, licence: 0, devCost: c.ownDevCost, own: true };
   });
 }
 export const allPlatforms = (ctx) => ctx.pack.platforms.concat(ownPlatforms(ctx));
