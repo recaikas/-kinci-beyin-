@@ -48,7 +48,7 @@ export function make(u) {
       const pv = g.previewReview(pj.id);
       return `<button class="pcard ${pj.status === 'debug' ? 'ready' : ''}" data-act="sel" data-id="${pj.id}">
         <span class="top"><b>${esc(pj.name)}</b>${pj.kind === 'ek' ? '<span class="pill">Ek paket</span>' : ''}<span class="num score">${Math.round(pv.score)}</span></span>
-        <small class="muted">${PACK.genres.find((x) => x.id === pj.genre).name} · ${PACK.topics.find((t) => t[0] === pj.topic)[1]} · ${room ? Staff.roomType(c, room.type).name + ' #' + room.id : 'odasız'}${helpers ? ` + ${helpers} destek odası` : ''}</small>
+        <small class="muted">${PACK.genres.find((x) => x.id === pj.genre).name} · ${PACK.topics.find((t) => t[0] === pj.topic)[1]} · ${pj.ext ? `${esc(pj.ext.studio)} teslim etti` : room ? Staff.roomType(c, room.type).name + ' #' + room.id : 'odasız'}${helpers ? ` + ${helpers} destek odası` : ''}</small>
         ${bar(v, 'prog')}<small>${pj.status === 'dev' ? `${PACK.production.phaseNames[pj.phase]} · ${pj.week}/${pj.totalWeeks} hf` : `Yayına hazır · ${fmt(pj.bugs)} hata`}</small></button>`;
     }).join('');
     const why = free.length ? '' : '<p class="muted small">Boş geliştirme odası yok. Ofis penceresinden yeni bir geliştirme odası kur; ya da bir odayı başka projeye destek olarak çalıştır.</p>';

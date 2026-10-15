@@ -304,6 +304,34 @@ export const PACK = {
     dealCost: 600000, dealMult: 1.35, dealWeeks: 30, dealThirdParty: 3, dealCooldown: 48,
   },
 
+  // Konu G: platform payı, özel oyun anlaşmaları, hisse kademeleri, bağlı stüdyolar, tekelin bedeli (P).
+  platform: {
+    _tag: 'P',
+    rateMin: 0.15, rateMax: 0.4, rateStd: 0.3, attractK: 3, attractMin: 0.4, attractMax: 1.5, // oran ↓ → stüdyo çekiciliği ↑
+    cartMedia: ['kartus', 'oyunkarti'], cartAttract: 0.15, cartFee: 4, // kartuş tekeli: adet başı basım ücreti (1976 $)
+    tpUnits: 7000, tpDecay: 0.85, tpWeeks: 26, tpBigK: 3, tpBaseRef: 5, priceRef: 20, // başka stüdyo oyununun konsolundaki satışı
+    deal: {
+      base: 600000, scoreRef: 70, scoreExp: 3, shareK: 1.6, seatDiscount: 0.25, offers: 6, horizon: 1, rivalOffers: 3,
+      types: {
+        pazarlama: { name: 'Pazarlama', k: 0.25, mult: 1.08, weeks: 12, tp: 1, heat: 0, rel: 5 },
+        sureli: { name: 'Süreli özel', k: 1, mult: 1.25, weeks: 30, tp: 3, heat: 3, rel: 10, scale: true },
+        tam: { name: 'Tam özel', k: 2.2, mult: 1.4, weeks: 48, tp: 5, heat: 6, rel: 15, scale: true, steal: 0.5 },
+        ikinci: { name: 'İkinci parti', k: 4, mult: 1.4, weeks: 48, tp: 5, heat: 6, rel: 25, scale: true, steal: 0.5, partner: { mult: 1.1, weeks: 20 } },
+      },
+      counterK: 0.35, counterRaise: 0.4, withdrawRefund: 0.9, flopShare: 0.05, flopRefund: 0.5,
+    },
+    stake: {
+      tiers: [10, 25, 51, 100], friendly: 1.1, hostile: 1.35, control: 0.2, sellK: 0.9, maxControlled: 5, dividendK: 0.3, seatRel: 10,
+      autonomyStart: 70, orderAutonomy: -12, policyAutonomy: -1, recover: 1, boostAutonomy: 1, quitBelow: 30, quitChance: 0.05, quitRep: 10,
+      boostCost: 150000, policyProfit: 0.75, policyMod: { mult: 1.06, weeks: 16 }, exitDiscount: 0.7,
+      orderBase: 200000, orderWeeksK: 1.3, budgets: { dusuk: { name: 'Düşük', cost: 0.6, q: 0.85 }, normal: { name: 'Normal', cost: 1, q: 1 }, yuksek: { name: 'Yüksek', cost: 1.6, q: 1.12 } },
+      mergeStaff: 3, mergeFansPerRep: 100,
+    },
+    antitrust: { shareAt: 0.4, controlledAt: 4, chance: 0.03, cooldownYears: 3, finePct: 0.04, sellK: 0.7, rel: -10 },
+    heat: { shareK: 60, perDeal: 5, perSub: 4, rateAt: 0.35, rate: 10, smooth: 0.2, fansAt: 50, fansK: 0.003 },
+    boycott: { rateAt: 0.35, chance: 0.05, attract: 0.3, weeks: 48 },
+  },
+
   // Modern dönem iş modelleri (P).
   modern: {
     _tag: 'P',

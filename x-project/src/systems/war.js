@@ -4,6 +4,7 @@
 import { clamp } from '../kernel.js';
 import { tableYear, inflation, segmentOf, platformBaseRaw, ownPlatforms } from '../models.js';
 import { companyById, companyRep } from './world.js';
+import * as Platform from './platform.js';
 
 const W = (ctx) => ctx.pack.war;
 const liveOwn = (state) => (state.consoles || []).filter((k) => k.launched && !k.retired);
@@ -70,24 +71,24 @@ export function monthlyWar(ctx) {
         for (const r of w.rivals.filter((x) => x.owner === owner)) (state.platformEnd ||= {})[r.id] = Math.min(y + 0.5, ctx.pack.platforms.find((p) => p.id === r.id).to);
         for (const k of liveOwn(state).filter((x) => segmentOf({ kind: ctx.pack.console.types.find((t) => t.id === x.type)?.kind }) === seg)) k.thirdParty = (k.thirdParty || 0) + 5;
         ctx.news(`🏳️ ${co.name} konsol savaşını kaybetti ve donanımdan çekiliyor. Artık senin konsoluna da oyun yapacak!`, 'tarih');
+        ctx.bus.fire('hwExit', co); // Konu G: stüdyoları satılık
         break;
       }
     }
   }
 }
 
-// Bir rakip oyun çıktığında: payın kadar olasılıkla senin konsoluna da gelir (lisans ücreti + kütüphane).
+// Bir rakip oyun çıktığında: payın ve platform oranının çekiciliği kadar olasılıkla senin konsoluna da gelir (Konu G: satıştan yüzde).
 export function thirdPartyRelease(ctx, studioName, gameName, big = false) {
-  const { state, rng, ledger } = ctx;
+  const { state, rng } = ctx;
   const c = W(ctx);
   const war = state.war || {};
   for (const k of liveOwn(state)) {
     const seg = segmentOf({ kind: ctx.pack.console.types.find((t) => t.id === k.type)?.kind });
     const share = war[seg]?.share || 0;
-    if (!share || (k.thirdParty || 0) >= c.thirdPartyCap || !rng.chance(clamp(share * c.thirdPartyK, 0, 0.9))) continue;
+    if (!share || (k.thirdParty || 0) >= c.thirdPartyCap || !rng.chance(clamp(share * c.thirdPartyK * Platform.attract(ctx), 0, 0.9))) continue;
     k.thirdParty = (k.thirdParty || 0) + 1;
-    const fee = Math.round(c.thirdPartyFee * (big ? 3 : 1) * inflation(ctx) ** 0.5);
-    ledger.post('konsol_lisans', fee, `${gameName} (${studioName})`);
+    Platform.tpRelease(ctx, k, studioName, gameName, big);
     if (big) ctx.news(`🎮 ${studioName}, "${gameName}" oyununu ${k.name} için de çıkardı.`, 'good');
   }
 }

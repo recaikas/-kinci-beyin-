@@ -210,7 +210,7 @@ export function monthlyConsole(ctx) {
       k.active *= 1 - (t.churn || 0);
       k.base = k.active * (t.players || 1) / 1e6;
     }
-    if (k.base > 0) ledger.post('konsol_lisans', Math.round(k.base * c.licencePerMillion * (1 - (k.piracy || 0)) * infl), `${k.name} lisansları`);
+    if (k.base > 0) ledger.post('konsol_lisans', Math.round(k.base * c.licencePerMillion * (1 - (k.piracy || 0)) * infl * (ctx.state.plat ? ctx.state.plat.rate / ctx.pack.platform.rateStd : 1)), `${k.name} lisansları`); // Konu G: platform oranıyla
   }
 }
 

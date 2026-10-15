@@ -973,7 +973,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const cats = () => Menu.openCats(g.ctx, g.state).map((k) => k.id).join();
   Menu.check(g);
   check('1976\'da Tanıtım ve Pazar saklı', cats() === 'is,ekip,arge,sirket,sistem', cats());
-  check('7 başlık, 31 seçenek', Menu.CATS.length === 7 && Menu.ITEMS.length === 31, String(Menu.ITEMS.length));
+  check('7 başlık, 34 seçenek', Menu.CATS.length === 7 && Menu.ITEMS.length === 34, String(Menu.ITEMS.length));
   check('Her seçenek var olan bir pencereye ve sekmeye gider', Menu.ITEMS.every((it) => WIN_NAMES[it.win] && (!it.sub || (SUBS[it.win] || []).some(([k]) => k === it.sub))));
   check('Kapalı seçeneğin ipucu var', Menu.ITEMS.filter((it) => !it.open(g.ctx, g.state)).every((it) => it.hint));
   check('Pazar sekmesinde Yayıncılar ilk oyuna kadar saklı', !Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar') && Menu.tabVisible(g.ctx, g.state, 'gelistir', 'sozlesme'));
@@ -985,6 +985,124 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   Menu.check(g);
   check('İlk oyundan sonra Pazar açılır', cats().includes('pazar') && Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar'));
   check('Görülen kayıtla taşınır', JSON.parse(g.save()).ui.known.teknoloji > 0);
+}
+
+// 37) Konu G: platform payı, özel anlaşmalar, hisseler, tekel
+{
+  const Pl = await import('../src/systems/platform.js');
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const mk = (y = 1995, media = 'kartus') => {
+    const g = rawNewGame({ seed: 70, difficulty: 'kolay', length: 50 });
+    g.state.week = Math.round((y - 1976) * 48 * g.state.lengthMult); g.state.cash = 5e8;
+    const k = { id: 'own900', name: 'Test Kutu', type: 'konsol', kind: 'konsol', parts: { media }, tech: 4, launched: y - 1, retired: null, base: 5, active: 5e6, sold: 5e6, weeks: 50, thirdParty: 0, revenue: 0, price: 'normal' };
+    g.state.consoles.push(k);
+    g.state.war = { konsol: { own: 5, hist: 20, share: 0.2, rivals: [{ id: 'oi1', name: 'Oyunİstasyonu', owner: 'soni', base: 20 }] } };
+    return { g, k, c: g.ctx };
+  };
+  const { g, k, c } = mk();
+  const st = g.state;
+  st.plat.rate = 0.15; const a15 = Pl.attract(c); st.plat.rate = 0.4; const a40 = Pl.attract(c); st.plat.rate = 0.3;
+  check('Platform oranı: düşük oran stüdyo çeker', a15 > 1.3 && a40 < 0.8 && Math.abs(Pl.attract(c) - 1) < 1e-9, `${a15.toFixed(2)} / ${a40.toFixed(2)}`);
+  g.toggleCart(); check('Kartuş tekeli çekiciliği düşürür', st.plat.cart && Pl.attract(c) < 1);
+  g.toggleCart();
+  const { g: gcd } = mk(1995, 'cd');
+  check('Kartuş tekeli yalnız kartuşlu konsolda', !gcd.toggleCart().ok);
+  // Başka stüdyo oyunundan yüzde
+  Pl.tpRelease(c, k, 'Namko', 'Test Oyunu', true);
+  const r0 = st.ledger.total.platform_payi || 0;
+  Pl.weekly(c);
+  const r1 = st.ledger.total.platform_payi || 0;
+  st.plat.rate = 0.4; Pl.weekly(c); const r2 = (st.ledger.total.platform_payi || 0) - r1;
+  check('Başka stüdyonun satışından oran kadar pay', r1 > r0 && st.plat.tp[0].sold > 0 && r2 > (r1 - r0) * 0.85 * (0.4 / 0.3) * 0.95, `${Math.round(r1 - r0)} → ${Math.round(r2)}`);
+  st.plat.rate = 0.3;
+  // Teklifler ve fiyatlar
+  st.plat.offerWeek = -99; Pl.weekly(c);
+  const offers = Pl.offers(c);
+  check('Özel anlaşma teklifleri gelir, donanım devlerinin oyunu yok', offers.length > 0 && offers.every((o) => !(o.cid && ['soni', 'pandando', 'segga', 'mikroyumusak', 'ataro'].includes(o.cid))), String(offers.length));
+  const o = offers[0];
+  const pr = ['pazarlama', 'sureli', 'tam', 'ikinci'].map((t) => Pl.dealPrice(c, o, t, k));
+  check('Anlaşma fiyatları: pazarlama < süreli < tam < ikinci parti', pr[0] < pr[1] && pr[1] < pr[2] && pr[2] < pr[3], pr.join(' < '));
+  st.war.konsol.share = 0.05; const weak = Pl.dealPrice(c, o, 'sureli', k); st.war.konsol.share = 0.2;
+  check('Konsol zayıfsa daha çok para isterler', weak > pr[1]);
+  // İmza ve çıkış
+  const cash0 = st.cash, sd = g.signDeal(o.id, 'sureli', k.id);
+  st.pending = [];
+  const d = sd.deal;
+  if (d?.counter) g.ctx.bus.fire('plat', { kind: 'counter', id: d.id, raise: true });
+  check('Anlaşma imzalanır ve bedel kesilir', sd.ok && st.cash < cash0 && st.plat.deals.length === 1);
+  const tp0 = k.thirdParty, mods0 = (st.consoleMods || []).length;
+  g.ctx.bus.fire('companyRelease', { cid: o.cid, rid: o.rid, studio: o.studio, name: o.src === 'hit' ? o.name : 'X', score: 85, game: { peak: 100, lastWeek: 10 } });
+  check('Oyun çıkınca konsolu iter ve kütüphaneye girer', d.done && !d.broken && k.thirdParty > tp0 && st.consoleMods.length > mods0 && st.consoleMods.at(-1).mult > 1.25);
+  // Karşı teklif: çekilmek paranın %90'ını geri verir
+  st.plat.offerWeek = -99; Pl.weekly(c);
+  const o2 = Pl.offers(c)[0], s2 = g.signDeal(o2.id, 'tam', k.id); st.pending = [];
+  s2.deal.counter = { who: 'Soni', extra: 1000 };
+  const c2 = st.cash; g.ctx.bus.fire('plat', { kind: 'counter', id: s2.deal.id, raise: false });
+  check('Karşı teklifte çekilmek: %90 iade', s2.deal.lost && Math.abs(st.cash - c2 - s2.deal.price * 0.9) < 2);
+  // Konsol çakarsa tam özel bozulur
+  st.plat.offerWeek = -99; Pl.weekly(c);
+  const o3 = Pl.offers(c)[0], s3 = g.signDeal(o3.id, 'tam', k.id); st.pending = []; if (s3.deal.counter) s3.deal.counter = null;
+  st.war.konsol.share = 0.01;
+  const c3 = st.cash; g.ctx.bus.fire('companyRelease', { cid: o3.cid, rid: o3.rid, studio: o3.studio, name: o3.src === 'hit' ? o3.name : 'Y', score: 80 });
+  check('Konsol çakarsa şirket anlaşmayı bozar, yarısını iade eder', s3.deal.broken && Math.abs(st.cash - c3 - s3.deal.price * 0.5) < 2);
+  st.war.konsol.share = 0.2;
+  // Hisseler
+  const rv = st.rivals.filter((r) => !r.hw).sort((a, b) => b.rep - a.rep)[0];
+  const p10 = Pl.stakePrice(c, rv, 10), p51 = Pl.stakePrice(c, rv, 51);
+  st.coRel[rv.cid || `r${rv.id}`] = -50; const hostile = Pl.stakePrice(c, rv, 10); st.coRel[rv.cid || `r${rv.id}`] = 0;
+  check('Hisse fiyatı: düşmanca daha pahalı, %51 kontrol primi', hostile > p10 && p51 / 51 > p10 / 10 * 1.1);
+  check('Donanım devinin hissesi satılmaz', !g.buyStake(st.rivals.find((r) => r.hw).id, 10).ok);
+  g.buyStake(rv.id, 10); const div0 = st.ledger.total.temettu || 0; Pl.monthly(c);
+  check('%10: temettü', rv.stake === 10 && (st.ledger.total.temettu || 0) > div0);
+  g.buyStake(rv.id, 25);
+  check('%25: koltuk, ilişki artar, anlaşmada %25 indirim', rv.stake === 25 && Pl.relOf(c, rv) >= 10 && Pl.dealPrice(c, { E: 80, rid: rv.id, cid: rv.cid }, 'sureli', k) < Pl.dealPrice(c, { E: 80, cid: 'yokboyle' }, 'sureli', k));
+  g.buyStake(rv.id, 51);
+  check('%51: kontrol, bağlı stüdyo', rv.acquired && rv.stake === 51 && Pl.controlled(c).includes(rv) && rv.autonomy === PACK.platform.stake.autonomyStart);
+  // Sipariş ve teslim
+  const or = g.orderGame(rv.id, { genre: 'aksiyon', topic: 'uzay', size: 'kucuk', budget: 'yuksek' });
+  check('Sipariş verilir, özerklik düşer, ikinci sipariş beklemeli', or.ok && rv.autonomy < PACK.platform.stake.autonomyStart && !g.orderGame(rv.id, { genre: 'aksiyon', topic: 'uzay', size: 'kucuk', budget: 'normal' }).ok);
+  tick(g, Math.round(10 * PACK.platform.stake.orderWeeksK) + 2);
+  const ext = st.projects.find((p) => p.ext);
+  check('Teslim: projelerde yayına hazır, odasız', ext && ext.status === 'debug' && ext.roomId == null && ext.ext.rid === rv.id);
+  st.research.done.oz_yayin = 1;
+  const rel = ext && g.release({ projectId: ext.id, price: 20 });
+  check('Teslim edilen oyunu sen yayınlarsın', rel?.ok && rel.game.score > 30, String(rel?.game?.score));
+  // Politika ve itme
+  check('Politika: yalnız benim konsolum', g.setPolicy(rv.id, 'yalniz').ok && rv.policy === 'yalniz');
+  const m0 = (st.consoleMods || []).length; g.ctx.bus.fire('companyRelease', { rid: rv.id, cid: rv.cid, studio: rv.name, name: 'Z', score: 70 });
+  check('Bağlı stüdyonun oyunu konsolunu iter', st.consoleMods.length > m0);
+  // Özerklik düşerse yıldız istifası
+  const n0 = st.rivals.length;
+  for (let i = 0; i < 300 && st.rivals.length === n0; i++) { rv.autonomy = 0; Pl.monthly(c); }
+  check('Özerklik düşerse yıldız yapımcı istifa edip yeni stüdyo kurar', st.rivals.length === n0 + 1 && rv.autonomy === 60);
+  // Birleştirme
+  g.buyStake(rv.id, 100);
+  const s0 = st.staff.length; g.state.rooms.push({ id: 9901, type: 'gelistirme', mode: 'otomatik' });
+  const mg = g.mergeStudio(rv.id);
+  check('%100: birleştirme çalışan getirir, şirket listeden çıkar', mg.ok && st.staff.length > s0 && !st.rivals.includes(rv));
+  // 5 bağlı stüdyo sınırı
+  const pool = st.rivals.filter((r) => !r.hw && !(r.stake >= 51));
+  for (const r of pool.slice(0, 5)) g.buyStake(r.id, 51);
+  const sixth = pool[5];
+  check('En çok 5 bağlı stüdyo', Pl.controlled(c).length === 5 && sixth && !g.buyStake(sixth.id, 51).ok);
+  // Rekabet Kurumu: anlaşmaları açma ve şirket satma
+  st.plat.offerWeek = -99; Pl.weekly(c);
+  const o4 = Pl.offers(c)[0]; const s4 = g.signDeal(o4.id, 'sureli', k.id); st.pending = [];
+  g.ctx.bus.fire('plat', { kind: 'probe', opt: 'open' });
+  check('Rekabet Kurumu: özel anlaşmalar açılır', s4.deal.opened && !st.consoleMods.some((m) => m.deal));
+  const weakest = Pl.controlled(c).sort((a, b) => a.rep - b.rep)[0], c5 = st.cash;
+  g.ctx.bus.fire('plat', { kind: 'probe', opt: 'sell', id: weakest.id });
+  check('Rekabet Kurumu: bir şirket satılır', !weakest.stake && st.cash > c5);
+  st.plat.lastProbe = -999; st.war.konsol.share = 0.6;
+  let probed = false;
+  for (let i = 0; i < 400 && !probed; i++) { st.pending = []; Pl.monthly(c); probed = st.pending.some((e) => e.id === 'rekabet'); }
+  check('Pay %40\'ı geçince soruşturma gelir', probed && st.pending.find((e) => e.id === 'rekabet').choices.length === 3);
+  check('Tekel ısısı yükselir', st.plat.heat > 30, st.plat.heat.toFixed(0));
+  // Eski kayıt
+  const old = JSON.parse(rawNewGame({ seed: 71 }).save());
+  delete old.plat; delete old.coRel; old.rivals[0].acquired = true; old.rivals[0].price = 1e6; delete old.rivals[0].stake;
+  const lg = loadGame(JSON.stringify(old));
+  check('Eski kayıt: satın alınmış şirket %100 hisse olur', lg.state.rivals[0].stake === 100 && lg.state.plat.rate === 0.3);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

@@ -56,7 +56,7 @@ export function weeklyProject(ctx) {
   const sun = Regions.sunK(ctx); // iki bölgede ekip: güneşi takip eden hata ayıklama
   const debugRate = (p, w) => w * pr.debugPerPointK * (0.5 + p.skill / 100) * careerOf(ctx, p).debug * sun;
   // Odası sökülmüş projeye boş bir geliştirme odası bul.
-  for (const pj of state.projects) if (!state.rooms.some((r) => r.id === pj.roomId)) pj.roomId = freeDevRooms(ctx)[0]?.id ?? null;
+  for (const pj of state.projects) if (!pj.ext && !state.rooms.some((r) => r.id === pj.roomId)) pj.roomId = freeDevRooms(ctx)[0]?.id ?? null; // bağlı stüdyonun teslimi odasızdır (Konu G)
   for (const r of state.rooms) if (r.mode === 'destek' && !state.projects.some((p) => p.id === r.target)) { r.mode = 'otomatik'; r.target = null; }
   const inDev = state.projects.filter((p) => p.status === 'dev');
   // Destek odası hedefi (MGT): atanmış projeye ya da (atanmamışsa) uygun tüm projelere eşit bölünür.

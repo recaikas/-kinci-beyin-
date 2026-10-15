@@ -21,6 +21,7 @@ import * as Pub from './systems/publishers.js';
 import * as Regions from './systems/regions.js';
 import * as Genres from './systems/genres.js';
 import * as Engines from './systems/engines.js';
+import * as Platform from './systems/platform.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na', background = 'salon' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -65,6 +66,7 @@ function migrate(state) {
   Pub.migrate(state);
   Genres.migrate(state, PACK);
   Engines.migrate(state);
+  Platform.migrate(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -90,6 +92,7 @@ export function makeGame(state, pack = PACK) {
   Regions.wire(ctx);
   Genres.wire(ctx);
   Engines.wire(ctx);
+  Platform.wire(ctx);
   const contracts = () => { Prod.genContracts(ctx); Pub.addTrial(ctx); };
 
   const api = {
@@ -126,6 +129,7 @@ export function makeGame(state, pack = PACK) {
       Prod.weeklyResearch(ctx);
       Engines.weekly(ctx);
       Con.weeklyConsole(ctx);
+      Platform.weekly(ctx);
       // satış
       Market.weeklySales(ctx);
       Modern.weeklyModern(ctx);
@@ -145,6 +149,7 @@ export function makeGame(state, pack = PACK) {
         Market.monthlySubsidiaries(ctx);
         Con.monthlyConsole(ctx);
         War.monthlyWar(ctx);
+        Platform.monthly(ctx);
         Staff.genApplicants(ctx);
         if (!state.contract || state.contractOffers.length === 0) contracts();
         state.cashHist.push(Math.round(state.cash));
@@ -318,6 +323,16 @@ export function makeGame(state, pack = PACK) {
     startResearch: (id) => Prod.startResearch(ctx, id),
     buildEngine: (name, features, fromId = null) => Engines.buildEngine(ctx, name, features, fromId),
     toggleLicence: (id) => Engines.setLicensed(ctx, id),
+    // --- Konu G: platform, anlaşmalar, hisseler
+    setPlatRate: (r) => Platform.setRate(ctx, r),
+    toggleCart: () => Platform.toggleCart(ctx),
+    signDeal: (offerId, type, consoleId) => Platform.signDeal(ctx, offerId, type, consoleId),
+    buyStake: (rid, to) => Platform.buyStake(ctx, rid, to),
+    sellStake: (rid) => Platform.sellStake(ctx, rid),
+    orderGame: (rid, o) => Platform.orderGame(ctx, rid, o),
+    setPolicy: (rid, pol) => Platform.setPolicy(ctx, rid, pol),
+    setBoost: (rid, lvl) => Platform.setBoost(ctx, rid, lvl),
+    mergeStudio: (rid) => Platform.merge(ctx, rid),
     startTech: (fid) => Engines.startTech(ctx, fid),
 
     // --- Ekonomi
@@ -345,4 +360,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres, Engines };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres, Engines, Platform };

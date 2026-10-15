@@ -24,6 +24,8 @@ export const ITEMS = [
   { id: 'projeler', cat: 'is', name: 'Projeler', icon: '🛠️', win: 'gelistir', sub: 'oyun', open: (c, s) => s.projects.length > 0, hint: 'Bir proje başlayınca açılır.' },
   { id: 'yayincilar', cat: 'is', name: 'Yayıncılar', icon: '🤝', win: 'pazar', sub: 'yayincilar', open: (c, s) => released(c, s) || s.projects.some((p) => p.status === 'debug'), hint: 'İlk oyunun bitince açılır.', first: 'Oyununu yayıncılara sun: avans ve satıştan pay. Ya da kendi yayınını yap.' },
   { id: 'ekpaket', cat: 'is', name: 'Ek paket', icon: '🧩', win: 'pazar', sub: 'oyunlar', open: (c, s) => s.games.some((g) => !g.expansion && g.score >= 60), hint: 'Sevilen bir oyunun olunca açılır.', first: 'Satıştaki oyununa dokun: ek paket, yama, fiyat indirimi ve port oyun ayrıntısında.' },
+  { id: 'platform', cat: 'is', name: 'Platform payı', icon: '💽', win: 'platform', sub: 'oran', open: (c, s) => s.consoles.some((k) => k.launched), hint: 'İlk konsolun piyasaya çıkınca açılır.', first: 'Konsolunda satılan başka stüdyo oyunlarından yüzde alırsın. Düşük oran stüdyo çeker, yüksek oran para getirir.' },
+  { id: 'anlasma', cat: 'is', name: 'Özel anlaşmalar', icon: '✍️', win: 'platform', sub: 'anlasma', open: (c, s) => s.consoles.some((k) => k.launched), hint: 'İlk konsolun piyasaya çıkınca açılır.', first: 'Büyük oyunları konsoluna özel yaptır: pazarlama, süreli özel, tam özel ya da ikinci parti.' },
   { id: 'konsolyap', cat: 'is', name: 'Konsol yap', icon: '🕹️', win: 'arge', sub: 'konsol', open: (c, s) => !!s.research.done.donanim_lab, hint: '"Donanım laboratuvarı" araştırmasıyla açılır.' },
   // Ekip
   { id: 'isealim', cat: 'ekip', name: 'İşe al', icon: '🧑‍💻', win: 'personel', sub: 'ise_al', open: always, first: 'Başvurular her ay yenilenir. Koltuk yoksa önce oda kur.' },
@@ -52,7 +54,8 @@ export const ITEMS = [
   { id: 'ofis', cat: 'sirket', name: 'Ofis ve odalar', icon: '🏢', win: 'ofis', open: always },
   { id: 'kredi', cat: 'sirket', name: 'Krediler', icon: '🏦', win: 'finans', sub: 'genel', open: (c, s) => s.loans.length > 0 || s.cash < 0 || (s.cashHist || []).some((v) => v < 0), hint: 'İlk eksi kasada açılır.' },
   { id: 'borsa', cat: 'sirket', name: 'Borsa ve halka arz', icon: '📈', win: 'finans', sub: 'sirket', open: (c, s) => s.office.tier >= 3, hint: 'Büyük ofiste (3. kademe) açılır.', first: 'Halka arz: hisse sat, kasaya büyük para koy; karşılığında kurul büyüme ister.' },
-  { id: 'satinal', cat: 'sirket', name: 'Rakip satın al', icon: '🛒', win: 'pazar', sub: 'rakip', open: (c, s) => s.cash >= 5e6, hint: 'Kasa 5 milyon doları geçince açılır.' },
+  { id: 'hisse', cat: 'sirket', name: 'Hisseler', icon: '📊', win: 'hisse', sub: 'sirketler', open: (c, s) => s.cash >= 2e6 || s.rivals.some((r) => r.stake), hint: 'Kasa 2 milyon doları geçince açılır.', first: 'Şirketlerin hissesini kademe kademe al: %10 temettü, %25 kurul koltuğu, %51 kontrol, %100 birleştirme.' },
+  { id: 'bagli', cat: 'sirket', name: 'Bağlı stüdyolar', icon: '🏭', win: 'hisse', sub: 'bagli', open: (c, s) => s.rivals.some((r) => (r.stake || 0) >= 51), hint: 'Bir şirketin %51 hissesini alınca açılır.', first: 'Bağlı stüdyona oyun ısmarla, platform politikasını seç, güçlendir; ama çok karışırsan yıldızları istifa eder.' },
   // Sistem
   { id: 'gunluk', cat: 'sistem', name: 'Günlük', icon: '📰', win: 'gunluk', open: always },
   { id: 'ayarlar', cat: 'sistem', name: 'Kayıt ve ayarlar', icon: '💾', win: 'ayarlar', open: always },

@@ -16,6 +16,7 @@ import * as Modern from '../src/systems/modern.js';
 import * as Charts from '../src/systems/charts.js';
 import * as Genres from '../src/systems/genres.js';
 import * as Engines from '../src/systems/engines.js';
+import * as Platform from '../src/systems/platform.js';
 import { TIER } from '../src/data/genres.js';
 
 const GAME_RESEARCH = ['ihracat', 'alt_tur', 'motor_ozel', 'boyut_orta', 'oz_yayin', 'tur_cas', 'tur_mac', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'oda_qa', 'tur_nis', 'kopya_koruma', 'oda_uzman',
@@ -57,6 +58,9 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     if (e.chance) v += e.chance.p * value(e.chance.yes) + (1 - e.chance.p) * value(e.chance.no);
     // Yayıncı: dürüst ve iyi cevap; blöfü yalnız çok kazandırıyorsa; vitrin etkinlikleri ve tarih istekleri
     if (e.pubMeet) v += (e.pubMeet.v - (e.pubMeet.bluff ? 6 : 0)) * unit * 3;
+    // Konu G: karşı teklif ve Rekabet Kurumu
+    if (e.plat?.kind === 'counter') { const d = state.plat.deals.find((x) => x.id === e.plat.id); if (d?.counter) v += e.plat.raise ? (state.cash > d.counter.extra * 12 ? 1 : -d.counter.extra) : -d.price * 0.1; }
+    if (e.plat?.kind === 'probe') v -= e.plat.opt === 'open' ? state.plat.deals.filter((x) => !x.done).length * unit * 20 + unit * 5 : Platform.value(ctx, state.rivals.find((r) => r.id === e.plat.id) || { rep: 50 }) * 0.3;
     if (e.pubShow) v += ns >= 3 && runway() > 4 ? unit * 10 : -1;
     if (e.pubDate) v += e.pubDate.ok ? unit * 4 : 0;
     if (e.pubMulti) v += selfValue() < 0.12 ? unit * 5 : -unit * 5;
@@ -443,8 +447,17 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       // Yayın sonrası: iyi oyunlara indirilebilir içerik (en fazla 2) ve yayıncı anahtarları
       for (const gm of state.games.filter((x) => x.active && x.score >= 75 && (x.dlcs || 0) < 2 && x.weeks > 8)) if (Modern.dlcAllowed(ctx, gm) && state.cash > Modern.dlcCost(ctx, gm) * 6 + burn() * 6) g.releaseDLC(gm.id);
       for (const gm of state.games.filter((x) => x.active && x.score >= 70 && x.weeks < 6 && !x.streamed)) if (M.tableYear(ctx) >= pack.modern.stream.year && state.cash > Modern.streamCost(ctx, gm) * 10 + burn() * 6) g.streamKeys(gm.id);
-      // Konsol savaşı: zenginken özel oyun anlaşması
-      for (const k of state.consoles.filter((x) => x.launched && !x.retired && !x.ended)) if (state.cash > War.dealCost(ctx) * 10 + burn() * 12) g.exclusiveDeal(k.id);
+      // Konu G: zenginken en iyi değerli oyuna süreli özel anlaşma (aynı anda bir tane); çok zenginken hisse
+      const liveK = state.consoles.filter((x) => x.launched && !x.retired && !x.ended);
+      if (liveK.length && !state.plat.deals.some((d) => (!d.done || state.week - d.signedWeek < 48) && d.type !== 'pazarlama')) {
+        const best = Platform.offers(ctx).map((o) => ({ o, pr: Platform.dealPrice(ctx, o, 'sureli', liveK[0]) })).sort((a, b) => b.o.E / b.pr - a.o.E / a.pr)[0];
+        if (best && best.o.E >= 70 && state.cash > best.pr * 10 + burn() * 12) g.signDeal(best.o.id, 'sureli', liveK[0].id);
+      }
+      const tgt = state.rivals.filter((r) => !r.hw && r.pub && (r.stake || 0) < 51).sort((a, b) => b.rep - a.rep)[0];
+      if (tgt && state.games.length > 20) {
+        const to = (tgt.stake || 0) < 25 ? 25 : 51;
+        if ((to === 25 || Platform.controlled(ctx).length < 2) && state.cash > Platform.stakePrice(ctx, tgt, to) * 8 + burn() * 24) g.buyStake(tgt.id, to);
+      }
       // Ofis ve istasyonlar
       const nextOffice = pack.offices.find((o) => o.tier === state.office.tier + 1);
       const full = state.staff.length >= seats - 1 && state.rooms.length >= Staff.slots(ctx);

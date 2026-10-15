@@ -18,6 +18,7 @@ import { make as make_win_pub } from './win_pub.js';
 import { make as make_win_regions } from './win_regions.js';
 import { make as make_win_genres } from './win_genres.js';
 import { make as make_win_engines } from './win_engines.js';
+import { make as make_win_platform } from './win_platform.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
@@ -338,7 +339,7 @@ export function boot(root, hotData = {}) {
     const subs = SUBS[id]?.filter(([k]) => Menu.tabVisible(ctx(), G().state, id, k)); // Konu F: kapalı sekmeler saklı
     if (subs && !subs.some(([k]) => k === app.sub[id])) app.sub[id] = subs[0]?.[0];
     const sub = app.sub[id] || subs?.[0]?.[0];
-    const fn = { kat: winCat, dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews, ayarlar: winSettings }[id];
+    const fn = { kat: winCat, platform: (s) => u.winPlatform(s), hisse: (s) => u.winStakes(s), dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews, ayarlar: winSettings }[id];
     const cat = Menu.CATS.find((k) => k.id === app.cat), item = app.item && Menu.ITEM[app.item];
     const crumb = id === 'kat' && cat ? cat.name : app.fromCat && item && item.win === id && cat ? `${cat.name} › ${item.name}` : null;
     const title = crumb || (id === 'oda' ? (() => { const r = G().state.rooms.find((x) => x.id === app.room); return r ? Staff.roomType(ctx(), r.type).name : 'Oda'; })() : WIN_NAMES[id]);
@@ -378,6 +379,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_win_regions(u));
   Object.assign(u, make_win_genres(u));
   Object.assign(u, make_win_engines(u));
+  Object.assign(u, make_win_platform(u));
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
@@ -396,7 +398,7 @@ export function boot(root, hotData = {}) {
     if (b.dataset.open) { app.fromCat = null; app.item = null; }
     if (b.dataset.open) return app.win && (app.win === b.dataset.open || (b.dataset.open === 'bilgisayar' && app.win !== 'gunluk')) ? closeWin() : openWin(b.dataset.open, false);
     if (b.dataset.hub) { if (b.dataset.hubsub) app.sub[b.dataset.hub] = b.dataset.hubsub; if (b.dataset.hub === 'gelistir') { app.sel = null; app.wizOn = b.dataset.hubsub === 'oyun' && !G().state.projects.length; } app.selGame = null; app.win = b.dataset.hub; app.fromHub = true; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
-    if (b.dataset.sub) { app.sub[app.win] = b.dataset.sub; el.winBody.scrollTop = 0; return renderWindow(); }
+    if (b.dataset.sub) { const mi = app.fromCat && Menu.ITEMS.find((it) => it.win === app.win && it.sub === b.dataset.sub); if (mi) app.item = mi.id; app.sub[app.win] = b.dataset.sub; el.winBody.scrollTop = 0; return renderWindow(); }
     if (b.dataset.pick) { app.draft[b.dataset.pick] = b.dataset.id; if (b.dataset.pick === 'genre' && app.draft.sub === b.dataset.id) app.draft.sub = ''; return renderWindow(); }
     if (b.dataset.choice !== undefined) { g.resolve(+b.dataset.choice); save(); return closeDialog(); }
     const act = b.dataset.act, id = b.dataset.id, pid = +b.dataset.pid;
@@ -465,7 +467,6 @@ export function boot(root, hotData = {}) {
       case 'campaign': return run(g.campaign(pid, id));
       case 'outsource': return run(g.outsource(pid, +id));
       case 'localize': return run(g.localize(pid, id));
-      case 'deal': return run(g.exclusiveDeal(id));
       case 'ea': return run(g.earlyAccess(pid));
       case 'crowd': return run(g.crowdfund(pid));
       case 'dlc': return run(g.releaseDLC(+id));
@@ -523,6 +524,16 @@ export function boot(root, hotData = {}) {
       case 'engine': { const fams = Engines.families(g.ctx).sort((a, b) => b.builtYear - a.builtYear); const from = app.engFrom === 'yeni' ? null : fams.find((e) => String(e.id) === String(app.engFrom)) || fams[0] || null;
         const r = g.buildEngine(app.engineName || 'Motor', [...app.engineSel], from?.id ?? null); if (r.ok) app.engineSel.clear(); return run(r); }
       case 'tech': return run(g.startTech(id));
+      // Konu G: platform, anlaşmalar, hisseler
+      case 'prate': return run(g.setPlatRate(+id));
+      case 'pcart': return run(g.toggleCart());
+      case 'deal': return run(g.signDeal(+id, b.dataset.type));
+      case 'stake': return run(g.buyStake(+id, +b.dataset.to));
+      case 'sellstake': return twice('sell' + id, () => g.sellStake(+id));
+      case 'policy': return run(g.setPolicy(+id, b.dataset.pol));
+      case 'boost': return run(g.setBoost(+id, +b.dataset.lv));
+      case 'order': return run(g.orderGame(+id, (app.order || {})[+id] || {}));
+      case 'merge': return twice('merge' + id, () => g.mergeStudio(+id));
       case 'weng': u.onWeng(id); return renderWindow();
       case 'licence': return run(g.toggleLicence(+id));
       case 'console': { const r = g.startConsole({ ...app.consoleDraft, parts: { ...app.consoleDraft.parts } }); if (r.ok) app.consoleDraft.series = String(r.console.seriesId); return run(r); }
@@ -546,6 +557,7 @@ export function boot(root, hotData = {}) {
     if (t.dataset.plat) { const set = new Set(app.draft.platforms); t.checked ? set.add(t.dataset.plat) : set.delete(t.dataset.plat); app.draft.platforms = [...set]; return; }
     if (t.dataset.feat) { t.checked ? app.engineSel.add(t.dataset.feat) : app.engineSel.delete(t.dataset.feat); return; }
     if (t.dataset.eng) { app.engineName = t.value; return; }
+    if (t.dataset.order) { (((app.order ||= {})[+t.dataset.id]) ||= {})[t.dataset.order] = t.value; t.blur(); return renderWindow(); }
     if (t.dataset.engfrom) { app.engFrom = t.value; app.engineSel.clear(); t.blur(); return renderWindow(); }
     if (t.dataset.wfeat) { u.onWfeat(t.dataset.wfeat, t.checked); return renderWindow(); }
     if (t.dataset.wmw) { u.onWmw(t.dataset.wmw, t.checked); return renderWindow(); }

@@ -69,13 +69,15 @@ function releaseHit(ctx, h) {
   const power = Math.max(W.hitPower, c ? companyRep(c, tableYear(ctx)) : 60) / 100;
   const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * 1.7 * pack.rivals.salesPeakK * W.hitPeakK * (1 - W.hitRankDecay * h.rank) * rng.range(0.85, 1.15);
   state.charts.unshift({ name: h.name, studio, score, week: state.week, mine: false, genre: h.genre, hist: true });
-  state.rivalGames.push(tagRival(ctx, { id: state.nextId++, name: h.name, studio, score, genre: h.genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true, hist: true }, { rank: h.rank, owner: c?.kind.includes('hw') ? h.cid : null }));
+  const rg = tagRival(ctx, { id: state.nextId++, name: h.name, studio, score, genre: h.genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true, hist: true }, { rank: h.rank, owner: c?.kind.includes('hw') ? h.cid : null });
+  state.rivalGames.push(rg);
   const r = state.rivals.find((x) => x.cid === h.cid);
   if (r) { r.games++; r.lastScore = score; }
   state.world.hits.unshift({ name: h.name, studio, score, genre: h.genre, year: Math.floor(tableYear(ctx)), week: state.week });
   if (state.world.hits.length > 600) state.world.hits.length = 600;
   ctx.news(`🕹️ ${studio}, "${h.name}" oyununu çıkardı (not ${score}).`, h.rank < 3 ? 'tarih' : 'info');
   ctx.bus.fire('rivalRelease', { studio, name: h.name, big: true, cid: h.cid });
+  ctx.bus.fire('companyRelease', { cid: h.cid, rid: r?.id, studio, name: h.name, score, game: rg }); // Konu G: özel anlaşmalar
 }
 
 // Haftalık: yıl değişimi, hit oyunlar, ayın tarihî olayı.

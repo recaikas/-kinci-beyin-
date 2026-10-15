@@ -279,10 +279,11 @@ export function acquireRival(ctx, id) {
   const rv = state.rivals.find((x) => x.id === id);
   if (!rv || rv.acquired) return { ok: false, msg: 'Satın alınamaz.' };
   if (rv.hw) return { ok: false, msg: `${rv.name} bir platform devi; satın alınamaz.` };
+  // Konu G: tek adımda %100 hisse (hisse kademeleri systems/platform.js)
   const price = rivalPrice(ctx, rv);
   if (state.cash < price) return { ok: false, msg: 'Yeterli nakit yok.' };
   ledger.post('satin_alma', -price, rv.name);
-  rv.acquired = true; rv.price = price;
+  rv.acquired = true; rv.price = price; rv.stake = 100; rv.autonomy ??= ctx.pack.platform.stake.autonomyStart; rv.policy ??= 'coklu'; rv.boost ??= 0;
   ctx.news(`🏢 ${rv.name} artık senin! Monopoli kokusu alıyorum.`, 'good');
   ctx.bus.fire('companyAcquired', rv);
   return { ok: true };
@@ -310,8 +311,10 @@ export function weeklyRivals(ctx) {
     // Satış listesi için rakip oyunun haftalık satış zirvesi (stüdyo gücü + not + pazar büyüklüğü)
     const s = pack.sales, power = rv.rep / 100;
     const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
-    state.rivalGames.push(Charts.tagRival(ctx, { id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true }, { owner: rv.hw ? rv.cid : null }));
+    const rg = Charts.tagRival(ctx, { id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true }, { owner: rv.hw ? rv.cid : null });
+    state.rivalGames.push(rg);
     if (!rv.hw && !rv.acquired) ctx.bus.fire('rivalRelease', { studio: rv.name, name, big: false, cid: rv.cid });
+    if (!rv.hw) ctx.bus.fire('companyRelease', { cid: rv.cid, rid: rv.id, studio: rv.name, name, score, game: rg }); // Konu G
   }
   if (state.charts.length > 40) state.charts.length = 40;
   // Rakip oyunların bu haftaki satışı
@@ -322,14 +325,8 @@ export function weeklyRivals(ctx) {
 // Haftalık satış listesi: dolgu oyunlarla gerçek sıra, raf, ödüller (charts.js).
 export const weeklyCharts = (ctx) => Charts.weeklyCharts(ctx);
 
-export function monthlySubsidiaries(ctx) {
-  const { state, pack, ledger } = ctx;
-  for (const rv of state.rivals) {
-    if (!rv.acquired) continue;
-    const profit = rv.rep * pack.rivals.profitPerRep * inflation(ctx) / 12;
-    ledger.post('istirak', Math.round(profit - rv.price * pack.rivals.monthlyCostShare), rv.name);
-  }
-}
+// İştirak ve temettü gelirleri Konu G ile systems/platform.js'e taşındı (hisse kademeleri).
+export function monthlySubsidiaries() {}
 
 // --- Fuar & ödüller
 export function scheduled(ctx) {

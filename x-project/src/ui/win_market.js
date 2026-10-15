@@ -103,7 +103,7 @@ ${gm.model === 'f2p' ? '' : `        <button data-act="pricedrop" data-id="${gm.
     if (sub === 'liste') return listWin();
     if (sub === 'yayincilar') return u.winPublishers();
     if (sub === 'cikanlar') return `<ol class="charts">${s.charts.slice(0, 15).map((x) => `<li class="${x.mine ? 'mine' : ''}"><b class="num">${x.score}</b><span>${esc(x.name)}</span><small>${esc(x.studio)}</small></li>`).join('') || '<li class="muted">Henüz yok.</li>'}</ol>`;
-    if (sub === 'rakip') return [...s.rivals].sort((a, b) => b.rep - a.rep).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : r.hw ? '<span class="pill">platform devi</span>' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('');
+    if (sub === 'rakip') return [...s.rivals].sort((a, b) => b.rep - a.rep).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>itibar ${Math.round(r.rep)} · ${r.games} oyun · son ${r.lastScore || '—'}</small></div>${r.stake ? `<span class="pill">%${r.stake} senin</span>` : r.hw ? '<span class="pill">platform devi</span>' : ''}</div>`).join('');
     const gm = app.selGame && s.games.find((x) => x.id === app.selGame);
     if (gm) return gameDetail(gm);
     const tr = s.trend ? (s.trend.genre ? PACK.genres.find((x) => x.id === s.trend.genre).name : PACK.topics.find((t) => t[0] === s.trend.topic)[1]) : '—';

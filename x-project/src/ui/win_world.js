@@ -14,7 +14,7 @@ export function make(u) {
     if (sub === 'sirketler') {
       const list = World.companyBoard(c, 40);
       return `<p class="muted small">${y} yılında piyasadaki şirketler (güce göre). Platform devleri satın alınamaz. Yeni şirketler kurulur, eskiler zamanla piyasadan çekilir.</p>
-        <div class="board">${list.map((r, i) => `<div class="row-item"><div><b>${i + 1}. ${esc(r.name)} ${r.hw ? '<span class="pill">platform</span>' : ''}${r.pub ? '<span class="pill">yayıncı</span>' : ''}</b>${bar(r.rep, 'prog')}<small>güç ${Math.round(r.rep)} · ${r.since} · ${r.games} oyun · son not ${r.lastScore || '—'}</small></div>${r.acquired ? '<span class="pill">Senin</span>' : r.hw ? '' : `<button data-act="acquire" data-id="${r.id}">${money(Market.rivalPrice(c, r))}</button>`}</div>`).join('')}</div>`;
+        <div class="board">${list.map((r, i) => `<div class="row-item"><div><b>${i + 1}. ${esc(r.name)} ${r.hw ? '<span class="pill">platform</span>' : ''}${r.pub ? '<span class="pill">yayıncı</span>' : ''}</b>${bar(r.rep, 'prog')}<small>güç ${Math.round(r.rep)} · ${r.since} · ${r.games} oyun · son not ${r.lastScore || '—'}</small></div>${r.stake ? `<span class="pill">%${r.stake} senin</span>` : ''}</div>`).join('')}</div>`;
     }
     if (sub === 'platformlar') {
       const sh = World.platformShares(c, (p) => M.platformBase(c, p));
