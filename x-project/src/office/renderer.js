@@ -1,7 +1,8 @@
 import Phaser from 'phaser/dist/phaser.js';
-import { CELL, ROOM_W, ROOM_H, DOOR, FURNITURE, buildingRooms, roomOrigin, dimensions, usePoint, findPath, canPlace, suggestFurniture } from '../systems/office.js';
-import { roomBusy, slots } from '../systems/staff.js';
-import { makeFurnitureTextures, characterTexture } from './assets.js';
+import * as Office from '../systems/office.js';
+const { CELL, FURNITURE, buildingRooms, roomOrigin, dimensions, usePoint, suggestFurniture, sizeOf, doorOf, globalPoint, worldPath } = Office;
+import { roomBusy } from '../systems/staff.js';
+import { makeFurnitureTextures, characterTexture, computerTexture } from './assets.js';
 
 // Phaser yalnız sahne/girdi/görsel saati yönetir. Haftalık üretimi mevcut game.js ilerletir.
 export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
@@ -17,7 +18,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     create() {
       scene = this;
       this.worldObjects = []; this.workers = new Map(); this.furniture = [];
-      this.draft = null; this.roomId = null; this.signature = null; this.elapsed = 0;
+      this.draft = null; this.roomDraft = null; this.roomId = null; this.signature = null; this.elapsed = 0;
       this.cameraPositions = new Map(); this.building = null; this.ready = true;
       makeFurnitureTextures(this);
       this.overlay = this.add.graphics().setDepth(100000);
@@ -67,46 +68,51 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
         const c = this.cameras.main;
         this.cameraPositions.set(this.building, { x: c.midPoint.x, y: c.midPoint.y, zoom: c.zoom });
       }
-      if (changedBuilding) { this.draft = null; this.roomId = this.rooms[0]?.roomId ?? null; }
+      if (changedBuilding) { this.draft = null; this.roomDraft = null; this.roomId = this.rooms.some((r) => r.roomId === this.requestedRoom) ? this.requestedRoom : this.rooms[0]?.roomId ?? null; this.requestedRoom = null; }
       if (!this.rooms.some((r) => r.roomId === this.roomId)) { this.roomId = this.rooms[0]?.roomId ?? null; this.draft = null; }
       this.building = view.building;
-      let right = ROOM_W + 2, bottom = ROOM_H + 4;
+      const plot = Office.plotSize(state, view.building); let right = plot.w, bottom = plot.h;
       const floor = this.keep(this.add.graphics().setDepth(-10));
       for (const room of this.rooms) {
-        const origin = roomOrigin(room), x = origin.x * CELL, y = origin.y * CELL;
-        right = Math.max(right, origin.x + ROOM_W + 1); bottom = Math.max(bottom, origin.y + ROOM_H + 2);
+        const origin = roomOrigin(room), x = origin.x * CELL, y = origin.y * CELL, { w: rw, h: rh } = sizeOf(room), door = doorOf(room);
+        right = Math.max(right, origin.x + rw + 1); bottom = Math.max(bottom, origin.y + rh + 2);
         const model = state.rooms.find((r) => r.id === room.roomId), type = pack.rooms.types.find((t) => t.id === model.type);
-        floor.fillStyle(0x23313c, 0.16); floor.fillRoundedRect(x + 7, y + 7, ROOM_W * CELL, ROOM_H * CELL, 4);
-        for (let row = 0; row < ROOM_H; row++) for (let col = 0; col < ROOM_W; col++) {
-          const wall = row === 0 || row === ROOM_H - 1 || col === 0 || col === ROOM_W - 1;
-          const door = row === ROOM_H - 1 && col === DOOR.x;
-          floor.fillStyle(wall && !door ? 0xe6d7b7 : (row + col) % 2 ? 0xd2b68f : 0xdac29f);
+        floor.fillStyle(0x23313c, 0.16); floor.fillRoundedRect(x + 7, y + 7, rw * CELL, rh * CELL, 4);
+        for (let row = 0; row < rh; row++) for (let col = 0; col < rw; col++) {
+          const wall = row === 0 || row === rh - 1 || col === 0 || col === rw - 1;
+          const isDoor = row === rh - 1 && col === door.x;
+          floor.fillStyle(wall && !isDoor ? 0xe6d7b7 : room.floor === 'tile' ? ((row + col) % 2 ? 0xc5d5ce : 0xdce4d9) : room.floor === 'carpet' ? ((row + col) % 2 ? 0x92a4a0 : 0x9daea7) : (row + col) % 2 ? 0xd2b68f : 0xdac29f);
           floor.fillRect(x + col * CELL, y + row * CELL, CELL - 1, CELL - 1);
           if (row === 0) { floor.fillStyle(0xb6aa92); floor.fillRect(x + col * CELL, y + CELL - 6, CELL, 5); }
         }
-        floor.fillStyle(0xf2e7cc); floor.fillRect(x, y - 20, ROOM_W * CELL, 20);
-        for (const wx of [2, 7]) {
+        floor.fillStyle(0xf2e7cc); floor.fillRect(x, y - 20, rw * CELL, 20);
+        for (const wx of [2, ...(rw > 9 ? [7] : [])]) {
           floor.fillStyle(0x8bb6bd); floor.fillRect(x + wx * CELL, y - 16, 60, 38);
           floor.fillStyle(0xdce8d9); floor.fillRect(x + wx * CELL + 4, y - 12, 23, 29);
           floor.fillRect(x + wx * CELL + 32, y - 12, 23, 29);
         }
-        this.text(x + 7, y - 46, `${type.name} · ${state.staff.filter((p) => p.room === room.roomId).length}/${room.capacity}`);
-        this.text(x + DOOR.x * CELL - 3, y + (ROOM_H - 1) * CELL + 4, 'GİRİŞ', 9, '#897656');
+        const capacity = Office.capacity(view.game.ctx, model);
+        const usage = model.type === 'tuvalet' ? `${room.items.filter((f) => f.type === 'toilet').length} klozet` : model.type === 'mola' ? `${capacity} dinlenme yeri` : `${state.staff.filter((p) => p.room === room.roomId).length}/${capacity}`;
+        this.text(x + 7, y - 46, `${type.name} · ${usage}`);
+        this.text(x + door.x * CELL - 3, y + (rh - 1) * CELL + 4, 'GİRİŞ', 9, '#897656');
         for (const item of room.items) {
           const { w, h } = dimensions(item), px = (origin.x + item.x + w / 2) * CELL, py = (origin.y + item.y + h) * CELL;
-          if (item.type === 'desk') {
-            const seat = usePoint(item);
-            this.keep(this.add.image((origin.x + seat.x + 0.5) * CELL, (origin.y + seat.y + 1) * CELL, 'chair').setOrigin(0.5, 1).setDepth((origin.y + seat.y + 1) * CELL - 2));
-          }
           const image = this.keep(this.add.image(px, py + 4, `${item.type}-${item.rotation}`).setOrigin(0.5, 1).setDepth(py));
+          if (item.computer) {
+            const pcKey = computerTexture(this, item.computer);
+            if (pcKey) this.keep(this.add.image(px + (item.rotation % 2 ? 0 : 10), py - 17, pcKey).setOrigin(0.5, 1).setDepth(py + 0.2));
+          }
           this.furniture.push({ room, item, image });
         }
       }
       this.worldBounds = { width: right * CELL, height: bottom * CELL };
+      const shown = this.rooms.length ? this.rooms : [{ x: 1, y: 2, w: 12, h: 12 }];
+      this.viewBounds = { width: Math.max(...shown.map((r) => roomOrigin(r).x + sizeOf(r).w + 2)) * CELL, height: Math.max(...shown.map((r) => roomOrigin(r).y + sizeOf(r).h + 2)) * CELL };
+      if (this.roomDraft) this.viewBounds = this.worldBounds;
       this.cameras.main.setBackgroundColor('#e8e1cf');
       if (!this.rooms.length) this.text(64, 160, 'Bu binada henüz oda yok.\nOda kurmak için boş alana dokun.', 18);
-      const spare = slots(view.game.ctx) - state.rooms.length;
-      this.buildSign = this.text(40, bottom * CELL - 20, spare > 0 ? '+ ODA KUR' : 'OFİSİ BÜYÜT', 13, '#587880');
+      const spare = Office.roomSite(view.game.ctx, 'mola', { building: view.building, w: 6, h: 6 }).ok ? 1 : 0;
+      this.buildSign = this.text(40, this.viewBounds.height - 20, spare > 0 ? '+ ODA KUR' : 'OFİSİ BÜYÜT', 13, '#587880');
       this.buildSign.setInteractive({ useHandCursor: true }).on('pointerup', () => {
         if (!this.view().blocked && !this.view().editing) bridge.onHit({ kind: spare > 0 ? 'slot' : 'locked', building: this.building });
       });
@@ -120,7 +126,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     }
     fitCamera() {
       if (!this.worldBounds) return;
-      const c = this.cameras.main, b = this.worldBounds;
+      const c = this.cameras.main, b = this.roomDraft ? this.worldBounds : this.viewBounds;
       c.setZoom(Math.max(0.12, Math.min(1.5, (c.width - 20) / b.width, Math.max(60, c.height - 80) / b.height)));
       c.centerOn(b.width / 2, b.height / 2);
     }
@@ -130,76 +136,75 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       c.setZoom(Phaser.Math.Clamp(c.zoom * factor, 0.18, 2.8));
     }
     syncWorkers(view) {
-      const { state, pack } = view.game, present = new Set();
+      const { state, pack, ctx } = view.game, present = new Set();
       for (const room of this.rooms) {
         const model = state.rooms.find((r) => r.id === room.roomId);
-        const seats = room.items.filter((f) => f.type === (model.type === 'mola' ? 'sofa' : 'desk'));
-        state.staff.filter((p) => p.room === room.roomId && ['ok', 'egitim'].includes(p.status)).forEach((p, index) => {
+        state.staff.filter((p) => p.room === room.roomId && ['ok', 'egitim'].includes(p.status)).forEach((p) => {
           present.add(p.id);
           let actor = this.workers.get(p.id);
           if (actor && actor.roomId !== room.roomId) { this.destroyWorker(actor); this.workers.delete(p.id); actor = null; }
-          const tex = characterTexture(this, p, pack), o = roomOrigin(room);
+          const tex = characterTexture(this, p, pack), entry = globalPoint(room, doorOf(room));
           if (!actor) {
-            actor = { id: p.id, roomId: room.roomId, x: DOOR.x, y: DOOR.y, path: null, wait: 0, mode: 'work' };
+            actor = { id: p.id, roomId: room.roomId, x: entry.x, y: entry.y, path: null, wait: 0, mode: 'work', visit: 0 };
             actor.shadow = this.add.ellipse(0, 0, 22, 8, 0x24323c, 0.15);
             actor.sprite = this.add.sprite(0, 0, tex, 0).setOrigin(0.5, 1);
-            actor.status = this.add.text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '13px', color: '#5a6172', backgroundColor: '#fff8e5', padding: { x: 3, y: 2 } }).setOrigin(0.5, 1);
+            actor.status = this.add.text(0, 0, '', { fontFamily: 'sans-serif', fontSize: '12px', color: '#5a6172', backgroundColor: '#fff8e5', padding: { x: 3, y: 2 } }).setOrigin(0.5, 1);
             this.workers.set(p.id, actor);
           }
           if (actor.sprite.texture.key !== tex) actor.sprite.setTexture(tex, 0);
-          actor.person = p; actor.room = room; actor.origin = o; actor.seat = seats[index];
-          actor.busy = roomBusy(view.game.ctx, model); actor.resting = model.type === 'mola';
+          actor.person = p; actor.room = room; actor.report = Office.workReport(ctx, p); actor.seat = actor.report.station?.desk;
+          actor.busy = roomBusy(ctx, model); actor.resting = model.type === 'mola';
         });
       }
       for (const [id, actor] of this.workers) if (!present.has(id)) { this.destroyWorker(actor); this.workers.delete(id); }
     }
     destroyWorker(actor) { actor.sprite.destroy(); actor.shadow.destroy(); actor.status.destroy(); }
     walk(actor, dt, view) {
-      const room = actor.room;
-      if (!actor.path && dt && actor.seat) {
+      const home = actor.report.station ? globalPoint(actor.room, actor.report.station.point) : globalPoint(actor.room, doorOf(actor.room));
+      if (!actor.path && dt) {
         const start = { x: Math.round(actor.x), y: Math.round(actor.y) };
-        const goal = usePoint(actor.seat);
-        actor.path = findPath(room, start, goal) || findPath(room, DOOR, goal) || [];
-        if (actor.path.length && (start.x !== actor.path[0].x || start.y !== actor.path[0].y)) { actor.x = DOOR.x; actor.y = DOOR.y; }
-        actor.path.shift();
+        actor.path = worldPath(view.game.state, this.building, start, home)?.slice(1) || [];
+        actor.mode = 'work';
       }
-      let budget = dt * 2.2;
-      const moving = !!actor.path?.length;
+      let budget = dt * 2.2; const moving = !!actor.path?.length;
       while (budget > 0 && actor.path?.length) {
-        const target = actor.path[0], dx = target.x - actor.x, dy = target.y - actor.y, distance = Math.hypot(dx, dy);
-        if (distance <= budget) { actor.x = target.x; actor.y = target.y; actor.path.shift(); budget -= distance; }
-        else { actor.x += dx / distance * budget; actor.y += dy / distance * budget; budget = 0; }
+        const target = actor.path[0], dx = target.x - actor.x, dy = target.y - actor.y, d = Math.hypot(dx, dy);
+        if (d <= budget) { actor.x = target.x; actor.y = target.y; actor.path.shift(); budget -= d; }
+        else { actor.x += dx / d * budget; actor.y += dy / d * budget; budget = 0; }
         if (dx) actor.sprite.setFlipX(dx < 0);
       }
       if (dt && actor.path && !actor.path.length) {
         actor.wait += dt;
-        if (actor.wait > 16 + actor.id % 13) {
-          const coffee = room.items.find((f) => f.type === 'coffee');
-          const destination = actor.mode === 'break' || !coffee ? actor.seat : coffee;
-          if (destination) actor.path = findPath(room, { x: Math.round(actor.x), y: Math.round(actor.y) }, usePoint(destination))?.slice(1) || [];
-          actor.mode = actor.mode === 'break' ? 'work' : 'break'; actor.wait = 0;
+        if (actor.wait > (actor.mode === 'work' ? 18 + actor.id % 11 : 4)) {
+          const visits = actor.report.visits.filter((v) => v.building === this.building);
+          const visit = actor.mode === 'work' ? visits[actor.visit++ % Math.max(1, visits.length)] : null;
+          const destination = visit?.point || home;
+          actor.path = worldPath(view.game.state, this.building, { x: Math.round(actor.x), y: Math.round(actor.y) }, destination)?.slice(1) || [];
+          actor.mode = visit?.kind || 'work'; actor.wait = 0;
         }
       }
-      const x = (actor.origin.x + actor.x + 0.5) * CELL, y = (actor.origin.y + actor.y + 1) * CELL;
-      actor.sprite.setPosition(x, y).setDepth(y + 1);
-      // Görsel saat delta süresine ve oyun hızına bağlı; duraklatınca kare değişmez.
-      actor.sprite.setFrame(moving ? Math.floor(this.elapsed * 6 + actor.id) % 4 : Math.floor(this.elapsed / 3 + actor.id) % 2 * 2);
-      actor.shadow.setPosition(x, y - 2).setDepth(y - 3);
-      const badge = actor.resting || actor.mode === 'break' ? '☕' : actor.person.stress > 75 ? '!' : actor.busy ? '···' : '';
-      actor.status.setText(badge).setPosition(x, y - 44).setDepth(y + 2).setVisible(!!badge);
+      const x = (actor.x + 0.5) * CELL, y = (actor.y + 1) * CELL;
+      const privateVisit = actor.mode === 'Tuvalet' && !actor.path?.length;
+      actor.sprite.setPosition(x, y).setDepth(y + 1).setVisible(!privateVisit);
+      if (dt) actor.sprite.setFrame(moving ? Math.floor(this.elapsed * 6 + actor.id) % 4 : Math.floor(this.elapsed / 3 + actor.id) % 2 * 2);
+      actor.shadow.setPosition(x, y - 2).setDepth(y - 3).setVisible(!privateVisit);
+      const badge = !actor.seat ? 'Çalışma yeri yok' : actor.mode !== 'work' ? actor.mode : actor.person.stress > 75 ? '!' : actor.busy ? '···' : '';
+      actor.status.setText(badge).setPosition(x, y - 44).setDepth(y + 2).setVisible(!!badge && !privateVisit);
     }
     position(pointer) { return this.cameras.main.getWorldPoint(pointer.x, pointer.y); }
     roomAt(point) {
-      return this.rooms.find((r) => { const o = roomOrigin(r); return point.x >= o.x * CELL && point.x < (o.x + ROOM_W) * CELL && point.y >= o.y * CELL && point.y < (o.y + ROOM_H) * CELL; });
+      return this.rooms.find((r) => { const o = roomOrigin(r), d = sizeOf(r); return point.x >= o.x * CELL && point.x < (o.x + d.w) * CELL && point.y >= o.y * CELL && point.y < (o.y + d.h) * CELL; });
     }
     itemAt(point) {
-      return [...this.furniture].sort((a, b) => b.image.depth - a.image.depth).find((f) => f.image.getBounds().contains(point.x, point.y));
+      const ordered = [...this.furniture].sort((a, b) => b.image.depth - a.image.depth);
+      return ordered.find((f) => { const o = roomOrigin(f.room), s = dimensions(f.item); return point.x >= (o.x + f.item.x) * CELL && point.x < (o.x + f.item.x + s.w) * CELL && point.y >= (o.y + f.item.y) * CELL && point.y < (o.y + f.item.y + s.h) * CELL; }) || ordered.find((f) => f.image.getBounds().contains(point.x, point.y));
     }
     pointerDown(p) {
       const view = this.view();
       if (!view.game || view.blocked) return;
       const pos = this.position(p), room = this.roomAt(pos);
       this.gesture = { x: p.x, y: p.y, lastX: p.x, lastY: p.y, moved: false, item: null };
+      if (view.editing && this.roomDraft) { this.gesture.room = true; this.pointerMove(p); return; }
       if (view.editing && room) {
         if (this.roomId !== room.roomId) { this.draft = null; this.roomId = room.roomId; }
         const hit = this.itemAt(pos);
@@ -212,7 +217,9 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       const view = this.view(), gesture = this.gesture;
       if (!gesture || !p.isDown || view.blocked) return;
       if (Math.hypot(p.x - gesture.x, p.y - gesture.y) > 6) gesture.moved = true;
-      if (gesture.item && this.draft) {
+      if (gesture.room && this.roomDraft) {
+        const point = this.position(p); this.roomDraft.x = Math.round(point.x / CELL - this.roomDraft.w / 2); this.roomDraft.y = Math.round(point.y / CELL - this.roomDraft.h / 2); this.notify();
+      } else if (gesture.item && this.draft) {
         const room = this.rooms.find((r) => r.roomId === this.roomId), o = roomOrigin(room), point = this.position(p), size = dimensions(this.draft);
         this.draft.x = Math.floor(point.x / CELL - o.x - size.w / 2 + 0.5);
         this.draft.y = Math.floor(point.y / CELL - o.y - size.h / 2 + 0.5);
@@ -232,48 +239,73 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       if (person) return bridge.onHit({ kind: person.person.founder ? 'boss' : 'person', id: person.id, room: person.roomId });
       const room = this.roomAt(point);
       if (room) return bridge.onHit({ kind: 'room', id: room.roomId });
-      if (!this.rooms.length) bridge.onHit({ kind: 'slot', building: view.building });
+      bridge.onHit({ kind: 'slot', building: view.building });
     }
     drawOverlay(view) {
-      this.overlay.clear();
+      const g = this.overlay; g.clear();
       for (const f of this.furniture) f.image.setAlpha(this.draft?.id === f.item.id ? 0.3 : 1);
       if (this.ghost) this.ghost.setVisible(false);
       if (!view.editing) return;
-      const room = this.rooms.find((r) => r.roomId === this.roomId);
-      if (!room) return;
-      const o = roomOrigin(room), g = this.overlay;
+      if (this.roomDraft) {
+        const d = this.roomDraft, result = Office.previewRoom(view.game.ctx, d.type, d, d.roomId), color = result.ok ? 0x438967 : 0xc35752;
+        g.fillStyle(color, 0.18); g.fillRect(d.x * CELL, d.y * CELL, d.w * CELL, d.h * CELL);
+        g.lineStyle(3, color); g.strokeRect(d.x * CELL, d.y * CELL, d.w * CELL, d.h * CELL); return;
+      }
+      const room = this.rooms.find((r) => r.roomId === this.roomId); if (!room) return;
+      const o = roomOrigin(room), { w: rw, h: rh } = sizeOf(room);
       g.lineStyle(1, 0xffffff, 0.28);
-      for (let x = 1; x < ROOM_W; x++) g.lineBetween((o.x + x) * CELL, (o.y + 1) * CELL, (o.x + x) * CELL, (o.y + ROOM_H - 1) * CELL);
-      for (let y = 1; y < ROOM_H; y++) g.lineBetween((o.x + 1) * CELL, (o.y + y) * CELL, (o.x + ROOM_W - 1) * CELL, (o.y + y) * CELL);
+      for (let x = 1; x < rw; x++) g.lineBetween((o.x + x) * CELL, (o.y + 1) * CELL, (o.x + x) * CELL, (o.y + rh - 1) * CELL);
+      for (let y = 1; y < rh; y++) g.lineBetween((o.x + 1) * CELL, (o.y + y) * CELL, (o.x + rw - 1) * CELL, (o.y + y) * CELL);
+      for (const desk of room.items.filter((f) => f.type === 'desk')) {
+        const p = usePoint(desk); g.lineStyle(2, 0x538b6d); g.strokeRect((o.x + p.x) * CELL + 3, (o.y + p.y) * CELL + 3, CELL - 6, CELL - 6);
+      }
       if (this.draft) {
         const { w, h } = dimensions(this.draft), x = (o.x + this.draft.x) * CELL, y = (o.y + this.draft.y) * CELL;
-        const valid = canPlace(room, this.draft).ok, color = valid ? 0x438967 : 0xc35752;
-        g.fillStyle(color, 0.35); g.fillRect(x, y, w * CELL, h * CELL);
-        g.lineStyle(2, color, 1); g.strokeRect(x, y, w * CELL, h * CELL);
+        const valid = Office.previewPlacement(view.game.ctx, this.roomId, this.draft).ok, color = valid ? 0x438967 : 0xc35752;
+        g.fillStyle(color, 0.35); g.fillRect(x, y, w * CELL, h * CELL); g.lineStyle(2, color); g.strokeRect(x, y, w * CELL, h * CELL);
         if (!this.ghost) this.ghost = this.add.image(0, 0, `${this.draft.type}-${this.draft.rotation}`).setOrigin(0.5, 1).setDepth(99999).setAlpha(0.75);
         this.ghost.setTexture(`${this.draft.type}-${this.draft.rotation}`).setPosition(x + w * CELL / 2, y + h * CELL + 4).setVisible(true);
+        if (this.draft.type === 'desk') { const p = usePoint(this.draft); g.lineStyle(3, 0x538b6d); g.strokeRect((o.x + p.x) * CELL + 3, (o.y + p.y) * CELL + 3, CELL - 6, CELL - 6); }
       }
     }
     notify() {
-      const room = this.rooms?.find((r) => r.roomId === this.roomId);
-      const valid = this.draft && room ? canPlace(room, this.draft) : null;
-      const info = { roomId: this.roomId, draft: this.draft ? { ...this.draft } : null, valid, rooms: this.rooms || [] };
-      const sig = JSON.stringify([info.roomId, info.draft, valid, info.rooms.map((r) => r.roomId)]);
+      const room = this.rooms?.find((r) => r.roomId === this.roomId), view = this.view();
+      const valid = this.roomDraft ? Office.previewRoom(view.game.ctx, this.roomDraft.type, this.roomDraft, this.roomDraft.roomId) : this.draft && room ? Office.previewPlacement(view.game.ctx, this.roomId, this.draft) : null;
+      const info = { roomId: this.roomId, draft: this.draft ? { ...this.draft } : null, roomDraft: this.roomDraft ? { ...this.roomDraft } : null, valid, rooms: this.rooms || [] };
+      const sig = JSON.stringify([info.roomId, info.draft, info.roomDraft, valid, info.rooms.map((r) => r.roomId), view.game?.state.week, view.game?.state.officeWorld.revision]);
       if (sig !== this.editSignature) { this.editSignature = sig; bridge.onEditChange?.(info); }
       return info;
     }
     action(action, value) {
       if (!this.view().editing) return;
       const { game } = this.view();
-      if (action === 'room') { this.roomId = +value; this.draft = null; const r = this.rooms.find((x) => x.roomId === this.roomId); if (r) { const o = roomOrigin(r); this.cameras.main.centerOn((o.x + ROOM_W / 2) * CELL, (o.y + ROOM_H / 2) * CELL); } }
+      if (action === 'room') { this.requestedRoom = +value; this.roomId = +value; this.draft = null; this.roomDraft = null; const r = this.rooms.find((x) => x.roomId === this.roomId); if (r) { const o = roomOrigin(r), d = sizeOf(r); this.cameras.main.centerOn((o.x + d.w / 2) * CELL, (o.y + d.h / 2) * CELL); } }
+      if (action === 'build') {
+        const q = Office.roomSite(game.ctx, value.type, value); if (!q.ok) return bridge.onMessage(q.msg);
+        this.draft = null; this.roomDraft = { ...q.site, type: value.type }; this.fitCamera();
+      }
+      if (action === 'room-move') { const r = this.rooms.find((x) => x.roomId === this.roomId); if (r) this.roomDraft = { ...r, type: game.state.rooms.find((m) => m.id === r.roomId).type }; this.draft = null; }
+      if (action === 'renovate') { const res = bridge.onConfigure(this.roomId, value); if (!res.ok) bridge.onMessage(res.msg); }
       if (action === 'add') {
-        const item = suggestFurniture(game.ctx, this.roomId, value);
-        if (!item) return bridge.onMessage('Bu odada bu eşya için uygun boşluk yok.');
-        this.draft = item;
+        const product = Office.SKU[value]; if (!product) return;
+        if (product.year > Office.year(game.ctx)) return bridge.onMessage(`${product.year} yılından önce satın alınamaz.`);
+        this.roomDraft = null;
+        if (product.type === 'computer') {
+          if (!this.draft?.id || this.draft.type !== 'desk') return bridge.onMessage('Bilgisayarı kurmak için önce sahnede bir masa seç.');
+          this.draft.computer = product.id;
+        } else if (this.draft?.id && this.draft.type === product.type) this.draft.sku = product.id;
+        else {
+          const item = suggestFurniture(game.ctx, this.roomId, value);
+          if (!item) return bridge.onMessage('Bu eşya için uygun boşluk yok.');
+          this.draft = item;
+        }
       }
       if (action === 'rotate' && this.draft) this.draft.rotation = (this.draft.rotation + 1) % 4;
-      if (action === 'cancel') this.draft = null;
-      if (action === 'confirm' && this.draft) { const res = bridge.onPlace(this.roomId, this.draft); if (res.ok) this.draft = null; }
+      if (action === 'cancel') { this.draft = null; this.roomDraft = null; }
+      if (action === 'confirm') {
+        if (this.roomDraft) { const d = this.roomDraft, res = d.roomId ? bridge.onConfigure(d.roomId, d) : bridge.onBuild(d.type, d); if (res.ok) { this.roomDraft = null; this.roomId = res.roomId || d.roomId; } else bridge.onMessage(res.msg); }
+        else if (this.draft) { const res = bridge.onPlace(this.roomId, this.draft); if (res.ok) this.draft = null; }
+      }
       if (action === 'remove' && this.draft?.id) { const res = bridge.onRemove(this.roomId, this.draft.id); if (res.ok) this.draft = null; }
       this.notify();
     }
@@ -289,7 +321,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     game,
     resize(w, h) { if (w > 0 && h > 0) { game.scale.resize(Math.round(w), Math.round(h)); scene?.fitCamera(); } },
     action: (action, value) => scene?.action(action, value),
-    setEditing() { if (scene) { scene.draft = null; scene.notify(); } },
+    setEditing() { if (scene) { scene.draft = null; scene.roomDraft = null; scene.notify(); } },
     zoom: (factor) => scene?.zoomBy(factor),
     fit: () => scene?.fitCamera(),
     destroy: () => game.destroy(false),

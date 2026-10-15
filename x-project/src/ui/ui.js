@@ -5,7 +5,9 @@ import { newGame, loadGame, M, Staff, Co, Charts, Engines, Crew } from '../game.
 import { PACK } from '../data/pack.js';
 import { menuIcon } from './icons.js';
 import { makeOfficeRenderer } from '../office/renderer.js';
-import { FURNITURE } from '../systems/office.js';
+import * as Office from '../systems/office.js';
+import { GROUPS } from '../data/office.js';
+const { FURNITURE, SKU } = Office;
 import { money } from '../kernel.js';
 import { SAVE_KEY, esc, fmt, pct, bar, discName, SPEEDS, kaosLabel, store, WIN_NAMES, ICON_OF, SUBS, move } from './util.js';
 import * as Menu from './menu.js';
@@ -44,8 +46,10 @@ export function boot(root, hotData = {}) {
       editing: app.editOffice, blocked: !!(app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.()) }),
     onHit: (h) => officeHit(h),
     onEditChange: (info) => { app.officeEditInfo = info; renderOfficeTools(); },
-    onPlace: (roomId, item) => { const res = G().placeFurniture(roomId, item); if (res.ok) save(); else note(res.msg, 'bad'); return res; },
-    onRemove: (roomId, id) => { const res = G().removeFurniture(roomId, id); if (res.ok) save(); else note(res.msg, 'bad'); return res; },
+    onPlace: (roomId, item) => { const res = G().placeFurniture(roomId, item); if (res.ok) { save(); renderHud(); } else note(res.msg, 'bad'); return res; },
+    onRemove: (roomId, id) => { const res = G().removeFurniture(roomId, id); if (res.ok) { save(); renderHud(); } else note(res.msg, 'bad'); return res; },
+    onConfigure: (id, proposal) => { const r = G().configureRoom(id, proposal); if (r.ok) { save(); renderHud(); } return r; },
+    onBuild: (type, proposal) => { const r = G().buildRoom(type, proposal); if (r.ok) { save(); renderHud(); renderBnav(); } return r; },
     onMessage: (text) => note(text, 'warn'), onReady: () => fit(),
   });
   // Ortak bağlam: pencere modülleri (src/ui/win_*.js, dialogs.js, chart.js) buradan okur ve fonksiyonlarını buraya ekler.
@@ -301,25 +305,59 @@ export function boot(root, hotData = {}) {
   }
 
   function renderOfficeTools() {
-    el.officeTools.hidden = !G();
+    const tools = el.officeTools;
+    tools.hidden = !G();
     el.stage.classList.toggle('paused', !!G() && !app.editOffice && (!app.running || !!blocked()) && !app.win);
     if (!G()) return;
-    const edit = el.officeTools.querySelector('[data-office=edit]');
-    edit.setAttribute('aria-pressed', String(app.editOffice)); edit.textContent = app.editOffice ? '✓ Düzenlemeyi bitir' : 'Ofisi düzenle';
-    el.officeTools.querySelector('.office-edit').hidden = !app.editOffice;
+    const edit = tools.querySelector('[data-office=edit]');
+    edit.setAttribute('aria-pressed', String(app.editOffice)); edit.textContent = app.editOffice ? '✓ Yerleşimi bitir' : 'Yerleşim ve mağaza';
+    tools.querySelector('.office-edit').hidden = !app.editOffice;
     if (!app.editOffice) return;
-    const info = app.officeEditInfo, draft = info?.draft;
-    const select = el.officeTools.querySelector('[data-office-room]');
-    const options = (info?.rooms || []).map((r) => `<option value="${r.roomId}">${esc(Staff.roomType(ctx(), G().state.rooms.find((x) => x.id === r.roomId).type).name)} #${r.roomId}</option>`).join('');
-    setHTML(select, options); if (info?.roomId != null) select.value = String(info.roomId);
-    const status = el.officeTools.querySelector('output');
-    status.textContent = draft ? `${FURNITURE[draft.type].name} · ${info.valid?.ok ? 'Yerleştirmeye uygun' : info.valid?.msg || ''}` : info?.rooms.length ? 'Eşyaya dokun, sürükle ve Yerleştir ile onayla.' : 'Önce bu binada bir oda kur.';
-    status.classList.toggle('invalid', !!draft && !info.valid?.ok);
-    for (const b of el.officeTools.querySelectorAll('[data-office=rotate], [data-office=cancel]')) b.disabled = !draft;
-    el.officeTools.querySelector('[data-office=confirm]').disabled = !draft || !info.valid?.ok;
-    const model = G().state.rooms.find((r) => r.id === info?.roomId);
-    el.officeTools.querySelector('[data-office=remove]').disabled = !draft?.id || !FURNITURE[draft.type]?.removable || draft.type === 'sofa' && model?.type === 'mola';
-    for (const b of el.officeTools.querySelectorAll('[data-office=add]')) b.disabled = !info?.rooms.length;
+    const c = ctx(), s = G().state, info = app.officeEditInfo, draft = info?.draft, rd = info?.roomDraft;
+    const room = s.officeWorld.rooms[info?.roomId], model = s.rooms.find((r) => r.id === info?.roomId);
+    const select = tools.querySelector('[data-office-room]');
+    setHTML(select, (info?.rooms || []).map((r) => `<option value="${r.roomId}">${esc(Staff.roomType(c, s.rooms.find((x) => x.id === r.roomId)?.type)?.name || 'Oda')} #${r.roomId}</option>`).join(''));
+    if (info?.roomId != null) select.value = String(info.roomId);
+    const status = tools.querySelector('output');
+    status.textContent = rd ? `Oda önizlemesi · ${rd.w}×${rd.h} · ${info.valid?.ok ? money(info.valid.cost) + ' · konumu onayla' : info.valid?.msg}` : draft ? `${SKU[draft.sku]?.name || FURNITURE[draft.type].name}${draft.computer ? ' + ' + SKU[draft.computer].name : ''} · ${info.valid?.ok ? info.valid.net ? money(info.valid.net) : 'Taşıma ücretsiz' : info.valid?.msg}` : info?.rooms.length ? 'Eşyaya dokun veya mağazadan bir parça seç.' : 'Önce bu binada bir oda kur.';
+    status.classList.toggle('invalid', !!(draft || rd) && !info.valid?.ok);
+    tools.querySelector('[data-office=rotate]').disabled = !draft;
+    tools.querySelector('[data-office=cancel]').disabled = !(draft || rd);
+    tools.querySelector('[data-office=confirm]').disabled = !(draft || rd) || !info.valid?.ok;
+    const sell = tools.querySelector('[data-office=remove]'); sell.disabled = !draft?.id;
+    sell.textContent = draft?.id ? `Sat · ${money(Math.round(((room?.items.find((f) => f.id === draft.id)?.paid || 0) + (room?.items.find((f) => f.id === draft.id)?.computerPaid || 0)) * 0.35))}` : 'Sat';
+    const people = s.staff.filter((p) => p.room === info?.roomId), reports = people.map((p) => Office.workReport(c, p));
+    tools.querySelector('#office-summary').textContent = model ? `${Office.workstations(c, model.id).length} hazır çalışma yeri · ${people.length} çalışan${reports.length ? ` · verim ×${(reports.reduce((a, r) => a + r.factor, 0) / reports.length).toFixed(2)} · ${Math.round(reports[0].temperature)}°C` : ''}${people.length > Staff.roomSeats(c, model) ? ' · Çalışma yeri eksik!' : ''}` : '';
+    tools.querySelector('[data-office-budget]').textContent = `${Math.floor(Office.year(c))} · Kasa ${money(s.cash)}`;
+    const list = Office.catalog(c, info?.roomId), groups = Object.entries(GROUPS).filter(([id]) => list.some((p) => p.group === id));
+    const group = tools.querySelector('[data-office-group]');
+    if (!groups.some(([id]) => id === app.officeGroup)) app.officeGroup = groups[0]?.[0];
+    setHTML(group, groups.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')); group.value = app.officeGroup;
+    const products = list.filter((p) => p.group === app.officeGroup), product = tools.querySelector('[data-office-product]');
+    if (!products.some((p) => p.id === app.officeProduct)) app.officeProduct = products.find((p) => p.year <= Office.year(c))?.id || products[0]?.id;
+    setHTML(product, products.map((p) => `<option value="${p.id}" ${p.year > Office.year(c) ? 'disabled' : ''}>${esc(p.name)} · ${p.year > Office.year(c) ? p.year + ' yılında' : money(Office.price(c, p.id))}</option>`).join('')); product.value = app.officeProduct;
+    const selected = SKU[app.officeProduct];
+    tools.querySelector('#office-product-info').textContent = selected ? `${selected.year} · ${selected.type === 'computer' ? `Güç ×${selected.power.toFixed(2)} · teknoloji ${selected.tech} · önce bir masa seç.` : selected.quality ? `Çalışma katsayısı ×${selected.quality}` : selected.cooling ? `Soğutma ${selected.cooling} · aylık işletme ${money(selected.running)}` : selected.service ? `${selected.service} kişilik hizmet` : selected.seats ? `${selected.seats} dinlenme koltuğu` : selected.bonus ? `Uygun departmanda +%${Math.round(selected.bonus * 100)}` : 'Konfor katkısı sınırlıdır.'}` : '';
+    tools.querySelector('[data-office=buy]').disabled = !room || !!rd || !selected || selected.year > Office.year(c) || selected.type === 'computer' && (!draft?.id || draft.type !== 'desk');
+    const bound = `${room?.roomId}:${s.officeWorld.revision}`;
+    if (room && tools.dataset.bound !== bound && !rd) {
+      for (const field of ['x', 'y', 'w', 'h', 'door', 'floor']) tools.querySelector(`#office-room-${field}`).value = room[field];
+      tools.dataset.bound = bound;
+    }
+  }
+  function furnishRoom(id) {
+    const room = G().state.officeWorld.rooms[id]; if (!room) return;
+    if (app.pop) u.closePop(); if (app.win) closeWin();
+    app.bIdx = buildings().findIndex((b) => b.id === room.building); renderBnav();
+    if (!app.editOffice) officeAction('edit'); R.action('room', id);
+  }
+  function prepareBuild(type) {
+    const w = +root.querySelector('#build-w')?.value || 8, h = +root.querySelector('#build-h')?.value || 8;
+    const building = app.buildFor || curBuilding().id;
+    const valid = Office.roomSite(ctx(), type, { w, h, building });
+    if (!valid.ok) return note(valid.msg, 'bad');
+    if (app.win) closeWin(); if (!app.editOffice) officeAction('edit');
+    R.action('build', { type, w, h, building });
   }
   function endOfficeEdit() {
     if (!app.editOffice) return;
@@ -338,6 +376,8 @@ export function boot(root, hotData = {}) {
     if (action === 'zoom-in') return R.zoom(1.2);
     if (action === 'zoom-out') return R.zoom(1 / 1.2);
     if (action === 'fit') return R.fit();
+    if (action === 'buy') return R.action('add', root.querySelector('[data-office-product]').value);
+    if (action === 'renovate') { const data = {}; for (const f of ['x', 'y', 'w', 'h', 'door']) data[f] = +root.querySelector(`#office-room-${f}`).value; data.floor = root.querySelector('#office-room-floor').value; return R.action('renovate', data); }
     R.action(action, value);
   }
 
@@ -441,7 +481,7 @@ export function boot(root, hotData = {}) {
       case 'ksave': save(); return note('💾 Kaydedildi.', 'good');
       case 'knews': u.closePop(); return app.win === 'gunluk' ? closeWin() : openWin('gunluk');
       case 'pclose': return u.closePop();
-      case 'pdept': { const r = g.state.rooms.find((x) => x.id === +id); if (r) { const bi = buildings().findIndex((bb) => bb.types.includes(r.type)); if (bi >= 0) { app.bIdx = bi; renderBnav(); } } return u.openPop({ kind: 'room', roomId: +id }); }
+      case 'pdept': { const r = g.state.rooms.find((x) => x.id === +id); if (r) { const bi = buildings().findIndex((bb) => bb.id === g.state.officeWorld.rooms[r.id]?.building); if (bi >= 0) { app.bIdx = bi; renderBnav(); } } return u.openPop({ kind: 'room', roomId: +id }); }
       case 'proom': { const was = app.popWas; app.pop = null; u.renderPop(); app.room = +id; openWin('oda'); app.wasRunning = was; return; }
       case 'pmgr': app.pop.sub = app.pop.sub === 'mgr' ? null : 'mgr'; return u.renderPop();
       case 'setmgr': { const r = g.setManager(+id, b.dataset.pid ? +b.dataset.pid : null); if (app.pop) app.pop.sub = null; run(r); return u.renderPop(); }
@@ -564,7 +604,9 @@ export function boot(root, hotData = {}) {
       case 'raise': return run(g.raise(+id));
       case 'level': return run(g.levelUp(+id));
       case 'expand': app.expanded.has(+id) ? app.expanded.delete(+id) : app.expanded.add(+id); return renderWindow();
-      case 'build': return run(g.buildRoom(id));
+      case 'build': return prepareBuild(id);
+      case 'furnish': return furnishRoom(+id);
+      case 'build-menu': app.buildFor = curBuilding().id; return openWin('insaat');
       case 'demolish': return twice('dem' + id, () => g.demolishRoom(+id));
       case 'office': return run(g.moveOffice());
       case 'stations': return run(g.upgradeStations());
@@ -598,6 +640,8 @@ export function boot(root, hotData = {}) {
   });
   root.addEventListener('change', (e) => {
     if (e.target.matches('[data-office-room]')) return R.action('room', e.target.value);
+    if (e.target.matches('[data-office-group]')) { app.officeGroup = e.target.value; app.officeProduct = null; return renderOfficeTools(); }
+    if (e.target.matches('[data-office-product]')) { app.officeProduct = e.target.value; return renderOfficeTools(); }
     const t = e.target, g = G();
     if (t.dataset.import && t.files?.[0]) { u.importSave(t.files[0]); t.value = ''; return; }
     if (!g) return;

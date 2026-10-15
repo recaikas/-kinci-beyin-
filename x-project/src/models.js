@@ -5,6 +5,7 @@ import { CRITICS } from './data/critics.js';
 import { REGIONS as REGION_DATA } from './data/regions.js';
 import { GENRE_IDS, REL, TOPIC_FIT, SUB, TOPIC_SUB, LEGENDS, TIER, MASTERY, LEGACY_SUB, tierOfValue } from './data/genres.js';
 import { FEATURES, FEAT, BASE, CATS, GENRE_WANTS, GENRE_MUST, SUB_NEEDS, LICENSED, MIDDLEWARE } from './data/engines.js';
+import * as Office from './systems/office.js';
 
 export const tableYear = (ctx) => calendar(ctx.state, ctx.pack).tableYear;
 export const inflation = (ctx, y = tableYear(ctx)) => Math.pow(ctx.pack.economy.inflation, y - ctx.pack.meta.startYear);
@@ -35,7 +36,8 @@ export function expectedStationTier(ctx, y = tableYear(ctx)) {
   for (const s of ctx.pack.workstations.tiers) if (y >= s.expectedFrom) t = s.tier;
   return t;
 }
-export function stationFactor(ctx) {
+export function stationFactor(ctx, person) {
+  if (person && ctx.state.officeWorld?.version >= 2) return Office.workReport(ctx, person).factor;
   const ws = ctx.pack.workstations;
   const tier = ctx.state.stationDown > 0 ? 0 : ctx.state.stationTier;
   return clamp(1 + ws.step * (tier - expectedStationTier(ctx)), ws.min, ws.max);
@@ -94,7 +96,7 @@ export function personWeekly(ctx, p, n) {
   let prod = eraMult(ctx, 'prodMult');
   if (prod < 1 && ctx.state.research.done.uzaktan) prod = 1 - (1 - prod) * 0.3;
   const rel = 1 + ctx.pack.relations.outK * relAvg(ctx, p) / 100;
-  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl * designOf(ctx, p).speed * rel;
+  return (pr.K * p.skill * mYear(ctx) * eta(ctx, n) * stationFactor(ctx, p) / 4) * morale * crunch * traitOf(ctx, p, 'out') * prod * lvl * designOf(ctx, p).speed * rel;
 }
 
 // --- Konu D: türler ve kombinasyon katmanları

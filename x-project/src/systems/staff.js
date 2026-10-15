@@ -5,13 +5,14 @@ import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel, 
 import { genSkills, growSkills, weeklyVacations, weeklyRelations, ensureSkills } from './people.js';
 import * as Genres from './genres.js';
 import { leadOf } from '../data/crew.js';
+import * as Office from './office.js';
 
 // --- Odalar
 export const officeOf = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
 export const roomType = (ctx, type) => ctx.pack.rooms.types.find((t) => t.id === type);
-export const slots = (ctx) => officeOf(ctx).slots + (ctx.state.office.floors || 0) * (officeOf(ctx).floorSlots || 0);
-export const roomSeats = (ctx) => officeOf(ctx).roomSeats;
-export const seats = (ctx) => ctx.state.rooms.length * roomSeats(ctx);
+export const slots = (ctx) => Math.max(ctx.state.rooms.length, Math.floor(ctx.pack.buildings.filter((b) => !b.minTier || ctx.state.office.tier >= b.minTier).reduce((a, b) => { const p = Office.plotSize(ctx.state, b.id); return a + (p.w - 2) * (p.h - 3); }, 0) / 81));
+export const roomSeats = (ctx, room) => room ? Office.capacity(ctx, room) : officeOf(ctx).roomSeats;
+export const seats = (ctx) => ctx.state.rooms.filter((r) => !['mola', 'tuvalet'].includes(r.type)).reduce((a, r) => a + roomSeats(ctx, r), 0);
 export const roomOf = (ctx, p) => ctx.state.rooms.find((r) => r.id === p.room);
 export const membersOf = (ctx, room) => ctx.state.staff.filter((p) => p.room === room.id);
 export const hasRoom = (ctx, type) => ctx.state.rooms.some((r) => r.type === type);
@@ -42,25 +43,26 @@ function vacateManager(ctx, p) {
 }
 
 export function freeRoom(ctx, prefer = 'gelistirme') {
-  const cap = roomSeats(ctx);
-  const open = ctx.state.rooms.filter((r) => membersOf(ctx, r).length < cap);
+  const open = ctx.state.rooms.filter((r) => !['mola', 'tuvalet'].includes(r.type) && membersOf(ctx, r).length < roomSeats(ctx, r));
   return open.find((r) => r.type === prefer) || open[0] || null;
 }
 
-export function buildRoom(ctx, type) {
+export function buildRoom(ctx, type, proposal = {}) {
   const { state, ledger } = ctx;
   const t = roomType(ctx, type);
   if (!t) return { ok: false, msg: 'Geçersiz oda.' };
-  if (state.rooms.length >= slots(ctx)) return { ok: false, msg: 'Boş alan yok. Daha büyük ofise taşın.' };
   if (t.research && !state.research.done[t.research]) return { ok: false, msg: `${t.name} için araştırma gerekli.` };
   if (t.office && state.office.tier < t.office) return { ok: false, msg: `${t.name} için en az "${ctx.pack.offices[t.office - 1].name}" gerekli.` };
-  const cost = Math.round(t.cost * inflation(ctx) ** 0.5);
+  const site = Office.previewRoom(ctx, type, proposal);
+  if (!site.ok) return site;
+  const cost = site.cost;
   if (state.cash < cost) return { ok: false, msg: `${t.name} ${cost.toLocaleString('tr-TR')} $.` };
   ledger.post('oda', -cost, t.name);
-  state.rooms.push({ id: state.nextId++, type, mode: 'otomatik' });
-  ctx.news(`🧱 ${t.name} kuruldu.`, 'good');
+  const model = { id: state.nextId++, type, mode: 'otomatik', buildCost: cost };
+  state.rooms.push(model); Office.registerRoom(state, model, site.site);
+  ctx.news(`🧱 ${t.name} kuruldu (${site.site.w}×${site.site.h}). İçini Yerleşim mağazasından donat.`, 'good');
   ctx.bus.fire('facilityUpgraded', t);
-  return { ok: true };
+  return { ok: true, roomId: model.id };
 }
 
 export function demolishRoom(ctx, id) {
@@ -70,11 +72,12 @@ export function demolishRoom(ctx, id) {
   if (state.rooms.length === 1) return { ok: false, msg: 'Son odayı yıkamazsın.' };
   const others = state.rooms.filter((r) => r.id !== id);
   const people = membersOf(ctx, room);
-  const freeSeats = others.length * roomSeats(ctx) - state.staff.filter((p) => p.room !== id).length;
+  const freeSeats = others.filter((r) => !['mola', 'tuvalet'].includes(r.type)).reduce((a, r) => a + Math.max(0, roomSeats(ctx, r) - membersOf(ctx, r).length), 0);
   if (people.length > freeSeats) return { ok: false, msg: 'Odadakilere başka yerde yer yok.' };
+  for (const f of [...(state.officeWorld.rooms[id]?.items || [])]) Office.removeFurniture(ctx, id, f.id);
   state.rooms = others;
   for (const p of people) p.room = freeRoom(ctx).id;
-  ledger.post('oda', Math.round(roomType(ctx, room.type).cost * inflation(ctx) ** 0.5 * pack.rooms.demolishRefund), 'Oda söküldü');
+  ledger.post('oda', Math.round((room.buildCost ?? roomType(ctx, room.type).cost * inflation(ctx) ** 0.5) * pack.rooms.demolishRefund), 'Oda söküldü');
   return { ok: true };
 }
 
@@ -83,7 +86,7 @@ export function moveStaff(ctx, id, roomId) {
   const room = ctx.state.rooms.find((r) => r.id === roomId);
   if (!p || !room) return { ok: false, msg: 'Geçersiz.' };
   if (p.room === roomId) return { ok: true };
-  if (membersOf(ctx, room).length >= roomSeats(ctx)) return { ok: false, msg: 'O oda dolu.' };
+  if (membersOf(ctx, room).length >= roomSeats(ctx, room)) return { ok: false, msg: 'Oda dolu veya tamamlanmış çalışma yeri yok.' };
   p.room = roomId;
   vacateManager(ctx, p);
   return { ok: true };
@@ -168,7 +171,7 @@ export function hire(ctx, id) {
   const a = state.applicants.find((x) => x.id === id);
   if (!a) return { ok: false, msg: 'Aday bulunamadı.' };
   const room = freeRoom(ctx);
-  if (!room) return { ok: false, msg: 'Boş koltuk yok. Oda kur ya da ofisi büyüt.' };
+  if (!room) return { ok: false, msg: 'Boş çalışma yeri yok. Masa, sandalye ve bilgisayar kur.' };
   ledger.post('ise_alim', -a.salary * pack.economy.hireFeeMonths, `${a.name} işe alındı`);
   a.hiredWeek = state.week; a.room = room.id;
   state.staff.push(a);
@@ -241,7 +244,7 @@ export function weeklyStaff(ctx) {
   const wb = pack.wellbeing;
   const n = state.staff.length;
   const teamMood = state.staff.reduce((s, p) => s + traitOf(ctx, p, 'moraleTeam', 0), 0);
-  const restRoom = hasRoom(ctx, 'mola');
+  const restRoom = ctx.state.rooms.some((r) => r.type === 'mola' && Office.capacity(ctx, r) > 0);
   const busyRooms = new Set(state.rooms.filter((r) => roomBusy(ctx, r)).map((r) => r.id));
   const leaving = [];
   weeklyRelations(ctx);
@@ -279,6 +282,8 @@ export function weeklyStaff(ctx) {
     if (state.flags.union && state.crunch) ds -= 2;
     if (restRoom) ds += pack.rooms.restRoomStress;
     const des = designOf(ctx, p);
+    const conditions = Office.workReport(ctx, p);
+    ds += conditions.stress || 0;
     p.stress = clamp(p.stress + ds * (ds > 0 ? traitOf(ctx, p, 'stress') * des.stress * roomStressK(ctx, room) : 1), 0, 100);
 
     const market = salaryFor(ctx, p.skill) * Math.pow(pack.careerRules.salaryPerLevel, careerLevel(p));
@@ -323,7 +328,7 @@ export function weeklyOutput(ctx, roomFilter) {
   const out = [];
   for (const p of working(ctx.state)) {
     const room = roomOf(ctx, p);
-    if (room && roomFilter(room)) out.push({ p, w: personWeekly(ctx, p, n) * roomOutK(ctx, room), room });
+    if (room && roomFilter(room)) { const w = personWeekly(ctx, p, n) * roomOutK(ctx, room); if (w > 0) out.push({ p, w, room }); }
   }
   return out;
 }

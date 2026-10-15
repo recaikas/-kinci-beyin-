@@ -11,24 +11,26 @@ npm ci                     # sabitlenmiş Phaser ve geliştirme bağımlılıkla
 npm start                  # http://localhost:8080 (başlangıçta derler)
 npm run build              # statik yayın çıktısı: dist/
 npm run test:office        # yerleşim + gerçek Phaser Canvas/DOM entegrasyon kontrolleri (Node)
-node test/validate.mjs      # mevcut 422 kontrol; bilinen 11 eski beklenti başarısızlığı var
+node test/validate.mjs      # genel ekonomi kontrolleri; güncel sonuç docs/OFFICE-VALIDATION.md içinde
 node tools/balance.mjs 8 --md docs/DENGE.md   # tam denge raporu
 ```
 
 Node 18+ gerekir. Ofis sahnesi Phaser 3.90.0 kullanır; esbuild tüm oyun kodunu ve motoru `dist/app.js` içine paketler. Oyun açılırken motor CDN'den indirilmez. `dist/` klasörü statik sunucuya bütünüyle konabilir; çift tıklayarak `file://` üzerinden açmak desteklenen çalıştırma yöntemi değildir. Kaynak değişikliklerinden sonra `npm start` yeniden başlatılmalıdır.
 
-Bu daldaki geçişin kapsamı ve doğrulama sınırları: [Phaser geçiş notları](docs/PHASER-MIGRATION.md).
+Bu dalda odalar taşınır ve boyutlandırılır; masa, sandalye ve dönemine uygun bilgisayar ayrı alınır. Fiziksel donanım, ısı ve ihtiyaç alanları üretimi etkiler. Nihai sanat çalışması henüz tamamlanmadı.
+
+Kapsam ve doğrulama sınırları: [Phaser geçiş notları](docs/PHASER-MIGRATION.md).
 
 ## Mimari (şartnameye göre)
 
 | Katman | Dosya | Ne yapar |
 |---|---|---|
-| Veri | `src/data/pack.js` | Tüm sayılar. Her blok `_tag` taşır: V doğrulanmış, L sınırlı, P bizim önerimiz |
+| Veri | `src/data/pack.js`, `src/data/office.js` | Tüm sayılar. Her blok `_tag` taşır: V doğrulanmış, L sınırlı, P bizim önerimiz |
 | Çekirdek servisler | `src/kernel.js` | Takvim (y/m/w, 48 hafta/yıl), olay veriyolu, tohumlu RNG, defter |
 | Modeller | `src/models.js` | Üretim, değerlendirme (`T_d = H·D·τ·1,11^P`), satış (`zirve = B·Pz·Z·S(n)·…`) |
 | Sistemler | `src/systems/*.js` | Kadro, üretim, pazar, ekonomi, olaylar |
 | Oyun | `src/game.js` | Haftalık tik ve oyuncu eylemleri |
-| Ofis dünyası | `src/systems/office.js` | Kayıtlı hücre konumları, eşya dönüşleri, çakışma ve erişilebilirlik, yol bulma |
+| Ofis dünyası | `src/systems/office.js` | Oda geometrisi, dönemsel mağaza, gerçek istasyon kapasitesi, çalışma koşulları ve yol bulma |
 | Ofis sahnesi | `src/office/renderer.js`, `assets.js` | Phaser sahnesi, kamera, çalışan hareketi, sprite atlası ve yerleşim önizlemesi |
 | Arayüz | `src/ui/ui.js`, `win_*.js`, `dialogs.js`, `chart.js`, `util.js`, `icons.js`, `index.html` | HTML/CSS yönetim pencereleri ve sahne bağlantısı |
 
@@ -92,7 +94,7 @@ Alt çubukta Kaydet, Günlük ve Menü var. Taçlı kurucu veya Menü kurucu men
 - **Ödüller**: Yılın Oyunu artık tarihî hitlerle yarışır; olamazsan "türünün en iyisi" ödülü
 - 10 tarihî dönem: 1983 çöküşü, dot-com, 2008 krizi, mobil furyası, ganimet kutusu skandalı, pandemi, işten çıkarma dalgası…
 
-## Denge (akıllı bot, 50 yıl)
+## Önceki denge ölçümü (ofis mağazası öncesi)
 
 `test/smartbot.mjs` oyunun tüm sistemlerini kullanan bir bottur. `node tools/balance.mjs 8 --md docs/DENGE.md` her zorlukta 8 tohumla 1976–2025 oynatıp `docs/DENGE.md` raporunu üretir (yaklaşık 1,5 dakika). Özet:
 
@@ -105,6 +107,6 @@ Alt çubukta Kaydet, Günlük ve Menü var. Taçlı kurucu veya Menü kurucu men
 | Çok zor | 1/8 | — |
 | Efsanevi | 4/8 | küçük sözleşme stüdyosu |
 
-Bu ölçümle bulunan ve düzeltilen 10 sorun raporun sonunda listelidir.
+Bu tablo ofis mağazası öncesindeki ölçümdür; yeni donanım ve hizmet maliyetleriyle yeniden kalibrasyon gerekir. Önceki ölçümle bulunan ve düzeltilen 10 sorun raporun sonunda listelidir.
 
 Satış ölçeği (B ve Pz) PDF'teki değerlerden yeniden kalibre edildi; gerekçe `pack.js` içinde yazılı.

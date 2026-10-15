@@ -1,3 +1,4 @@
+import * as Office from './office.js';
 // Yayın sonrası (MGT/GDT): güncelleme, fiyat indirimi, başka platforma uyarlama (port), ek paket.
 import { inflation, peakWeekly, platformById, activePlatforms } from '../models.js';
 import { revive, onRelease } from './charts.js';
@@ -43,7 +44,7 @@ export function priceDrop(ctx, id) {
 
 // Port: aynı oyun yeni platformlara, biraz düşük notla ve daha az satışla.
 export function portTargets(ctx, g) {
-  const maxTech = ctx.pack.workstations.tiers[ctx.state.stationTier].maxTech;
+  const maxTech = Office.maxTech(ctx);
   return activePlatforms(ctx).filter((p) => !g.platforms.includes(p.id) && (p.own || p.tech <= maxTech));
 }
 export function portCost(ctx, g, pid) {

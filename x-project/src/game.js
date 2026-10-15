@@ -111,6 +111,7 @@ export function makeGame(state, pack = PACK) {
       founder.room = state.rooms[0].id;
       Genres.assignTaste(ctx, founder, true);
       state.staff.push(founder);
+      Office.seedStarter(ctx);
       if (Genres.bg(ctx).bonus.fans) state.fans += Genres.bg(ctx).bonus.fans;
       Staff.genApplicants(ctx);
       contracts();
@@ -125,6 +126,7 @@ export function makeGame(state, pack = PACK) {
     tick() {
       if (state.gameOver || state.pending.length) return false;
       state.week++;
+      Office.weekly(ctx);
       const newMonth = state.week % 4 === 0;
       const newYear = state.week % 48 === 0;
       // personel / üretim
@@ -186,15 +188,16 @@ export function makeGame(state, pack = PACK) {
     freeDevRooms: () => Prod.freeDevRooms(ctx),
     startProject(o) {
       const free = Prod.freeDevRooms(ctx);
-      const room = o.roomId ? free.find((r) => r.id === o.roomId) : free[0];
+      const room = o.roomId ? free.find((r) => r.id === o.roomId) : free.find((r) => Office.workstations(ctx, r.id).length) || free[0];
       if (!room) return { ok: false, msg: 'Boş geliştirme odası yok. Ofis penceresinden yeni bir geliştirme odası kur.' };
+      if (!Office.workstations(ctx, room.id).length) return { ok: false, msg: 'Bu odada masa, sandalye ve bilgisayarı tamamlanmış bir çalışma yeri kur.' };
       const size = pack.sizes.find((s) => s.id === o.size);
       if (size.research && !state.research.done[size.research]) return { ok: false, msg: 'Bu boyut için araştırma gerekli.' };
       if (state.office.tier < size.office) return { ok: false, msg: `Bu boyut için en az "${pack.offices[size.office - 1].name}" gerekli.` };
       if (!o.platforms?.length) return { ok: false, msg: 'En az bir platform seç.' };
       if (o.kind !== 'ek' && !Genres.knows(ctx, o.genre)) return { ok: false, msg: 'Bu türü henüz bilmiyorsun; önce araştır.' };
       if (o.kind !== 'ek' && o.sub && !Genres.subAvailable(ctx, o.sub)) return { ok: false, msg: 'Bu alt tür henüz yok ya da bilinmiyor.' };
-      const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
+      const maxTech = Office.maxTech(ctx, room.id);
       const locked = o.platforms.map((id) => M.platformById(ctx, id)).filter((p) => !p || (!p.own && p.tech > maxTech));
       if (locked.some((p) => !p)) return { ok: false, msg: 'Bu platform artık piyasada değil.' };
       if (locked.length) return { ok: false, msg: `${locked[0].name} için daha iyi iş istasyonu lazım.` };
@@ -277,7 +280,8 @@ export function makeGame(state, pack = PACK) {
     train: (id, tid) => Staff.train(ctx, id, tid),
     raise: (id) => Staff.raise(ctx, id, pack.economy.raiseOnDemand),
     // --- Odalar ve kariyer
-    buildRoom(type) { const res = Staff.buildRoom(ctx, type); if (res.ok) Office.ensureOffice(state, pack); return res; },
+    buildRoom(type, proposal) { const res = Staff.buildRoom(ctx, type, proposal); if (res.ok) Office.ensureOffice(state, pack); return res; },
+    configureRoom: (id, proposal) => Office.configureRoom(ctx, id, proposal),
     demolishRoom(id) { const res = Staff.demolishRoom(ctx, id); if (res.ok) Office.ensureOffice(state, pack); return res; },
     placeFurniture: (roomId, item) => Office.placeFurniture(ctx, roomId, item),
     removeFurniture: (roomId, id) => Office.removeFurniture(ctx, roomId, id),

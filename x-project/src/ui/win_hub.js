@@ -4,6 +4,7 @@ import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc } from './util.js';
 import * as Menu from './menu.js';
+import * as Office from '../systems/office.js';
 
 export function make(u) {
   const { G, app, ctx, icons } = u;
@@ -60,7 +61,7 @@ export function make(u) {
     const g = G(), s = g.state, c = ctx();
     const r = s.rooms.find((x) => x.id === app.room);
     if (!r) return '<p class="muted">Oda yok.</p>';
-    const t = Staff.roomType(c, r.type), people = Staff.membersOf(c, r), cap = Staff.roomSeats(c);
+    const t = Staff.roomType(c, r.type), people = Staff.membersOf(c, r), cap = Staff.roomSeats(c, r);
     let work = '';
     if (r.type === 'gelistirme') {
       const own = s.projects.find((p) => p.roomId === r.id);
@@ -72,8 +73,8 @@ export function make(u) {
       const list = s.games.slice(-8).reverse().map((gm) => `<div class="row-item"><div><b>${esc(gm.name)}</b><small>${gm.playerReport ? 'rapor hazır' : gm.active && gm.weeks < PACK.playerReport.minWeeks ? `${PACK.playerReport.minWeeks - gm.weeks} hf sonra` : 'rapor çıkarılabilir'}</small></div><button data-act="report" data-id="${gm.id}" ${gm.active && gm.weeks < PACK.playerReport.minWeeks ? 'disabled' : ''}>${gm.playerReport ? 'Raporu gör' : 'Rapor çıkar · bedava'}</button></div>`).join('');
       work = `<p class="muted small">Müşteri destek ekibi oyuncu raporlarını bedavaya hazırlar.</p>${list || '<p class="muted">Henüz oyun yok.</p>'}`;
     } else work = targetSelect(r);
-    const hire = people.length < cap ? `<details class="box"><summary><h3>Bu odaya işe al · ${cap - people.length} boş koltuk</h3></summary>${s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill}</small></div><button data-act="hire-here" data-id="${p.id}" data-room="${r.id}">${money(p.salary)}/ay</button></div>`).join('') || '<p class="muted">Bu ay başvuru yok.</p>'}</details>` : '';
-    return `<p class="muted small">${t.desc}</p><section class="box">${work}</section>
+    const hire = !['mola', 'tuvalet'].includes(r.type) && people.length < cap ? `<details class="box"><summary><h3>Bu odaya işe al · ${cap - people.length} boş koltuk</h3></summary>${s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill}</small></div><button data-act="hire-here" data-id="${p.id}" data-room="${r.id}">${money(p.salary)}/ay</button></div>`).join('') || '<p class="muted">Bu ay başvuru yok.</p>'}</details>` : '';
+    return `<p class="muted small">${t.desc}</p><button data-act="furnish" data-id="${r.id}">Odayı donat ve düzenle</button><section class="box">${work}</section>
       <div class="head"><h3>Çalışanlar</h3><span class="pill">${people.length}/${cap}</span></div>
       <div class="people">${people.map(personRow).join('') || '<p class="muted small">Boş oda. Personel penceresinden birini buraya taşı ya da aşağıdan işe al.</p>'}</div>${hire}
       ${s.rooms.length > 1 ? `<div class="foot"><button class="ghost danger small" data-act="demolish" data-id="${r.id}">${app.confirm === 'dem' + r.id ? 'Emin misin?' : 'Odayı sök'}</button></div>` : ''}`;
@@ -82,10 +83,12 @@ export function make(u) {
   function winBuild() {
     const s = G().state, c = ctx();
     const b = PACK.buildings.find((x) => x.id === app.buildFor) || PACK.buildings[0];
-    const free = Staff.slots(c) - s.rooms.length;
-    return `<p class="muted small">${esc(b.name)} için oda kur. Boş alan: ${free}.</p><div class="tiles">${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => {
+    const plot = Office.plotSize(s, b.id);
+    return `<p class="muted small">${esc(b.name)} · ${plot.w}×${plot.h} hücre. Oda türünü seç; sahnede konumunu önizleyip onayla. Yeni oda boş açılır.</p>
+      <div class="office-dimensions"><label>Genişlik<input id="build-w" type="number" min="6" max="20" value="8"></label><label>Derinlik<input id="build-h" type="number" min="6" max="20" value="8"></label></div>
+      <div class="tiles">${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => {
       const lock = t.research && !s.research.done[t.research] ? 'araştır' : t.office && s.office.tier < t.office ? PACK.offices[t.office - 1].name : '';
-      return `<button class="tile" data-act="build" data-id="${t.id}" ${lock || free <= 0 ? 'disabled' : ''} title="${esc(t.desc)}">${t.name}<small>${lock || money(t.cost * M.inflation(c) ** 0.5)}</small></button>`;
+      return `<button class="tile" data-act="build" data-id="${t.id}" ${lock ? 'disabled' : ''} title="${esc(t.desc)}">${t.name}<small>${lock || `${money(t.cost * M.inflation(c) ** 0.5)} / 8×8 alan`}</small></button>`;
     }).join('')}</div>${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => `<p class="small"><b>${t.name}:</b> <span class="muted">${t.desc}</span></p>`).join('')}`;
   }
 

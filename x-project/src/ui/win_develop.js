@@ -3,6 +3,7 @@ import { M, Prod, Market, Staff, Know, Modern, Charts, Genres, Engines, Crew } f
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
+import * as Office from '../systems/office.js';
 
 export function make(u) {
   const { G, app, ctx } = u;
@@ -80,7 +81,7 @@ export function make(u) {
         + nav(false, 'Platforma geç');
     }
     if (app.wiz === 2) {
-      const maxTech = PACK.workstations.tiers[s.stationTier].maxTech;
+      const maxTech = Office.maxTech(c, d.roomId ? +d.roomId : g.freeDevRooms().find((r) => Office.workstations(c, r.id).length)?.id);
       const all = M.activePlatforms(c), hidden = all.filter((p) => !Crew.isLicensed(c, p.id)).length;
       d.platforms = d.platforms.filter((id) => Crew.isLicensed(c, id));
       const plats = all.filter((p) => Crew.isLicensed(c, p.id)).map((p) => {

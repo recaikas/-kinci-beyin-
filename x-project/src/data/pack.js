@@ -429,7 +429,8 @@ export const PACK = {
       { id: 'ses', name: 'Ses stüdyosu', cost: 40000, research: 'oda_uzman', disc: 'ses', floor: '#5a3f73', desc: 'Tüm proje boyunca yalnızca ses puanı üretir, hızlı.' },
       { id: 'qa', name: 'Kalite güvence', cost: 30000, research: 'oda_qa', floor: '#3f7360', desc: 'Geliştirme sırasında hata ayıklar, oynanışı cilalar.' },
       { id: 'arastirma', name: 'Araştırma odası', cost: 30000, floor: '#73653f', desc: 'Araştırma puanı üretir.' },
-      { id: 'mola', name: 'Mola odası', cost: 15000, floor: '#734a5a', desc: 'Buradakiler hızla dinlenir; varlığı herkesin stresini azaltır.' },
+      { id: 'mola', name: 'Dinlenme ve çay odası', cost: 6000, floor: '#734a5a', desc: 'Koltuk, çaydanlık ve kahve makinesi yerleştir. Ekip molaya kendisi gelir; boş oda fayda sağlamaz.' },
+      { id: 'tuvalet', name: 'Tuvalet', cost: 3500, floor: '#91aaaa', desc: 'Klozet ve lavabo kur. Yetersiz hizmet kapasitesi beklemeyi ve çalışma süresi kaybını artırır.' },
       { id: 'donanim', name: 'Donanım laboratuvarı', cost: 500000, research: 'donanim_lab', office: 3, floor: '#4a4a5a', desc: 'Kendi konsolunu yapar. Donanım mühendisi gerekir.' },
       { id: 'pazarlama', name: 'Pazarlama ve yayın', cost: 35000, office: 2, floor: '#735a3f', desc: 'Projelere her hafta hype üretir; kendi yayınında oyunun gücünü artırır.' },
       { id: 'musteri', name: 'Müşteri destek', cost: 25000, office: 2, floor: '#3f6773', desc: 'Satıştaki oyunlar için hayran kazandırır, kötü not ve hata kaynaklı hayran kaybını azaltır, oyuncu raporlarını bedavaya çıkarır.' },
@@ -447,10 +448,10 @@ export const PACK = {
 
   // Binalar (MGT esinli): odalar türüne göre ayrı binalarda durur; sahnede kaydırarak geçilir.
   buildings: [
-    { id: 'ana', name: 'Ana ofis', types: ['gelistirme', 'mola'] },
-    { id: 'studyo', name: 'Stüdyolar', types: ['grafik', 'ses'], minTier: 2 },
-    { id: 'arge', name: 'Ar-Ge binası', types: ['arastirma', 'donanim'], minTier: 2 },
-    { id: 'yayin', name: 'Yayın ve destek', types: ['qa', 'pazarlama', 'musteri'], minTier: 2 },
+    { id: 'ana', name: 'Ana ofis', types: ['gelistirme', 'mola', 'tuvalet'] },
+    { id: 'studyo', name: 'Stüdyolar', types: ['grafik', 'ses', 'mola', 'tuvalet'], minTier: 2 },
+    { id: 'arge', name: 'Ar-Ge binası', types: ['arastirma', 'donanim', 'mola', 'tuvalet'], minTier: 2 },
+    { id: 'yayin', name: 'Yayın ve destek', types: ['qa', 'pazarlama', 'musteri', 'mola', 'tuvalet'], minTier: 2 },
   ],
 
   // Oyuncu raporu (GDT esinli): oyuncular neyi beğendi; görev önemleri bilgi olarak birikir (P).

@@ -4,12 +4,34 @@ import { PACK } from '../src/data/pack.js';
 import { createState, makeGame, newGame as rawNewGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub, Regions, Genres } from '../src/game.js';
 // Konu D öncesi testler 6 eski türün hepsini bilinen sayar; yeni tür testleri rawNewGame kullanır.
 // Konu H öncesi testler lisans kavramını bilmez: her platform lisanslı başlar (lisans testleri rawNewGame kullanır).
-const newGame = (o) => { const g = rawNewGame(o); for (const gg of PACK.genres.slice(0, 6)) g.state.research.done[gg.research] ??= 0; for (const p of PACK.platforms) g.state.platLic[p.id] = true; return g; };
+// Eski ekonomi senaryoları hazır ofisleri varsayar. Sadece bu test fikstürleri eski
+// kayıt dönüşümüyle donatılır; gerçek satın alma/boş oda kuralları office.test.mjs'de test edilir.
+const newGame = (o) => {
+  const g = rawNewGame(o);
+  for (const gg of PACK.genres.slice(0, 6)) g.state.research.done[gg.research] ??= 0;
+  for (const p of PACK.platforms) g.state.platLic[p.id] = true;
+  return legacyOfficeFixture(g);
+};
+const legacyOfficeFixture = (g) => {
+  let signature;
+  const prepare = () => {
+    const s = g.state, next = JSON.stringify([s.office.tier, s.stationTier, s.rooms.map((r) => [r.id, r.type]), s.staff.map((p) => [p.id, p.room])]);
+    if (next === signature) return;
+    delete s.officeWorld; Office.ensureOffice(s, g.pack); signature = next;
+  };
+  for (const action of ['buildRoom', 'startProject', 'tick', 'mergeStudio']) {
+    const original = g[action];
+    g[action] = (...args) => { prepare(); const result = original(...args); prepare(); return result; };
+  }
+  g.prepareOfficeFixture = prepare;
+  return g;
+};
 import { EXTRA_PUBS, TRAITS } from '../src/data/publishers.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
 import * as Ev from '../src/systems/events.js';
 import * as M from '../src/models.js';
+import * as Office from '../src/systems/office.js';
 import { runSmartBot } from './smartbot.mjs';
 
 let pass = 0, fail = 0;
@@ -65,6 +87,7 @@ check('P=3 → ~72', Math.abs(r3 - 72) < 2.5, r3.toFixed(1), 'Tasarım davranı�
 {
   const ctx = ctxAt(1976, 'efsanevi');
   const n = 22;
+  delete ctx.state.officeWorld; // Saf üretim kalibrasyonu: fiziksel ofis bu senaryonun kapsamı dışında.
   const per = M.personWeekly(ctx, { skill: 35, morale: 100, trait: null }, n);
   const total = per * n * 4;
   const need = ['oyn', 'gfx', 'ses'].reduce((s, d) => s + M.target(ctx, d, 'orta'), 0) + M.target(ctx, 'tek', 'orta');
@@ -386,6 +409,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   for (let i = 0; i < 40; i++) People.weeklyRelations(ctx);
   const v = People.relation(st, x, y);
   check('Aynı odadakiler zamanla dost olur', v > 10, Math.round(v) + '');
+  g.prepareOfficeFixture();
   const w1 = M.personWeekly(ctx, x, 3);
   st.rel[M.relKey(x.id, y.id)] = -100; st.rel[M.relKey(x.id, st.staff[0].id)] = -100;
   check('Düşmanlık verimi düşürür', M.personWeekly(ctx, x, 3) < w1);
@@ -1081,7 +1105,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   g.buyStake(rv.id, 100);
   const s0 = st.staff.length; g.state.rooms.push({ id: 9901, type: 'gelistirme', mode: 'otomatik' });
   const mg = g.mergeStudio(rv.id);
-  check('%100: birleştirme çalışan getirir, şirket listeden çıkar', mg.ok && st.staff.length > s0 && !st.rivals.includes(rv));
+  check('%100: birleştirme boş odaya ücretsiz koltuk vermez, şirket listeden çıkar', mg.ok && st.staff.length === s0 && !st.rivals.includes(rv));
   // 5 bağlı stüdyo sınırı
   const pool = st.rivals.filter((r) => !r.hw && !(r.stake >= 51));
   for (const r of pool.slice(0, 5)) g.buyStake(r.id, 51);
@@ -1113,7 +1137,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const Cr = await import('../src/systems/crew.js');
   const { personaOf, PERSONAS } = await import('../src/data/crew.js');
   const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
-  const g = rawNewGame({ seed: 81, difficulty: 'kolay', length: 50 });
+  const g = legacyOfficeFixture(rawNewGame({ seed: 81, difficulty: 'kolay', length: 50 }));
   const st = g.state, c = g.ctx;
   st.cash = 5e8;
   check('Herkesin kişiliği var, kayıttan bağımsız aynı', [...st.staff, ...st.applicants].every((p) => PERSONAS.includes(personaOf(p))) && personaOf(st.staff[0]) === personaOf(JSON.parse(JSON.stringify(st.staff[0]))));
@@ -1155,6 +1179,8 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   // Platform lisansları
   const gl = rawNewGame({ seed: 83, difficulty: 'kolay', length: 50 });
   gl.state.week = Math.round((1985 - 1976) * 48 * gl.state.lengthMult); gl.state.cash = 1e7;
+  const desk = gl.state.officeWorld.rooms[gl.state.rooms[0].id].items.find((f) => f.type === 'desk');
+  gl.placeFurniture(gl.state.rooms[0].id, { ...desk, computer: 'pc-c64-82' });
   check('Başta yalnız Kişisel Bilgisayar lisanslı', Object.keys(gl.state.platLic).join() === 'pc');
   const bad = gl.startProject({ name: 'L', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['komodor'], size: 'kucuk' });
   check('Lisanssız platforma oyun yapılamaz', !bad.ok && /lisans/.test(bad.msg));

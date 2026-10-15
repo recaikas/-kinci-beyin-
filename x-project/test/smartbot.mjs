@@ -5,9 +5,10 @@
 import { newGame } from '../src/game.js';
 import * as M from '../src/models.js';
 import { researchAvailable, researchInfo, devCapacity, projectCost, regionStatus, locCost } from '../src/systems/production.js';
-import { stationUpgradeCost, creditLimit, rent, designCost } from '../src/systems/economy.js';
+import { creditLimit, rent, designCost } from '../src/systems/economy.js';
 import * as Pub from '../src/systems/publishers.js';
 import * as Regions from '../src/systems/regions.js';
+import * as Office from '../src/systems/office.js';
 import * as Staff from '../src/systems/staff.js';
 import * as Con from '../src/systems/console.js';
 import * as Co from '../src/systems/company.js';
@@ -111,7 +112,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     const y = M.tableYear(ctx);
     const genres = Genres.knownGenres(ctx);
     const topics = pack.topics.filter((t) => t[4] <= y);
-    const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
+    const maxTech = Math.max(0, ...state.rooms.filter((r) => r.type === 'gelistirme').map((r) => Office.maxTech(ctx, r.id)));
     const plats = M.activePlatforms(ctx).filter((p) => p.own || p.tech <= maxTech);
     const cands = [];
     const alt = !!state.research.done.alt_tur;
@@ -244,9 +245,43 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     if (cands.length && g.pitch(pj.id, cands.slice(0, 2).map((p) => p.id), { mode: 'erken' }).ok) stats.pub.early++;
   }
 
+  function furnishOffices() {
+    const products = Office.CATALOG.filter((p) => p.type === 'computer' && p.year <= Office.year(ctx) && p.grade === 1).sort((a, b) => b.generation - a.generation || b.year - a.year);
+    const pc = products[0];
+    const purchase = (room, sku, draft) => {
+      const p = draft || Office.suggestFurniture(ctx, room.roomId, sku);
+      if (!p) return false;
+      const q = Office.previewPlacement(ctx, room.roomId, p);
+      return q.ok && state.cash > q.net + burn() * 8 && g.placeFurniture(room.roomId, p).ok;
+    };
+    for (const model of state.rooms) {
+      const room = state.officeWorld.rooms[model.id];
+      if (model.type === 'mola') {
+        for (const sku of ['sofa-basic', 'tea-basic']) if (!room.items.some((f) => f.sku === sku)) purchase(room, sku);
+        continue;
+      }
+      if (model.type === 'tuvalet') {
+        for (const sku of ['toilet-basic', 'sink-basic']) if (!room.items.some((f) => f.sku === sku)) purchase(room, sku);
+        continue;
+      }
+      for (const desk of room.items.filter((f) => f.type === 'desk')) {
+        if (!desk.computer || Office.SKU[desk.computer].generation < pc.generation) purchase(room, pc.id, { ...desk, computer: pc.id });
+        const point = Office.usePoint(desk);
+        if (!room.items.some((f) => f.type === 'chair' && f.x === point.x && f.y === point.y && f.rotation === desk.rotation)) purchase(room, 'chair-basic', { ...point, type: 'chair', sku: 'chair-basic', rotation: desk.rotation });
+      }
+      const target = Math.min(6, pack.offices.find((o) => o.tier === state.office.tier).roomSeats);
+      if (Office.workstations(ctx, model.id).length < target && state.cash > burn() * 12 + 5000) {
+        const draft = Office.suggestFurniture(ctx, model.id, 'desk-basic');
+        if (draft) purchase(room, 'desk-basic', { ...draft, computer: pc.id });
+      }
+      if (Office.workReport(ctx, state.staff.find((p) => p.room === model.id) || {}).temperature > 26 && !room.items.some((f) => f.type === 'fan')) purchase(room, 'fan-basic');
+    }
+    if (state.office.tier > 1 && !state.rooms.some((r) => r.type === 'tuvalet') && state.cash > burn() * 12 + 6000) g.buildRoom('tuvalet');
+  }
+
   function hireFor(roomId, filter = () => true) {
-    const cap = Staff.roomSeats(ctx);
     const room = state.rooms.find((r) => r.id === roomId);
+    const cap = room ? Staff.roomSeats(ctx, room) : 0;
     if (!room || Staff.membersOf(ctx, room).length >= cap) return false;
     const floor = M.marketSkill(ctx) * 0.75;
     const a = state.applicants.filter((p) => p.skill >= floor && filter(p)).sort((x, y) => y.skill / y.salary - x.skill / x.salary)[0];
@@ -401,7 +436,8 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         if (state.cash > c.cost * k + burn() * 6 && g.buyNet(rid).ok) break;
       }
       // Çalışma koltukları: mola ve müşteri odası dışındakiler (mola odasına kimse yerleştirilmez)
-      const seats = state.rooms.filter((r) => r.type !== 'mola' && r.type !== 'musteri').length * Staff.roomSeats(ctx);
+      furnishOffices();
+      const seats = Staff.seats(ctx);
       // Oda görevleri: ana proje + destek; kasa darsa bir oda sözleşmeye
       const dev = state.rooms.filter((r) => r.type === 'gelistirme');
       const lead = state.projects[0];
@@ -423,7 +459,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         const order = [...state.rooms].sort((a, b) => Staff.membersOf(ctx, a).length - Staff.membersOf(ctx, b).length);
         for (const r of order) {
           const key = { grafik: 'grafik', ses: 'ses', qa: 'test', pazarlama: 'pazar', arastirma: 'arge', donanim: 'donanim' }[r.type];
-          if (r.type === 'mola' || r.type === 'musteri') continue;
+          if (['mola', 'musteri', 'tuvalet'].includes(r.type)) continue;
           if (hireFor(r.id, (p) => !key || (p.skills?.[key] || 0) >= p.skill * 0.9)) break;
         }
       }
@@ -466,12 +502,11 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       }
       // Ofis ve istasyonlar
       const nextOffice = pack.offices.find((o) => o.tier === state.office.tier + 1);
-      const full = state.staff.length >= seats - 1 && state.rooms.length >= Staff.slots(ctx);
+      const full = state.staff.length >= seats - 1 && !Office.roomSite(ctx, 'gelistirme', { w: 8, h: 8 }).ok;
       const burnAfter = nextOffice ? (wages() + nextOffice.rent * infl() + 2 * M.salaryFor(ctx, M.marketSkill(ctx))) * 12 : 0;
       if (full && nextOffice && trend12() > -burn() * 3 && state.cash > nextOffice.cost * infl() ** 0.5 * 1.2 + burnAfter * 1.5) g.moveOffice();
       else if (full && !nextOffice && state.cash > pack.offices[3].floorCost * infl() ** 0.5 * 2 + burn() * 12) g.moveOffice();
-      const sc = stationUpgradeCost(ctx);
-      if (sc && M.expectedStationTier(ctx) > state.stationTier && state.cash > sc * 2 + burn() * 6) g.upgradeStations();
+      furnishOffices();
       // Tatil ve ofis tasarımı
       if (state.vacationPolicy !== 'planli') g.setVacationPolicy('planli');
       const avgStress = state.staff.reduce((a, p) => a + p.stress, 0) / Math.max(1, state.staff.length);

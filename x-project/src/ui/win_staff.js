@@ -4,6 +4,7 @@ import { personaOf, leadOf } from '../data/crew.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, bar, STATUS, move } from './util.js';
+import * as Office from '../systems/office.js';
 
 export function make(u) {
   const { G, app, ctx } = u;
@@ -11,7 +12,7 @@ export function make(u) {
   function personRow(p) {
     const c = ctx(), car = Staff.career(c, p.career), lvl = p.careers[p.career] || 0;
     const open = app.expanded.has(p.id);
-    const room = Staff.roomOf(c, p);
+    const room = Staff.roomOf(c, p), equipment = Office.workReport(c, p);
     const status = STATUS[p.status] ? `<span class="pill warn">${STATUS[p.status]} ${p.statusWeeks}</span>` : '';
     let actions = '';
     if (open) {
@@ -26,6 +27,7 @@ export function make(u) {
         ${traitPills(p)}
         <div class="skills">${PACK.skills.keys.map(([k, n]) => `<span>${n}</span>${bar(p.skills?.[k] || 0, 'sk')}<b class="num">${p.skills?.[k] ?? '–'}</b>`).join('')}</div>
         ${relLine(p)}
+        <section class="box"><b>Çalışma koşulları · verim ×${equipment.factor.toFixed(2)}</b><small>Donanım ×${equipment.equipment.toFixed(2)} · ortam ×${equipment.conditions.toFixed(2)} · çalışma payı %${Math.round(equipment.workShare * 100)}</small><small>${esc(equipment.reasons.join(' ') || 'Çalışma yeri ve hizmetler yeterli.')}</small></section>
         <div class="foot"><span class="muted small">İzin hakkı ${(p.vacDue || 0).toFixed(1)} hf${p.lastVac != null ? ` · son tatil Y${Math.floor(p.lastVac / 48) + 1}` : ''}</span><button data-act="vacation" data-id="${p.id}" ${p.status !== 'ok' ? 'disabled' : ''}>Tatile gönder</button></div></div>`;
     }
     return `<div class="person ${p.status !== 'ok' ? 'away' : ''} ${open ? 'open' : ''}">

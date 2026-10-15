@@ -1,41 +1,51 @@
-# Phaser ofis geçişi
+# Düzenlenebilir ofis: ilk işlevsel bölüm
 
-Çalışma dalı: `codex/x-project-office-ui`. Yedek dal: `claude/x-project`.
-Geçiş başlangıcı: `4c75c317acdf7dbaa5d0a6e256305abb0d555ba6`.
+Çalışma dalı `codex/x-project-office-ui`; yedek `claude/x-project` korunur.
+Başlangıç yedeği: `4c75c317acdf7dbaa5d0a6e256305abb0d555ba6`.
 
-## Değişen katmanlar
+## Oyuncunun akışı
 
-- Eski Canvas ofis çizicisi kaldırıldı. Menü simgeleri `ui/icons.js` içinde korundu.
-- Sahne, kamera, girdi ve görsel saat Phaser 3.90.0 tarafından yönetilir. WebGL destekleniyorsa WebGL, aksi halde Canvas seçilir. Haftalık simülasyonun zamanlayıcısı `ui.js`/`game.js` içinde kalır; Phaser ikinci bir ekonomi saati başlatmaz.
-- `officeWorld.version:1` kayıt alanı oda yuvalarını, eşya kimliklerini, hücre konumlarını ve yönlerini tutar. Oda koordinatları kamera ve ekran boyutundan bağımsızdır. Ana kayıt sürümü ve kayıt anahtarı değiştirilmedi; eski kariyerler yüklenirken yeni alan oluşturulur.
-- Oda kurma/yıkma ve ofis yükseltme eylemleri yerleşimi eşitler. Mevcut eşyaların konumları korunur; yeni kapasite için varsayılan iş istasyonları eklenir. Aşırı sıkıştırılmış kişisel yerleşimde yeni masa için yer yoksa mevcut eşyalar zorla taşınmaz.
-- Eşya sürükleme, döndürme, onay/iptal, dekor ekleme/kaldırma, zemin çakışması ve kapıdan kullanım noktalarına erişim kontrolü eklendi.
-- Dört yönlü hücre yol bulma kullanılır. Çalışanların fiziksel konumları görsel sahneye aittir; üretim kapasitesi, çalışan oda ataması ve maaşlar mevcut sistemde hesaplanır. Çalışanlar masasına ve odasında varsa kahve noktasına yürür.
-- Konum onaylanana kadar yalnızca sahne taslağı değişir. Onaydan sonra mevcut kayıt mekanizması kullanılır. Düzenleme ve yönetim pencereleri görsel hareketi durdurur. Görsel saat ekranın Hz değerine değil geçen süreye ve oyun hızına bağlıdır.
-- Motor ve oyun kodu esbuild ile yerel bağımlılıklardan derlenir. Çalıştırma için `npm ci && npm start`; statik yayın için `npm run build` ve `dist/` gerekir.
+1. Garaj tek hazır masa, sandalye ve 1976 bilgisayarıyla açılır. Kurucu yalnızken temel ihtiyaçlar ortak tesislerden karşılanmış sayılır.
+2. **Yerleşim ve mağaza → Yeni oda kur** ile tür ve ölçü seçilir. Oda sahnede yeşil/kırmızı taslak olarak taşınır; **Onayla** ile bedeli ödenir. Yeni oda boştur.
+3. Mağazadan masa alınır. Sandalye masanın yeşil işaretli kullanım hücresine, masayla aynı yönde yerleştirilir. Masaya dokunulup bilgisayar kategorisinden model seçilir ve onaylanır. Ancak üçü tamamlandığında işe alım kapasitesi oluşur.
+4. Mevcut eşyaya dokunmak taşıma/döndürme, aynı türden modelle değiştirme veya satış taslağı açar. İptal ücretsizdir. Her onay kaydedilir.
+5. Oda panelinden konum, genişlik/derinlik, alt duvardaki kapı sütunu ve zemin değişir; oda bütün olarak da sürüklenebilir. Küçültmek içerideki eşyalara veya erişime zarar veriyorsa reddedilir.
+6. Mola odasına koltuk ve çay/kahve, tuvalete klozet **ve lavabo** konur. Çalışanlar aynı binadaki erişilebilir hizmetlere kendileri yürür. Oda adı tek başına fayda sağlamaz.
 
-## Bilerek kapsam dışında kalanlar
+## Mekanik ve veri
 
-- Yeni karakter ve eşya çizimleri için nihai sanat çalışması yapılmadı. Şu anki sprite atlası kodla üretilmiş geçici görsellerdir; aynı anahtarlarla sonradan hazırlanacak çizimler takılabilir.
-- Oda duvarlarını çizme/boyutlandırma ve odaları serbestçe taşıma yok; oda yuvaları sabittir. Eşyalar kendi odalarında taşınır.
-- Eşyalar itilip devrilmez; fizik, kaplanan zemin ve geçiş açısından ele alınır. Çalışanların birbirinden kaçınması/kalabalık simülasyonu ve odalar arası mola yolculuğu bu geçişte yok.
-- Yerleşim iş istasyonu kapasitesini değiştirmez. Ekonomiye bağlı mobilya mağazası eklenmedi.
-- Önceki çizicinin bütün dekoratif efektleri taşınmadı: eski kaos yangını, kedi ve bağımsız gece karartması bu ilk Phaser sahnesinde yok. Sayısal kaos ve ilgili oyun kuralları korunur.
-- Diğer ekonomi hataları ve eski test beklentileri bu motor geçişine karıştırılmadı.
+| Parça | Uygulanan davranış |
+|---|---|
+| Oda alanı | 6–20 hücrelik dikdörtgenler; bir hücre ara koridor; bina sınırı ve oda çakışması kontrolü |
+| İş istasyonu | Ayrı ücretli masa, sandalye ve masaya takılan bilgisayar; bir sandalye tek istasyona aittir |
+| Teknoloji | Her model kendi yılında açılır; PET 1977, Commodore 64 1982; sonraki dönemlerde üç bilgisayar sınıfı |
+| Üretim | Kişinin gerçek istasyonu, cihazın gücü ve eskimesi, masa/sandalye kalitesi, sıcaklık, hizmet kapasitesi ve yürüme payı |
+| Eksik eşya | Çalışma yeri yoksa kişinin üretimi sıfır; geliştirme ekibinin çıktısı yoksa proje haftası ilerlemez |
+| Isı ve hizmet | Pervane/klima oda sıcaklığını düşürür; koltuk, içecek, klozet/lavabo hizmet kapasitesi sağlar |
+| Dekor/uzmanlık | Bitki en çok +%3; kitaplık en çok +%3; uygun departman ekipmanı en çok +%25 |
+| Para | Yerleştirme ve yükseltme ücretli; eski parçanın ödenmiş bedelinin %35'i geri alınır; elektrik/su/içecek aylık giderdir |
+| Ofis büyütme | Alan açar; ücretsiz masa veya bilgisayar eklemez |
+| Eski kayıt | v1 veya yerleşimsiz kayıtlara mevcut kapasiteyi koruyan geçiş yapılır; v2 yeni odalara eşya doldurmaz |
 
-## Doğrulama
+Fiyatlar ve katsayılar **oyun dengesi değerleridir**, tarihî satış fiyatı veya gerçek termodinamik model değildir. Sıcaklık mevsim, cihaz ısısı ve oda içindeki soğutma toplamıyla hesaplanır. Bekleme süresi hizmet kapasitesinden tahmin edilir; çalışanlar için tek tek kuyruk rezervasyonu henüz yoktur. Farklı binalar arasındaki hizmet erişimi sabit yol maliyetiyle modellenir; görsel yürüyüş aynı bina içindedir.
 
-`npm run test:office` şu kontrolleri çalıştırır:
+## Katman sınırları
 
-1. Eski kayıt dönüşümü ve tekrar yükleme kararlılığı.
-2. Tüm ofis kademeleri/oda türlerinde varsayılan eşya erişimi.
-3. Çakışma, duvar, kapı ve kapatılan kullanım yolu reddi.
-4. Taşıma/döndürme, dekor ekleme/kaldırma ve kayıt bütünlüğü.
-5. Ofis yükseltme, oda yıkma ve diğer odaların konumlarını koruma.
-6. Yerleşim değiştirildiğinde 16 haftalık ekonomi/üretim sonucunun aynı kalması.
-7. Gerçek Phaser CanvasRenderer ile sahne açılışı, çalışan yürüyüşü/duraklatma, yerleşim onayı, dikey/yatay boyut değişimi ve dolu raster çıktı.
-8. HTML menülerle Phaser'ın birlikte açılması; yeni kariyer → sihirbaz → üretime başlama → ofis düzenleme → kayıt akışı.
+- `src/data/office.js`: ürünler, dönemler, fiyatlar ve etkiler.
+- `src/systems/office.js`: yerleşim, satın alma, kapasite, erişim, yol ve çalışma koşulları. DOM/Phaser bağımlılığı yoktur.
+- `src/models.js` ve `src/systems/staff.js`: gerçek donanımı haftalık üretim ve personel kapasitesine bağlar.
+- `src/office/renderer.js`: Phaser 3.90.0 sahnesi, kamera, hareket ve taslaklar. Görsel hareket ekonomiyi ilerletmez.
+- `officeWorld.version:2`: bina, oda ölçüsü/konumu, kapı, zemin, ürün ve ödenen bedelleri saklar. Ana kayıt anahtarı değişmedi.
+- WebGL desteklenirse WebGL, aksi halde Canvas kullanılır. Motor esbuild ile paketlenir; CDN gerektirmez.
 
-Son iki test **Node + jsdom + yerel Canvas ortamında** çalışır. Gerçek Chrome/Safari, WebGL, dokunmatik cihaz veya oynanış denemesi değildir. Tarayıcı testinin yapıldığı iddia edilmez. Küçük telefonlarda dokunma hissi, GPU çizimi ve görsel yerleşim hâlâ gerçek cihazda değerlendirilmelidir.
+## Sonraki bölümler
 
-Mevcut `node test/validate.mjs` sonucu geçişten önce ve sonra **411 geçti / 11 başarısız**. Aynı başarısızlıklar: dört puan/hedef kalibrasyonu, iki satış aralığı, üç eski pazarlama departmanı senaryosu ve iki yayıncı eşiği/anlaşma beklentisi. Yeni ofis testleri bunları sessizce geçilmiş saymaz; ana test komutunun başarısız çıkışı korunur.
+Nihai izometrik çizimler ve yeni karakter sanatları, bakım/arızanın ayrıntılı döngüsü, ikinci el pazarı, birden çok eşya seçimi ve taşıması, elle duvar parçaları çizme, çarpışan kalabalık ve gerçek hizmet kuyrukları henüz tamamlanmadı. Şu anki karakter ve mobilya sprite'ları geçicidir. Bu teslim görsel sanatın son hali değildir.
+
+## Doğrulama sınırı
+
+`npm run test:office`: 14 test; gerçek satın alma API'si, kayıt dönüşümü, boş odalar, üretim, dönem kilitleri, ısı ve ihtiyaçlar; ayrıca Node ortamında gerçek Phaser CanvasRenderer ile sürükleme, taslak/onay, odalar arası hizmet yürüyüşü, tuvalette gizlenme ve 390×620/844×300 sahne boyutlandırması. HTML menüleri jsdom'da yeni kariyer/proje, mağaza ve oda kurma akışıyla kontrol edilir.
+
+Bu kontroller gerçek tarayıcı, WebGL, iOS/Android veya dokunmatik cihazda oynama doğrulaması değildir. Bu ortamda gerçek telefon/tarayıcı oturumu yapılamadı.
+
+Genel `npm test` sonucu ve başarısız beklentiler ayrı doğrulama notunda tutulur. Eski ekonomi senaryolarının hazır ofis varsayımı yalnız test fikstüründe eski kayıt dönüşümüyle korunur; yeni oyun davranışına otomatik eşya eklenmez. Bot gerçek mağaza API'siyle satın alır.

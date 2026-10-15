@@ -91,7 +91,7 @@ export function moveOffice(ctx) {
   ledger.post('ofis', -cost, next.name);
   state.office.tier = next.tier;
   state.rentMult = 1;
-  ctx.news(`🏠 Yeni mekân: ${next.name}! ${next.slots} oda alanı, oda başına ${next.roomSeats} koltuk. Ofis sekmesinden oda kur.`, 'good');
+  ctx.news(`🏠 Yeni mekân: ${next.name}! İnşa alanın büyüdü. Yeni odaları ve çalışma yerlerini kendin kur.`, 'good');
   ctx.bus.fire('facilityUpgraded', next);
   for (const p of state.staff) p.morale = clamp(p.morale + 10, 0, 100);
   return { ok: true };
@@ -118,6 +118,7 @@ export function stationUpgradeCost(ctx) {
   return Math.round(perSeat * seats(ctx));
 }
 export function upgradeStations(ctx) {
+  if (ctx.state.officeWorld?.version >= 2) return { ok: false, msg: 'Bilgisayarları Yerleşim mağazasından masaları seçerek tek tek yenile.' };
   const { state, pack, ledger } = ctx;
   const cost = stationUpgradeCost(ctx);
   if (cost == null) return { ok: false, msg: 'En iyi istasyonlara sahipsin.' };

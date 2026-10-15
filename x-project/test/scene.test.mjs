@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canvasDOM } from './support/canvas-dom.mjs';
 import { newGame } from '../src/game.js';
-import { CELL, roomOrigin, dimensions } from '../src/systems/office.js';
+import { CELL, roomOrigin, dimensions, suggestFurniture } from '../src/systems/office.js';
 
 test('Phaser Canvas sahnesi açılır; çalışan yürür, durur, düzenler ve yeniden boyutlanır', { timeout: 15000 }, async () => {
   const env = canvasDOM();
@@ -13,6 +13,7 @@ test('Phaser Canvas sahnesi açılır; çalışan yürür, durur, düzenler ve y
   const renderer = makeOfficeRenderer(env.window.document.querySelector('#scene'), {
     view: () => view,
     onEditChange: (next) => { info = next; }, onHit: () => {}, onMessage: () => {},
+    onBuild: (type, draft) => g.buildRoom(type, draft), onConfigure: (room, draft) => g.configureRoom(room, draft),
     onPlace: (room, draft) => g.placeFurniture(room, draft), onRemove: (room, id) => g.removeFurniture(room, id),
   }, { type: 1 }); // Phaser.CANVAS; WebGL/mobile ayrıca tarayıcıda doğrulanmalı.
   try {
@@ -45,12 +46,33 @@ test('Phaser Canvas sahnesi açılır; çalışan yürür, durur, düzenler ve y
     assert.ok(info.valid.ok); assert.equal(g.save(), before, 'sürükleme önce yalnız taslak oluşturur');
     renderer.action('cancel');
     assert.equal(info.draft, null); assert.equal(g.save(), before, 'iptal ilk konumu korur');
-    renderer.action('add', 'shelf');
+    renderer.action('add', 'shelf-basic');
     assert.ok(info.draft); assert.ok(info.valid.ok);
     assert.equal(g.save(), before, 'önizleme kayda yazılmaz');
     renderer.action('confirm'); scene.update(0, 0);
     assert.equal(g.state.officeWorld.rooms[scene.roomId].items.at(-1).type, 'shelf');
     assert.equal(info.draft, null);
+    g.state.cash = 1e6;
+    renderer.action('build', { type: 'mola', w: 6, h: 6, building: 'ana' });
+    assert.ok(info.roomDraft); assert.ok(info.valid.ok);
+    const roomsBefore = g.state.rooms.length;
+    renderer.action('confirm'); scene.update(0, 0);
+    assert.equal(g.state.rooms.length, roomsBefore + 1);
+    assert.equal(scene.rooms.length, 2);
+    assert.equal(g.state.officeWorld.rooms[scene.roomId].items.length, 0);
+    const lounge = g.state.officeWorld.rooms[scene.roomId];
+    assert.ok(g.placeFurniture(lounge.roomId, suggestFurniture(g.ctx, lounge.roomId, 'sofa-basic')).ok);
+    const wcId = g.buildRoom('tuvalet').roomId;
+    for (const sku of ['toilet-basic', 'sink-basic']) assert.ok(g.placeFurniture(wcId, suggestFurniture(g.ctx, wcId, sku)).ok);
+    view.editing = false; view.paused = false;
+    let visitedRest = false, privateToilet = false;
+    for (let i = 0; i < 2200; i++) {
+      scene.update(i * 100, 100);
+      if (worker.mode === 'Dinlenme' && !worker.path?.length) visitedRest = true;
+      if (worker.mode === 'Tuvalet' && !worker.path?.length && !worker.sprite.visible) privateToilet = true;
+    }
+    assert.ok(visitedRest, 'çalışan odalar arasında dinlenme koltuğuna yürüdü');
+    assert.ok(privateToilet, 'tuvalet kullanımında karakter gizlendi');
     const layout = JSON.stringify(g.state.officeWorld);
     renderer.resize(390, 620); scene.update(0, 0);
     renderer.resize(844, 300); scene.update(0, 0);

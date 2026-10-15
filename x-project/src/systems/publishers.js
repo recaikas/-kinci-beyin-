@@ -1,3 +1,4 @@
+import * as Office from './office.js';
 // Yayıncılar (Konu B): kimlik, kademe, kapı, sunuş, toplantı, kurul, teklif, pazarlık, açık artırma, sözleşme,
 // geri ödemeli avans, erken anlaşma ve kilometre taşları, sipariş, deneme işi, vitrin etkinlikleri, tavsiye, ajan,
 // ilişki ve hafıza, iflas ve birleşme. Para defterden, rastgelelik tohumlu RNG'den; arayüz yalnız bu API'yi çağırır.
@@ -844,7 +845,7 @@ function genOrder(ctx) {
   const rank = { S: 6, I: 5, G: 4, B: 3, K: 2, X: 1 };
   const topics = pack.topics.filter((t) => t[4] <= y).sort((a, b) => rank[topicTier(b[0], genre)] - rank[topicTier(a[0], genre)]).slice(0, 8);
   const topic = rng.pick(topics);
-  const maxTech = pack.workstations.tiers[state.stationTier].maxTech;
+  const maxTech = Office.maxTech(ctx);
   const plats = activePlatforms(ctx).filter((p) => !p.own && p.tech <= maxTech && pub.focus.includes(p.kind)).sort((a, b) => platformBase(ctx, b) - platformBase(ctx, a));
   if (!plats.length) return;
   const plat = plats[0];

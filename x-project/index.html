@@ -186,6 +186,11 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .office-edit output { font-size: 0.8rem; color: #426151; }
 .office-edit output.invalid { color: #a34136; }
 .office-edit label { display: grid; gap: 3px; }
+.office-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.office-shop { display: grid; gap: 7px; padding-top: 8px; border-top: 1px solid #b9b4a5; }
+.office-edit summary { cursor: pointer; font-size: 0.8rem; padding: 5px 0; }
+.office-edit { max-height: min(64vh, 600px); }
+@media (max-width: 600px) { #office-tools { max-width: min(300px, calc(100% - 18px)); } .office-edit { max-height: 48vh; } }
 @media (max-height: 500px) { .office-edit { max-height: 40vh; } #office-tools button { min-height: 34px; } }
 .hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .hubtile { display: grid; justify-items: start; gap: 4px; padding: 12px; text-align: left; min-height: 92px; }
@@ -544,7 +549,7 @@ button { border-color: var(--shadow); }
     <canvas id="scene" aria-label="Stüdyonun piksel görünümü"></canvas>
     <section id="office-tools" aria-label="Ofis yerleşimi ve kamera" hidden>
       <div class="office-camera">
-        <button type="button" data-office="edit" aria-pressed="false">Ofisi düzenle</button>
+        <button type="button" data-office="edit" aria-pressed="false">Yerleşim ve mağaza</button>
         <button type="button" data-office="zoom-out" aria-label="Uzaklaş">−</button>
         <button type="button" data-office="zoom-in" aria-label="Yakınlaş">+</button>
         <button type="button" data-office="fit">Sığdır</button>
@@ -558,13 +563,25 @@ button { border-color: var(--shadow); }
           <button type="button" data-office="cancel" disabled>İptal</button>
           <button type="button" data-office="remove" disabled>Kaldır</button>
         </div>
-        <div class="office-actions" aria-label="Dekor ekle">
-          <button type="button" data-office="add" data-value="plant">+ Bitki</button>
-          <button type="button" data-office="add" data-value="shelf">+ Kitaplık</button>
-          <button type="button" data-office="add" data-value="sofa">+ Kanepe</button>
-          <button type="button" data-office="add" data-value="coffee">+ Kahve</button>
+        <p id="office-summary" class="small"></p>
+        <div class="office-shop">
+          <b>Yerleşim mağazası <small data-office-budget></small></b>
+          <button type="button" data-act="build-menu">Yeni oda kur</button>
+          <label>Kategori<select data-office-group aria-label="Ekipman kategorisi"></select></label>
+          <label>Model<select data-office-product aria-label="Satın alınacak model"></select></label>
+          <small id="office-product-info"></small>
+          <button type="button" data-office="buy">Seç ve yerleştir</button>
         </div>
-        <small>Boş zemini sürükleyerek etrafa bak. Dekorasyon üretim kapasitesini değiştirmez.</small>
+        <details><summary>Oda: alan, kapı ve zemin</summary>
+          <div class="office-dimensions">
+            <label>X<input type="number" min="1" id="office-room-x"></label><label>Y<input type="number" min="2" id="office-room-y"></label>
+            <label>Genişlik<input type="number" min="6" max="20" id="office-room-w"></label><label>Derinlik<input type="number" min="6" max="20" id="office-room-h"></label>
+            <label>Kapı sütunu<input type="number" min="1" id="office-room-door"></label>
+            <label>Zemin<select id="office-room-floor"><option value="wood">Ahşap</option><option value="tile">Fayans</option><option value="carpet">Halı</option></select></label>
+          </div>
+          <div class="office-actions"><button type="button" data-office="room-move">Odayı sahnede taşı</button><button type="button" data-office="renovate">Alanı uygula</button></div>
+        </details>
+        <small>Masa + sandalye + bilgisayar = çalışma yeri. Sandalyeyi masanın önündeki yeşil noktaya aynı yönde koy. Bilgisayar için önce masaya dokun.</small>
       </div>
     </section>
     <div id="notes" aria-live="polite"></div>
