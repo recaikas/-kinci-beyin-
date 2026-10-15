@@ -1,7 +1,8 @@
 // Oyun raporu ve bilgi birikimi (GDT esinli): her yayından sonra konu×tür, tür×alt tür, konu×alt tür, konu×kitle,
 // platform×tür uyumu ve zaman dağılımı dersleri öğrenilir; sihirbaz bu bilgiyi gösterir.
 // Konu D: uyumlar altı kademeli (Süper 10 · İyi 9 · Geçerli 8 · Başarısız 7 · Kötü 6 · İğrenç 4).
-import { discShares, inflation, engineFactor, combo, platFit } from '../models.js';
+import { discShares, inflation, combo, platFit } from '../models.js';
+import { GENRE_MUST } from '../data/engines.js';
 import { hasRoom } from './staff.js';
 import { TIER, tierOfValue, SUB, PRESS_LINES, PLAYER_LINES } from '../data/genres.js';
 import { learnCombo } from './genres.js';
@@ -109,8 +110,9 @@ export function playerReport(ctx, id) {
   if (g.price > ref * R.priceHigh) lines.push({ tone: 'bad', text: `Fiyat pahalı bulundu (${g.price} $). Satış daha hızlı düştü.` });
   else if (g.price < ref * R.priceLow) lines.push({ tone: 'info', text: `Oyuncular fiyatı çok uygun buldu; biraz daha pahalı da satardı.` });
   if ((g.bugRate || 0) * pack.review.bugMult > 2) lines.push({ tone: 'bad', text: 'Forumlar hata şikâyetiyle dolu. Güncelleme çıkar ya da bir dahakine QA odası kullan.' });
-  const eng = state.engines.find((e) => e.id === g.engineId);
-  if (engineFactor(ctx, eng) < 1) lines.push({ tone: 'bad', text: 'Teknik açıdan dönemin gerisinde bulundu. Daha yeni bir motor gerek.' });
+  if (g.techLow) lines.push({ tone: 'bad', text: `${g.techLow.name} dönemin gerisinde bulundu: ${g.techLow.top} vardı, oyuncular ${g.techLow.expTop} bekliyordu. Motoruna yeni sürüm yap ya da güncel bir motor lisansla.` });
+  const must = (g.review?.notes || []).some((n) => n.startsWith('Olmazsa olmaz')) && ctx.pack && GENRE_MUST.find((m) => m.genre === g.genre);
+  if (must) lines.push({ tone: 'bad', text: `"${must.line}"` });
   if (g.hype - (g.score - 50) > R.hypeGap) lines.push({ tone: 'bad', text: 'Reklam beklentiyi çok yükseltti; oyun karşılayamayınca hayal kırıklığı oldu.' });
   else if (g.score >= 80 && g.hype < 20) lines.push({ tone: 'info', text: 'Oyunu sevenler çok ama kimse duymamış. Daha çok pazarlama satışları katlardı.' });
   if (!lines.some((l) => l.tone === 'good')) lines.push({ tone: 'info', text: 'Oyuncular dikkat çekici bir güçlü yan bulamadı.' });

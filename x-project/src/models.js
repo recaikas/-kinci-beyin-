@@ -4,6 +4,7 @@ import { lerpTable, logTable, clamp, calendar } from './kernel.js';
 import { CRITICS } from './data/critics.js';
 import { REGIONS as REGION_DATA } from './data/regions.js';
 import { GENRE_IDS, REL, TOPIC_FIT, SUB, TOPIC_SUB, LEGENDS, TIER, MASTERY, LEGACY_SUB, tierOfValue } from './data/genres.js';
+import { FEATURES, FEAT, BASE, CATS, GENRE_WANTS, GENRE_MUST, SUB_NEEDS, LICENSED, MIDDLEWARE } from './data/engines.js';
 
 export const tableYear = (ctx) => calendar(ctx.state, ctx.pack).tableYear;
 export const inflation = (ctx, y = tableYear(ctx)) => Math.pow(ctx.pack.economy.inflation, y - ctx.pack.meta.startYear);
@@ -184,21 +185,123 @@ export function fitFactor(ctx, project) {
   const pg = avg((p) => platFit(ctx, p, project.genre, project.sub) / 10), pa = avg((p) => p.aud[ai] / 10);
   return Math.sqrt(tg * ta * pg * pa) * (c.gs ? TIER[c.gs].subF ?? 1 : 1);
 }
+// --- Motor ve teknoloji (Konu E): oyuna giren her teknik özellik bir motordan gelir.
+// Kendi motoru (araştırılan özellikler), lisanslı motor (dönemin birkaç yıl gerisi) ya da sıfırdan kod (yalnız temel).
+const vRow = (ctx, v) => ctx.pack.researchV.rows.find((r) => r[0] === v);
+export const featPts = (ctx, fid) => (FEAT[fid] ? vRow(ctx, FEAT[fid].v)[4] : 0);
+export function featureStats(ctx, fid, y = tableYear(ctx)) {
+  const f = FEAT[fid], row = vRow(ctx, f.v), E = ctx.pack.engine;
+  const age = Math.max(E.techAgeMin, 1 - E.techAgeK * Math.max(0, y - f.year)); // eski teknoloji ucuzlar
+  return { v: row[0], rp: Math.round(row[1] * E.techRpK * age), weeks: Math.max(2, Math.round(row[2] * E.techWeeksK * age)), cost: Math.round(row[3] * E.techCostK * age), enginePts: row[4], engineCost: row[5] };
+}
+// Kendi motorunun puanı: içindeki özelliklerin (temel dahil) toplamı
 export function engineScore(ctx, engine) {
   if (!engine) return 0;
-  return engine.features.reduce((s, fid) => s + featureStats(ctx, fid).enginePts, 0);
+  return [...new Set([...BASE, ...engine.features])].reduce((s, fid) => s + featPts(ctx, fid), 0);
 }
-export function featureStats(ctx, fid) {
-  const item = ctx.pack.research.find((r) => r.id === fid);
-  const row = ctx.pack.researchV.rows.find((r) => r[0] === item.v);
-  return { v: row[0], rp: row[1], weeks: row[2], cost: row[3], enginePts: row[4], engineCost: row[5] };
+// Dönemin beklentisi: 3 yıl önce çıkmış ve seçilen platformların kaldırdığı basamakların toplamı (kategori ya da hepsi)
+const expFeats = (ctx, cat, y, plats) => FEATURES.filter((f) => (!cat || f.cat === cat) && (f.base || f.year <= y - ctx.pack.engine.expectLag) && (!plats || featOk(ctx, f.id, plats)));
+export const catExpected = (ctx, cat, y = tableYear(ctx), plats = null) => expFeats(ctx, cat, y, plats).reduce((s, f) => s + featPts(ctx, f.id), 0);
+export const expectedTop = (ctx, cat, y = tableYear(ctx), plats = null) => expFeats(ctx, cat, y, plats).pop();
+export const licById = (id) => LICENSED.find((L) => L.id === id) || null;
+export const mwById = (id) => MIDDLEWARE.find((m) => m.id === id) || null;
+export const licOpen = (L, y) => y >= L.from && y < L.to;
+// Lisanslı motorun o yıl taşıdığı özellikler. Bekleyiş Motoru her iki yılda bir yıl yaklaşır.
+export function licLag(L, y) { return L.grows ? Math.max(1, L.lag - Math.floor((y - L.from) / 2)) : L.lag; }
+export function licFeatures(ctx, L, y = tableYear(ctx)) {
+  const lim = y - licLag(L, y);
+  return FEATURES.filter((f) => f.base || ((!L.cats || L.cats.includes(f.cat)) && f.year <= Math.min(lim, L.cap ?? 9999, L.capCats?.[f.cat] ?? 9999))).map((f) => f.id);
 }
-export function engineFactor(ctx, engine) {
-  const e = ctx.pack.engine;
-  const exp = lerpTable(e.expected, tableYear(ctx));
-  if (!engine) return exp <= 0 ? 1 : e.noEngine;
-  if (exp <= 0) return e.factorMax;
-  return clamp(e.factorBase + e.factorK * (engineScore(ctx, engine) / exp), e.factorMin, e.factorMax);
+export function licPay(L, y) { let p = L.pay[0]; for (const x of L.pay) if (y >= x.from) p = x; return p; }
+export const mwFeatures = (m, y) => FEATURES.filter((f) => f.cat === m.cat && !f.base && f.year <= y - m.lag).map((f) => f.id);
+// Platform şartı: kademe şartını seçilen her konsol karşılamalı; tür şartı (fare, dokunmatik) için tek platform yeter.
+const techBound = (p) => ['konsol', 'el', 'salon'].includes(p.kind);
+const kindOfPlat = (p) => (p.kind === 'salon' ? 'konsol' : p.kind);
+export function featOk(ctx, fid, platIds = []) {
+  const n = FEAT[fid]?.need;
+  if (!n) return true;
+  const plats = platIds.map((id) => platformById(ctx, id)).filter(Boolean);
+  if (!plats.length) return true;
+  if (n.kinds && !plats.some((p) => n.kinds.includes(kindOfPlat(p)))) return false;
+  if (n.tech && plats.some((p) => techBound(p) && p.tech < n.tech)) return false;
+  return true;
+}
+// Projenin motoru: kaynak, sunduğu özellikler, hız
+export function engineOf(ctx, pj, y = tableYear(ctx)) {
+  const st = ctx.state;
+  const own = pj.engineId != null ? st.engines.find((e) => e.id === pj.engineId) : null;
+  const L = !own && pj.engineLic ? licById(pj.engineLic) : null;
+  let avail = own ? [...BASE, ...own.features] : L ? licFeatures(ctx, L, y) : [...BASE];
+  for (const id of pj.mw || []) { const m = mwById(id); if (m) avail.push(...mwFeatures(m, y)); }
+  avail = [...new Set(avail)];
+  return { kind: own ? 'own' : L ? 'lic' : 'scratch', own, L, avail, name: own ? own.name : L ? L.name : 'Sıfırdan kod' };
+}
+// Oyunda kullanılan özellikler: seçilenler (yoksa motorun hepsi) ∩ motorun sundukları ∩ platformun kaldırdıkları; temel her zaman var.
+export function projFeatures(ctx, pj, y = tableYear(ctx)) {
+  const src = engineOf(ctx, pj, y);
+  const want = pj.features ? new Set([...BASE, ...pj.features]) : null;
+  return src.avail.filter((f) => (FEAT[f].base || !want || want.has(f)) && featOk(ctx, f, pj.platforms));
+}
+// Kategori seviyeleri ve çarpanlar: grafik → grafik puanı, ses → ses puanı, diğer beşi → teknik puanı (türün önemsediği ağır basar)
+export function techProfile(ctx, pj, y = tableYear(ctx)) {
+  const E = ctx.pack.engine, feats = projFeatures(ctx, pj, y);
+  const cats = {};
+  for (const c of CATS) {
+    const mine = feats.filter((f) => FEAT[f].cat === c.id);
+    const have = mine.reduce((s, f) => s + featPts(ctx, f), 0), exp = catExpected(ctx, c.id, y, pj.platforms);
+    const top = mine.map((f) => FEAT[f]).sort((a, b) => a.year - b.year).pop();
+    cats[c.id] = { have, exp, r: exp > 0 ? have / exp : 1, top: top?.name || '—', expTop: expectedTop(ctx, c.id, y, pj.platforms)?.name || '—' };
+  }
+  const av = (r) => clamp(E.avBase + E.avK * r, E.avMin, E.avMax);
+  const w = GENRE_WANTS[pj.genre] || {};
+  const tc = CATS.filter((c) => c.disc === 'tek');
+  const ws = tc.reduce((s, c) => s + (w[c.id] || 1), 0);
+  const rt = tc.reduce((s, c) => s + (w[c.id] || 1) * Math.min(cats[c.id].r, E.rCap), 0) / ws;
+  const extra = feats.filter((f) => !FEAT[f].base).length;
+  return { feats, cats, rt, gfx: av(cats.gfx.r), ses: av(cats.ses.r), tek: clamp(E.factorBase + E.factorK * rt, E.factorMin, E.factorMax), load: 1 + Math.min(E.featLoadMax, E.featLoad * extra) };
+}
+// Oyuncu raporu: dönemin en çok gerisinde kalan kategori (yoksa null)
+export function techLowOf(ctx, pj) {
+  const tp = techProfile(ctx, pj);
+  const w = GENRE_WANTS[pj.genre] || {};
+  const low = CATS.map((c) => ({ c, x: tp.cats[c.id], k: (w[c.id] || 1) * (1 - Math.min(1, tp.cats[c.id].r)) })).filter((o) => o.x.r < 0.8).sort((a, b) => b.k - a.k)[0];
+  return low ? { cat: low.c.id, name: low.c.name, top: low.x.top, expTop: low.x.expTop } : null;
+}
+// Eski arayüz ve raporlar için: teknik çarpanı
+export function engineFactor(ctx, pj) { return pj ? techProfile(ctx, pj).tek : 1; }
+// Motor ailesinde daha önce çıkan oyun sayısı (ekip alışkanlığı)
+export function familyGames(ctx, family) {
+  const ids = new Set(ctx.state.engines.filter((e) => (e.family ?? e.id) === family).map((e) => e.id));
+  return ctx.state.games.filter((g) => ids.has(g.engineId)).length;
+}
+export const familyLatest = (ctx, family) => ctx.state.engines.filter((e) => (e.family ?? e.id) === family).reduce((m, e) => Math.max(m, e.builtYear), -Infinity);
+// Hız (puan çarpanı) ve hata çarpanı
+export function engineSpeed(ctx, pj) {
+  const E = ctx.pack.engine, src = engineOf(ctx, pj);
+  if (src.kind === 'lic') {
+    const kindOk = !src.L.speedKinds || (pj.platforms || []).some((id) => src.L.speedKinds.includes(platformById(ctx, id)?.kind));
+    const k = (kindOk ? src.L.speed || 1 : 1) * (src.L.genres?.[pj.genre] || 1);
+    return { speed: 1 + (k - 1) * E.licSpeedK, bugs: 1 };
+  }
+  if (src.kind === 'own') {
+    const n = familyGames(ctx, src.own.family ?? src.own.id);
+    if (n === 0) return { speed: E.famFirstSpeed, bugs: E.famFirstBugs };
+    if (n >= E.famUsedGames) return { speed: E.famUsedSpeed, bugs: 1 };
+  }
+  return { speed: 1, bugs: 1 };
+}
+// Değerlendirmeye giren motor notları
+export function techNotes(ctx, pj, y = tableYear(ctx)) {
+  const E = ctx.pack.engine, r = ctx.pack.review, out = [];
+  const feats = new Set(projFeatures(ctx, pj, y));
+  const sid = subId(pj.sub), need = sid && SUB_NEEDS[sid];
+  if (need && !feats.has(need)) out.push({ v: -E.subNeedPenalty, text: `${SUB[sid].name}: ${FEAT[need].name} yok −${E.subNeedPenalty}` });
+  const must = GENRE_MUST.find((m) => m.genre === pj.genre && y >= m.from);
+  if (must && !must.any.some((f) => feats.has(f))) out.push({ v: -E.mustPenalty, text: `Olmazsa olmaz eksik −${E.mustPenalty}`, line: must.line });
+  const src = engineOf(ctx, pj, y);
+  if (src.kind === 'own' && y - familyLatest(ctx, src.own.family ?? src.own.id) > r.oldEngineYears) out.push({ v: -r.oldEnginePenalty, text: `Eskimiş motor −${r.oldEnginePenalty}` });
+  if ([...feats].some((f) => !FEAT[f].base && !ctx.state.usedFeatures[f])) out.push({ v: r.newFeatureBonus, text: `Yeni özellik +${r.newFeatureBonus}` });
+  return out;
 }
 
 // --- Review (değerlendirme)
@@ -250,9 +353,7 @@ export function review(ctx, project) {
   if (sp) { score += sp; notes.push(`Küçük boyut ${sp}`); }
   const last = ctx.state.games[ctx.state.games.length - 1];
   if (last && last.topic === project.topic && last.genre === project.genre) { score -= r.repeatComboPenalty; notes.push(`Aynı konu×tür tekrarı −${r.repeatComboPenalty}`); }
-  const engine = ctx.state.engines.find((e) => e.id === project.engineId);
-  if (engine && tableYear(ctx) - engine.builtYear > r.oldEngineYears) { score -= r.oldEnginePenalty; notes.push(`Eskimiş motor −${r.oldEnginePenalty}`); }
-  if (engine && engine.features.some((f) => !ctx.state.usedFeatures[f])) { score += r.newFeatureBonus; notes.push(`Yeni özellik +${r.newFeatureBonus}`); }
+  for (const n of techNotes(ctx, project)) { score += n.v; notes.push(n.text); } // Konu E
   if (score >= r.cap - 0.01) score = r.cap + ctx.rng.range(0, r.randTop);
   score = clamp(score, 1, 100);
   const critics = criticPanel(ctx, score, project.genre);

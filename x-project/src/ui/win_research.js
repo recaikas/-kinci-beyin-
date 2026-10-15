@@ -1,4 +1,4 @@
-// Ar-Ge: araştırma, motor, donanım/konsol tasarımı.
+// Ar-Ge: araştırma, teknoloji ve motor (win_engines.js), türler, donanım/konsol tasarımı.
 import { M, Prod, Con, War } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
@@ -9,15 +9,8 @@ export function make(u) {
   // ---------- AR-GE
   function winResearch(sub) {
     const s = G().state, c = ctx();
-    if (sub === 'motor') {
-      const feats = PACK.research.filter((r) => r.engine && s.research.done[r.id]);
-      const builder = s.research.done.motor_ozel ? `<label class="field">Motor adı<input id="e-name" data-eng="name" value="${esc(app.engineName)}" maxlength="24"></label>
-        <fieldset class="picks">${feats.map((f) => { const st = M.featureStats(c, f.id); return `<label class="pick"><input type="checkbox" id="ft-${f.id}" data-feat="${f.id}" ${app.engineSel.has(f.id) ? 'checked' : ''}><span class="name">${esc(f.name.replace('Motor: ', ''))}</span><span class="meta num">${st.enginePts} p · ${money(st.engineCost)}</span></label>`; }).join('') || '<p class="muted">Önce motor özelliği araştır.</p>'}</fieldset>
-        <div class="foot">${s.engineJob ? `<span class="muted">Yapılıyor: ${esc(s.engineJob.name)} · ${s.engineJob.weeksLeft} hf</span>` : '<span></span><button class="primary" data-act="engine">Motoru yap</button>'}</div>` : '<p class="muted">"Kendi motorunu yap" araştırmasıyla açılır.</p>';
-      const engines = s.engines.map((e) => `<div class="row-item"><div><b>${esc(e.name)}</b><small>${M.engineScore(c, e)} puan · ${Math.floor(e.builtYear)} · ×${M.engineFactor(c, e).toFixed(2)}</small></div>
-        <button data-act="licence" data-id="${e.id}" ${s.research.done.motor_lisans ? '' : 'disabled'}>${e.licensed ? 'Lisansı kapat' : 'Lisansla'}</button></div>`).join('');
-      return builder + engines;
-    }
+    if (sub === 'motor') return u.engineView(); // Konu E
+    if (sub === 'teknoloji') return u.techTree();
     if (sub === 'konsol') return consoleView();
     if (sub === 'turler') return u.genreTree(); // Konu D
     const cur = s.research.current ? (() => { const it = PACK.research.find((r) => r.id === s.research.current.id); return `<section class="box hl"><h3>${esc(it.name)}</h3><p class="muted small">${s.research.current.weeksLeft} hafta kaldı</p></section>`; })() : '';

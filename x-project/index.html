@@ -69,7 +69,7 @@ p { margin: 0; }
 .note.out { opacity: 0; }
 @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
 
-#menu { display: flex; justify-content: center; gap: 6px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(#1d1529, var(--panel)); border-top: 3px solid var(--shadow); overflow-x: auto; }
+#menu { position: relative; z-index: 9; display: flex; justify-content: center; gap: 6px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(#1d1529, var(--panel)); border-top: 3px solid var(--shadow); overflow-x: auto; }
 #menu button { position: relative; display: grid; justify-items: center; gap: 3px; min-width: 76px; padding: 6px 8px 5px; font-size: var(--s-1); }
 #menu img { width: 28px; height: 28px; image-rendering: pixelated; }
 #menu button.on { background: var(--candy); color: var(--night); border-color: var(--candy); }
@@ -173,6 +173,12 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .hubtile { display: grid; justify-items: start; gap: 4px; padding: 12px; text-align: left; min-height: 92px; }
 .hubtile img { width: 28px; height: 28px; image-rendering: pixelated; }
 .hubtile small { color: var(--ink-2); font-size: var(--s-1); }
+.hubtile { position: relative; }
+.hubtile .mi-ic { font-size: 1.5rem; line-height: 1; }
+.hubtile.tease { opacity: 0.5; border-style: dashed; }
+.hubtile.tease .mi-ic { font-family: var(--font-display); color: var(--ink-2); }
+.newtag, .badge.new { position: absolute; top: -8px; right: -6px; font-style: normal; font-size: 0.62rem; background: var(--amber); color: var(--night); padding: 1px 4px; border: 2px solid var(--night); }
+.firstnote { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 6px 10px; border: 2px dashed var(--sky); font-size: var(--s-1); }
 .window > header .back { margin-right: 6px; padding: 0 8px; }
 .plist-r { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--s-1); }
 .plist-r .good { color: var(--mint); } .plist-r .bad { color: #ffb3bd; } .plist-r .quote { color: var(--ink-2); font-style: italic; list-style: none; margin-left: -18px; }
@@ -333,6 +339,16 @@ details.subgrp { margin: 4px 0; } details.subgrp summary { cursor: pointer; font
 .tg { font-size: 0.72rem; padding: 2px 6px; border: 1px solid var(--line); background: var(--panel); }
 .pill.taste { background: var(--panel-2); }
 @media (max-width: 600px) { .srow { grid-template-columns: 1fr; gap: 2px; } }
+.tcat { display: grid; grid-template-columns: 130px minmax(60px, 1fr) minmax(0, 1.4fr); gap: 8px; align-items: center; font-size: var(--s-1); padding: 2px 0; }
+.tcat small { color: var(--ink); } .tcat .warn { color: var(--amber); }
+@media (max-width: 600px) { .tcat { grid-template-columns: 110px 1fr; } .tcat small { grid-column: 1 / -1; } }
+.tcols { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.tcol { display: grid; gap: 4px; align-content: start; }
+.tstep { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: var(--s-1); padding: 3px 6px; border-left: 3px solid var(--line); }
+.tstep small { color: var(--ink-2); font-size: 0.7rem; }
+.tstep.done { border-left-color: var(--mint); } .tstep.run { border-left-color: var(--amber); } .tstep.ready { border-left-color: var(--sky); background: var(--panel-2); }
+.tstep.locked, .tstep.future { opacity: 0.55; }
+.tstep button.mini small { display: block; }
 .report { display: grid; gap: 6px; text-align: left; }
 .report ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--s-1); }
 .report .good { color: var(--mint); } .report .bad { color: #ffb3bd; }
@@ -420,11 +436,11 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
   .time button { height: 34px; min-width: 40px; }
   .stat b { font-size: 1.2rem; }
   #menu { justify-content: flex-start; gap: 4px; padding-left: 8px; padding-right: 8px; }
-  #menu button { flex: 0 1 120px; min-width: 0; padding: 5px 2px; font-size: 0.7rem; }
+  #menu button { flex: 1 1 52px; min-width: 0; max-width: 120px; padding: 5px 2px; font-size: 0.7rem; }
   #menu { justify-content: center; }
   #menu button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   #menu img { width: 21px; height: 21px; }
-  #win { padding: 0; place-items: end stretch; }
+  #win { padding: 0 0 calc(66px + env(safe-area-inset-bottom, 0px)); place-items: end stretch; } /* alt çubuk açık kalır (Konu F) */
   .window { width: 100%; max-height: 82vh; border-width: 3px 0 0; }
   .acts { grid-template-columns: 1fr 1fr; }
 }

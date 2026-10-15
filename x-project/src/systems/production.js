@@ -1,10 +1,11 @@
 // Üretim: oyun projesi (3 faz × 3 görev), uzman odalar, QA, hata ayıklama, dış kaynak, sözleşme, araştırma, motor.
 import { clamp, lerpTable } from '../kernel.js';
-import { H, inflation, tableYear, featureStats, engineFactor, traitOf, platformById, careerOf, skillK, DISC_SKILL, homePay, homeImport } from '../models.js';
+import { H, inflation, tableYear, techProfile, engineSpeed, traitOf, platformById, careerOf, skillK, DISC_SKILL, homePay, homeImport } from '../models.js';
 import { weeklyOutput } from './staff.js';
 import { consumeHypeBank } from './charts.js';
 import * as Regions from './regions.js';
 import * as Genres from './genres.js';
+import * as Engines from './engines.js';
 
 // --- Proje (MGT: her geliştirme odası kendi oyununu yapar; uzman odalar ve QA tüm projelere bölünür)
 export function newProject(ctx, o) {
@@ -71,16 +72,17 @@ export function weeklyProject(ctx) {
       pj.phase = Math.min(2, Math.floor(pj.week / (pj.totalWeeks / 3)));
       const ids = pack.missions.map((m, i) => i).filter((i) => pack.missions[i].phase === pj.phase);
       const sum = ids.reduce((s, i) => s + pj.alloc[i], 0) || 1;
-      const eng = engineFactor(ctx, state.engines.find((e) => e.id === pj.engineId));
+      const tp = techProfile(ctx, pj), es = engineSpeed(ctx, pj); // Konu E: motor ve özellikler
+      const ek = { oyn: 1, gfx: tp.gfx, ses: tp.ses, tek: tp.tek }, rate = es.speed / tp.load;
       const spd = Genres.speedK(ctx, pj), gb = Genres.bugK(ctx, pj); // Konu D: stüdyonun tür ustalığı
       for (const { p, w } of crew) {
-        const c = careerOf(ctx, p), aff = Genres.staffK(ctx, p, pj) * spd; // çalışanın tür yatkınlığı
+        const c = careerOf(ctx, p), aff = Genres.staffK(ctx, p, pj) * spd * rate; // çalışanın tür yatkınlığı
         for (const i of ids) {
           const m = pack.missions[i];
           let pts = w * aff * (pj.alloc[i] / sum) * (pr.missionFloor + (1 - pr.missionFloor) * g.mission[i]) * c.aff[m.disc] * skillK(ctx, p, DISC_SKILL[m.disc]) * Genres.missionK(ctx, m);
-          if (m.disc === 'tek') pts *= eng;
+          pts *= ek[m.disc];
           pj.points[m.disc] += pts;
-          pj.bugs += pts * bugK(p) * gb;
+          pj.bugs += pts * bugK(p) * gb * es.bugs;
         }
       }
       // Uzman odalar: geliştirmedeki projelere eşit bölünür, yalnızca kendi disiplinine.
@@ -88,7 +90,7 @@ export function weeklyProject(ctx) {
         const d = room.type === 'grafik' ? 'gfx' : 'ses';
         const k = share(room, pj, inDev);
         if (!k) continue;
-        const pts = w * rm.expertMult * careerOf(ctx, p).aff[d] * k * skillK(ctx, p, DISC_SKILL[d]);
+        const pts = w * rm.expertMult * careerOf(ctx, p).aff[d] * k * skillK(ctx, p, DISC_SKILL[d]) * ek[d] / tp.load;
         pj.points[d] += pts;
         pj.bugs += pts * bugK(p) * 0.5;
       }
@@ -215,10 +217,6 @@ export function weeklyContract(ctx) {
 
 // --- Araştırma
 export function researchInfo(ctx, item) {
-  if (item.engine) {
-    const f = featureStats(ctx, item.id);
-    return { rp: f.rp, cost: f.cost, weeks: f.weeks };
-  }
   const k = Genres.researchDiscount(ctx, item); // yakın türü bilen ucuza öğrenir (Konu D)
   return { rp: Math.round(item.rp * k), cost: Math.round(item.cost * k * inflation(ctx) ** 0.5), weeks: item.weeks };
 }
@@ -253,25 +251,7 @@ export function weeklyResearch(ctx) {
     ctx.bus.fire('researchCompleted', item);
     state.research.current = null;
   }
-  const job = state.engineJob;
-  if (job && --job.weeksLeft <= 0) {
-    state.engines.push({ id: state.nextId++, name: job.name, features: job.features, builtYear: tableYear(ctx), licensed: false });
-    ctx.news(`⚙️ Motor hazır: ${job.name}`, 'good');
-    ctx.bus.fire('engineFinished', job);
-    state.engineJob = null;
-  }
 }
 
-// --- Motor
-export function buildEngine(ctx, name, features) {
-  const { state, pack, ledger } = ctx;
-  if (!state.research.done.motor_ozel) return { ok: false, msg: 'Önce "Kendi motorunu yap" araştırmasını bitir.' };
-  if (state.engineJob) return { ok: false, msg: 'Zaten bir motor yapılıyor.' };
-  const fs = features.filter((f) => state.research.done[f]);
-  if (!fs.length) return { ok: false, msg: 'En az bir araştırılmış özellik seç.' };
-  const cost = fs.reduce((s, f) => s + featureStats(ctx, f).engineCost, 0);
-  ledger.post('motor', -cost, `Motor: ${name}`);
-  state.engineJob = { name, features: fs, weeksLeft: pack.engine.buildWeeksBase + pack.engine.buildWeeksPerFeature * fs.length };
-  ctx.bus.fire('engineStarted', state.engineJob);
-  return { ok: true };
-}
+// --- Motor (Konu E: systems/engines.js)
+export const buildEngine = (ctx, name, features, fromId) => Engines.buildEngine(ctx, name, features, fromId);

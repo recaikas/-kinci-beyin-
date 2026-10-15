@@ -1,5 +1,5 @@
 // Geliştir: proje listesi, yeni oyun sihirbazı, proje ayrıntısı, sözleşmeler.
-import { M, Prod, Market, Staff, Know, Modern, Charts, Genres } from '../game.js';
+import { M, Prod, Market, Staff, Know, Modern, Charts, Genres, Engines } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
@@ -11,7 +11,7 @@ export function make(u) {
   function defaultDraft() {
     const g = G(), y = M.tableYear(ctx());
     const r = PACK.rivals, pick = (a) => a[(g.state.week + g.state.games.length * 3) % a.length];
-    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: Genres.knownGenres(ctx())[0]?.id || 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: '', sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
+    return { name: `${pick(r.gameNamesA)} ${pick(r.gameNamesB)}`, genre: Genres.knownGenres(ctx())[0]?.id || 'aksiyon', sub: '', topic: PACK.topics.find((t) => t[4] <= y)[0], audience: 'herkes', size: 'kucuk', engineId: Engines.families(ctx()).sort((a, b) => b.builtYear - a.builtYear)[0]?.id ?? null, engineLic: null, mw: [], features: null, sequelOf: '', platforms: ['pc'], roomId: '', regions: Prod.baseRegions(ctx()) };
   }
   const badgeOf = (v) => (v == null ? '' : `<em class="kn t${u.tierOfV(v)}" title="${Know.rating(v)[1]}">${Know.rating(v)[0]}</em>`);
   // Yayın zamanlaması (Konu A): bu ayın talebi ve yakın tarihte aynı türde çıkacak büyük oyunlar
@@ -59,7 +59,7 @@ export function make(u) {
     const g = G(), s = g.state, c = ctx(), y = M.tableYear(c), kn = Know.known(c);
     const d = (app.draft ||= defaultDraft());
     const done = s.research.done, trend = s.trend || {};
-    const steps = ['Fikir', 'Platform', 'Onay'];
+    const steps = ['Fikir', 'Platform', 'Teknoloji', 'Onay'];
     const head = `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div><ol class="steps">${steps.map((n, i) => `<li class="${app.wiz === i + 1 ? 'on' : app.wiz > i + 1 ? 'done' : ''}">${i + 1}. ${n}</li>`).join('')}</ol>`;
     const opt = (v, label, sel, dis = false) => `<option value="${v}" ${sel ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(label)}</option>`;
     const nav = (back, nextLabel) => `<div class="foot">${back ? '<button data-act="wiz" data-id="-1">Geri</button>' : ''}<span></span><button class="primary" data-act="wiz" data-id="1">${nextLabel}</button></div>`;
@@ -94,18 +94,18 @@ export function make(u) {
         <fieldset class="picks"><legend>Çeviriler <small>satabileceğin yerleri dağıtım ağın belirler (Dünya › Bölgeler)</small></legend>${regs}</fieldset>
         <div class="form">
           <label>Boyut<select id="f-size" data-draft="size">${PACK.sizes.map((z) => { const lock = z.research && !done[z.research] ? ' (araştır)' : s.office.tier < z.office ? ` (${PACK.offices[z.office - 1].name})` : ''; return opt(z.id, `${z.name} · ${z.weeks} hf${lock}`, d.size === z.id, !!lock); }).join('')}</select></label>
-          <label>Motor<select id="f-engine" data-draft="engineId">${opt('', 'Motorsuz', !d.engineId)}${s.engines.map((e) => opt(e.id, `${e.name} (${M.engineScore(c, e)})`, String(d.engineId) === String(e.id))).join('')}</select></label>
           <label>Seri<select id="f-ip" data-draft="sequelOf">${opt('', 'Yeni IP', !d.sequelOf)}${s.ips.map((ip) => opt(ip.id, `${ip.name} ★${ip.value.toFixed(1)}`, String(d.sequelOf) === String(ip.id))).join('')}</select></label>
           <label>Geliştirme odası<select id="f-room" data-draft="roomId">${free.map((r) => opt(r.id, `${Staff.roomType(c, r.type).name} #${r.id} · ${Staff.membersOf(c, r).length} kişi`, String(d.roomId) === String(r.id))).join('')}</select></label>
-        </div>` + nav(true, 'Özete geç');
+        </div>` + nav(true, 'Teknolojiye geç');
     }
+    if (app.wiz === 3) return head + u.techStep(d) + nav(true, 'Özete geç'); // Konu E
     const genre = PACK.genres.find((x) => x.id === d.genre), topic = PACK.topics.find((t) => t[0] === d.topic);
     const size = PACK.sizes.find((z) => z.id === d.size);
     return head + `<div class="summary">
         <h2>${esc(d.name)}</h2>
         <p>${esc(topic[1])} temalı ${genre.name.toLowerCase()}${d.sub && Genres.SUB[d.sub] ? ' (' + Genres.SUB[d.sub].name.toLowerCase() + ')' : ''} oyunu, ${PACK.audiences.find((a) => a.id === d.audience).name.toLowerCase()} kitle için.</p>
-        <div class="kv"><span>Platform</span><b>${d.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ') || '—'}</b><span>Boyut</span><b>${size.name} · ${size.weeks} hafta</b>
-        <span>Başlangıç maliyeti</span><b class="num">${money(Prod.projectCost(c, d))}</b><span>Kasa</span><b class="num">${money(s.cash)}</b></div>
+        <div class="kv"><span>Platform</span><b>${d.platforms.map((id) => esc(M.platformById(c, id)?.name || id)).join(', ') || '—'}</b><span>Boyut</span><b>${size.name} · ${Math.round(size.weeks * M.techProfile(c, u.draftPj(d)).load)} hafta</b>
+        ${u.techSummary(d)}<span>Başlangıç maliyeti</span><b class="num">${money(Prod.projectCost(c, d) + Engines.startFees(c, u.draftPj(d)))}</b><span>Kasa</span><b class="num">${money(s.cash)}</b></div>
       </div><div class="foot"><button data-act="wiz" data-id="-1">Geri</button><span></span><button class="primary big" data-act="start">Geliştirmeye başla</button></div>`;
   }
   function projectView(pj) {

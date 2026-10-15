@@ -1,6 +1,6 @@
 // Ekonomi: maaş, kira, kredi, iflas, ofis/istasyon yatırımı, motor lisansı, kaos ölçeri.
 import { clamp, lerpTable } from '../kernel.js';
-import { inflation, eraMult, salaryFor, tableYear, engineScore, homeRent } from '../models.js';
+import { inflation, eraMult, salaryFor, tableYear, homeRent } from '../models.js';
 import { seats, slots } from './staff.js';
 
 export const office = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
@@ -52,14 +52,7 @@ export function monthlyEconomy(ctx) {
   }
   state.loans = state.loans.filter((l) => l.remaining > 1);
   if (state.cash < 0) ledger.post('faiz', Math.round(state.cash * pack.economy.loanRateYear * 1.5 / 12), 'Kredili mevduat faizi');
-  // Motor lisansı geliri
-  const exp = lerpTable(pack.engine.expected, tableYear(ctx));
-  for (const e of state.engines) {
-    if (!e.licensed) continue;
-    const sc = engineScore(ctx, e);
-    if (exp > 0 && sc < exp * pack.engine.licenceMinRatio) continue;
-    ledger.post('lisans', Math.round(sc * pack.engine.licenceIncomePerPoint * inflation(ctx) ** 0.5), e.name);
-  }
+  // Motor lisansı geliri: systems/engines.js (Konu E)
 }
 
 export function weeklySolvency(ctx) {

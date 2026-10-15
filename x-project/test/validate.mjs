@@ -895,5 +895,97 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('Eski kayıt: eski türler bilinir, alt tür eşlenir, bilgi geçmiş oyunlardan', Genres.knows(lg.ctx, 'macera') && Genres.knows(lg.ctx, 'casual') && Genres.knows(lg.ctx, 'rpg') && lg.state.games[0].sub === 'aksiyonrpg' && lg.state.gxp.aksiyon > 0 && lg.state.staff[0].likes?.length >= 1);
 }
 
+// 35) Konu E: motor ve teknoloji
+{
+  const E = await import('../src/systems/engines.js');
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const at = (y, o = {}) => { const g = rawNewGame({ seed: 77, difficulty: 'kolay', length: 50, ...o }); g.state.week = Math.round((y - 1976) * 48 * g.state.lengthMult); for (const gg of PACK.genres) g.state.research.done[gg.research] ??= 0; g.state.research.done.alt_tur = 1; g.state.cash = 5e7; return g; };
+  check('50 özellik, 7 kategori, 6 temel', E.FEATURES.length === 50 && E.CATS.length === 7 && E.BASE.length === 6, `${E.FEATURES.length}/${E.CATS.length}/${E.BASE.length}`);
+  check('Her kategori 1976 temeliyle başlar (kayıt hariç) ve yıla göre sıralı', E.CATS.every((c) => { const l = E.FEATURES.filter((f) => f.cat === c.id); return l.every((f, i) => !i || f.year >= l[i - 1].year); }));
+  const g95 = at(1995);
+  check('Platform şartı: poligon Ataro\'da yok, bilgisayarda var; fare yalnız bilgisayarda', !M.featOk(g95.ctx, 'g_poligon', ['ataro']) && M.featOk(g95.ctx, 'g_poligon', ['pc']) && M.featOk(g95.ctx, 'k_fare', ['pc', 'oi1']) && !M.featOk(g95.ctx, 'k_fare', ['oi1']));
+  const fps = { name: 'F', genre: 'nisanci', sub: 'fps', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk', points: { oyn: 1, gfx: 1, ses: 1, tek: 1 }, bugs: 0, alloc: [] };
+  const n0 = M.techNotes(g95.ctx, fps).map((n) => n.text).join('|'), n1 = M.techNotes(g95.ctx, { ...fps, engineLic: 'kiyamet' }).map((n) => n.text).join('|');
+  check('Alt tür şartı: sıfırdan kodla FPS −5, Kıyamet Motoru ile yok', /Poligon 3D yok −5/.test(n0) && !/Poligon/.test(n1), n0);
+  const rpg = { ...fps, genre: 'rpg', sub: 'aksiyonrpg' };
+  check('Türün olmazsa olmazı: kayıtsız RPG −2', M.techNotes(g95.ctx, rpg).some((n) => n.v === -2 && n.line));
+  const scr = M.techProfile(g95.ctx, fps), kiy = M.techProfile(g95.ctx, { ...fps, engineLic: 'kiyamet' });
+  check('Sıfırdan kod 1995\'te geride, lisanslı motor dönemde', scr.gfx < 0.9 && scr.tek < 1 && kiy.gfx >= 1 && kiy.tek > 1.1, `${scr.gfx.toFixed(2)}/${scr.tek.toFixed(2)} · ${kiy.gfx.toFixed(2)}/${kiy.tek.toFixed(2)}`);
+  check('Temel dışı özellik süreyi uzatır (en çok %15)', kiy.load > 1 && kiy.load <= 1.15 + 1e-9);
+  const c0 = g95.state.cash, r = g95.startProject({ ...fps, engineLic: 'kiyamet' });
+  check('Peşin lisans proje başında kesilir', r.ok && c0 - g95.state.cash >= 150000 && g95.state.ledger.total.motor_lisans <= -150000, String(g95.state.ledger.total.motor_lisans));
+  check('Projeye lisans yazılır', r.project?.engineLic === 'kiyamet' && r.project.lic?.royalty === 0);
+  // Yüzde ve eşik
+  const g15 = at(2015), g22 = at(2022), g23 = at(2023);
+  check('Gerçeksiz 2014 sonrası peşin yok, %5', M.licPay(M.licById('gercekdisi'), 2015).fee === 0 && M.licPay(M.licById('gercekdisi'), 2015).royalty === 0.05);
+  check('Yüzde haftalık gelirden kesilir', E.royaltyCut(g15.ctx, { lic: { id: 'gercekdisi', royalty: 0.05 }, revenue: 0 }, 100000) === 5000);
+  check('Gerçeksiz 2022: ilk 1 milyon yüzdesiz', E.royaltyCut(g22.ctx, { lic: { id: 'gercekdisi', royalty: 0.05, threshold: 1e6 }, revenue: 0 }, 500000) === 0 && E.royaltyCut(g22.ctx, { lic: { id: 'gercekdisi', royalty: 0.05, threshold: 1e6 }, revenue: 900000 }, 200000) === 5000);
+  check('Birlik 2023 kurulum ücreti: +%3', E.royaltyCut(g23.ctx, { lic: { id: 'birlik', royalty: 0, seat: 150 }, revenue: 0 }, 100000) === 3000);
+  const gr = at(2016); const rr = gr.startProject({ ...fps, engineLic: 'gercekdisi' }).project;
+  while (rr.status === 'dev') tick(gr, 1);
+  for (const d in rr.points) rr.points[d] = M.target(gr.ctx, d, rr.size); rr.bugs = 0;
+  gr.state.research.done.oz_yayin = 1; gr.release({ projectId: rr.id, price: 20 });
+  tick(gr, 6);
+  check('Satıştan motor lisansı kesilir (finans satırı)', gr.state.ledger.total.motor_lisans < 0 && gr.state.games[0].lic?.id === 'gercekdisi');
+  // Çizim Yazılımı kapanır
+  check('Çizim Yazılımı 2004\'te kapanır', E.licAvailable(at(2003).ctx).some((L) => L.id === 'cizim') && !E.licAvailable(at(2004).ctx).some((L) => L.id === 'cizim') && !at(2004).startProject({ ...fps, engineLic: 'cizim' }).ok);
+  // Teknoloji hattı ve motor sürümü
+  const gt = at(1985);
+  check('Teknoloji hattı "Kendi motorunu yap" ister', !gt.startTech('g_blok').ok);
+  gt.state.research.done.motor_ozel = 1; gt.state.research.rp = 1000;
+  check('Merdiven: Sprite, Blok grafikten önce araştırılamaz', E.techState(gt.ctx, 'g_sprite') === 'locked' && E.techState(gt.ctx, 'g_blok') === 'ready');
+  const st = gt.startTech('g_blok');
+  tick(gt, M.featureStats(gt.ctx, 'g_blok').weeks + 1);
+  check('Teknoloji araştırması biter, sonraki basamak açılır', st.ok && E.techDone(gt.ctx, 'g_blok') && E.techState(gt.ctx, 'g_sprite') === 'ready');
+  check('Eski basamak ucuzlar', M.featureStats(gt.ctx, 'g_blok').cost < PACK.researchV.rows[0][3]);
+  gt.state.tech.done.g_sprite = 1; gt.state.tech.done.s_cip = 1;
+  const b1 = gt.buildEngine('Garaj', ['g_blok', 'g_sprite']);
+  tick(gt, 8);
+  const e1 = gt.state.engines[0];
+  const full = E.buildCost(gt.ctx, ['g_blok', 'g_sprite', 's_cip']), carry = E.buildCost(gt.ctx, ['g_blok', 'g_sprite', 's_cip'], e1.id);
+  check('Yeni sürüm eski özellikleri %20 bedelle taşır', b1.ok && e1 && carry.cost < full.cost && carry.fresh === 1, `${carry.cost} < ${full.cost}`);
+  gt.buildEngine('x', ['g_blok', 'g_sprite', 's_cip'], e1.id); tick(gt, 6);
+  check('Sürüm aynı ailede: Garaj 2', gt.state.engines[1]?.name === 'Garaj 2' && gt.state.engines[1].family === e1.family && E.families(gt.ctx).length === 1);
+  // Eski kayıt göçü
+  const old = JSON.parse(rawNewGame({ seed: 78 }).save());
+  delete old.engineV; delete old.tech;
+  old.research.done.f_3d = 5; old.research.done.f_sprite = 3; old.usedFeatures = { f_sprite: true };
+  old.engines = [{ id: 900, name: 'Eski', features: ['f_metin', 'f_sprite'], builtYear: 1980, licensed: false }, { id: 901, name: 'Eski 2', features: ['f_sprite', 'f_3d'], builtYear: 1993, licensed: false }];
+  const lo = loadGame(JSON.stringify(old));
+  check('Eski kayıt: eski motor özellikleri yeni ağaca taşınır, motorlar tek aile', lo.state.tech.done.g_poligon === 5 && lo.state.tech.done.g_sprite === 3 && lo.state.engines[1].features.join() === 'g_sprite,g_poligon' && lo.state.engines[0].features.join() === 'g_sprite' && E.families(lo.ctx).length === 1 && lo.state.usedFeatures.g_sprite && !lo.state.research.done.f_3d);
+  // Dışarıya lisans
+  const gl = at(1990); gl.state.research.done.motor_ozel = 1; gl.state.research.done.motor_lisans = 1;
+  for (const f of E.FEATURES) if (f.year <= 1989) gl.state.tech.done[f.id] = 1;
+  gl.state.engines.push({ id: 950, name: 'Lisans', family: 950, ver: 1, features: E.FEATURES.filter((f) => !f.base && f.year <= 1989).map((f) => f.id), builtYear: 1990, licensed: false });
+  gl.toggleLicence(950); gl.state.reputation = 80;
+  const l0 = gl.state.ledger.total.lisans || 0;
+  tick(gl, 12);
+  check('Dışarıya lisans: lisansçı gelir ve aylık gelir', (gl.state.licensees[950] || []).length >= 1 && (gl.state.ledger.total.lisans || 0) > l0);
+  const lic = gl.state.licensees[950][0];
+  check('Lisansçı rakibin notu +1', E.rivalBonus(gl.ctx, lic) === 1 && E.rivalBonus(gl.ctx, 'Yok Öyle Bir Stüdyo') === 0);
+}
+
+// 36) Konu F: menüler ve kilitler
+{
+  const Menu = await import('../src/ui/menu.js');
+  const { WIN_NAMES, SUBS } = await import('../src/ui/util.js');
+  const g = rawNewGame({ seed: 80, difficulty: 'kolay' });
+  const cats = () => Menu.openCats(g.ctx, g.state).map((k) => k.id).join();
+  Menu.check(g);
+  check('1976\'da Tanıtım ve Pazar saklı', cats() === 'is,ekip,arge,sirket,sistem', cats());
+  check('7 başlık, 31 seçenek', Menu.CATS.length === 7 && Menu.ITEMS.length === 31, String(Menu.ITEMS.length));
+  check('Her seçenek var olan bir pencereye ve sekmeye gider', Menu.ITEMS.every((it) => WIN_NAMES[it.win] && (!it.sub || (SUBS[it.win] || []).some(([k]) => k === it.sub))));
+  check('Kapalı seçeneğin ipucu var', Menu.ITEMS.filter((it) => !it.open(g.ctx, g.state)).every((it) => it.hint));
+  check('Pazar sekmesinde Yayıncılar ilk oyuna kadar saklı', !Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar') && Menu.tabVisible(g.ctx, g.state, 'gelistir', 'sozlesme'));
+  check('İlk kontrol sessiz: açılış haberi yok', !g.state.news.some((n) => n.t.startsWith('🆕')));
+  g.state.research.done.motor_ozel = 1;
+  Menu.check(g);
+  check('"Kendi motorunu yap" Teknoloji\'yi açar ve haber düşer, YENİ rozeti', Menu.isOpen(g.ctx, g.state, Menu.ITEM.teknoloji) && g.state.news.some((n) => n.t === '🆕 Ar-Ge › Teknoloji açıldı.') && Menu.isNew(g.state, Menu.ITEM.teknoloji));
+  g.state.games.push({ id: 1, name: 'X', weeks: 0, active: true, score: 50 });
+  Menu.check(g);
+  check('İlk oyundan sonra Pazar açılır', cats().includes('pazar') && Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar'));
+  check('Görülen kayıtla taşınır', JSON.parse(g.save()).ui.known.teknoloji > 0);
+}
+
 console.log(`\n${pass} geçti, ${fail} kaldı.`);
 process.exit(fail ? 1 : 0);

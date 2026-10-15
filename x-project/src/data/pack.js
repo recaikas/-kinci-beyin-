@@ -714,29 +714,21 @@ export const PACK = {
     { id: 'sezon_karti', name: 'Sezon kartı', rp: 60, cost: 100000, weeks: 5, year: 2011, requires: 'dlc' },
     { id: 'erken_erisim', name: 'Erken erişim', rp: 80, cost: 120000, weeks: 6, year: 2013 },
     { id: 'uzaktan', name: 'Uzaktan çalışma altyapısı', rp: 50, cost: 30000, weeks: 4, year: 2019 },
-    // Motor özellikleri: v seviyesi → RP/süre/maliyet/motor puanı researchV'den gelir.
-    { id: 'f_metin', name: 'Motor: Metin arayüzü', v: 1, year: 1976, engine: true },
-    { id: 'f_sprite', name: 'Motor: 2D sprite', v: 2, year: 1977, engine: true },
-    { id: 'f_renk', name: 'Motor: 16 renk', v: 2, year: 1978, engine: true },
-    { id: 'f_kaydirma', name: 'Motor: Kaydırma', v: 4, year: 1980, engine: true },
-    { id: 'f_sescip', name: 'Motor: Ses çipi', v: 4, year: 1982, engine: true },
-    { id: 'f_kayit', name: 'Motor: Kayıt sistemi', v: 4, year: 1983, engine: true },
-    { id: 'f_256', name: 'Motor: 256 renk', v: 6, year: 1987, engine: true },
-    { id: 'f_3d', name: 'Motor: 3D grafik', v: 6, year: 1992, engine: true },
-    { id: 'f_cd', name: 'Motor: CD ses', v: 8, year: 1994, engine: true },
-    { id: 'f_fizik', name: 'Motor: Fizik', v: 8, year: 1998, engine: true },
-    { id: 'f_online', name: 'Motor: Çevrimiçi', v: 10, year: 2000, engine: true },
-    { id: 'f_shader', name: 'Motor: Gölgelendiriciler', v: 10, year: 2004, engine: true },
-    { id: 'f_acik', name: 'Motor: Açık dünya akışı', v: 12, year: 2009, engine: true },
-    { id: 'f_ray', name: 'Motor: Işın izleme', v: 14, year: 2019, engine: true },
-    { id: 'f_ainpc', name: 'Motor: YZ destekli NPC', v: 14, year: 2023, engine: true },
   ],
+  // Konu E: motor ve teknoloji. Özellikler src/data/engines.js'te; v seviyesi → RP/süre/maliyet/motor puanı researchV'den.
   engine: {
     _tag: 'P',
-    expected: [[1976, 0], [1978, 20], [1982, 50], [1986, 110], [1992, 200], [1998, 380], [2005, 600], [2012, 900], [2020, 1400], [2030, 2000]],
-    factorBase: 0.85, factorK: 0.3, factorMin: 0.8, factorMax: 1.25, noEngine: 0.8,
-    buildWeeksBase: 3, buildWeeksPerFeature: 1,
-    licenceIncomePerPoint: 25, licenceMinRatio: 0.8,
+    expectLag: 3, // dönemin beklentisi 3 yıl geriden gelir
+    factorBase: 0.85, factorK: 0.3, factorMin: 0.8, factorMax: 1.12, rCap: 1.5, // teknik puan çarpanı (5 kategori)
+    avBase: 0.8, avK: 0.2, avMin: 0.85, avMax: 1.02, // grafik ve ses puanı çarpanı
+    featLoad: 0.01, featLoadMax: 0.15, // temel dışı her özellik geliştirmeyi %1 uzatır (en çok %15)
+    techRpK: 1, techCostK: 1, techWeeksK: 1, techAgeK: 0.07, techAgeMin: 0.3, // teknoloji hattı; eski basamak ucuzlar
+    buildWeeksBase: 3, buildWeeksPerFeature: 1, carryK: 0.2, // yeni sürüm eski özellikleri %20'ye taşır
+    famFirstSpeed: 0.95, famFirstBugs: 1.15, famUsedGames: 3, famUsedSpeed: 1.03, // ekip alışkanlığı
+    licSpeedK: 0.5, // lisanslı motorun hız ve tür uzmanlığı etkisi (denge ayarı)
+    subNeedPenalty: 5, mustPenalty: 2,
+    licenseeMax: 6, licenceMinRatio: 0.8, licenceIncomePerPoint: 3, rivalBonus: 1, gotyRep: 5, gotyFans: 2000, // dışarıya lisans
+    quitYears: 8, birlikFee: 0.03,
   },
 
   training: [

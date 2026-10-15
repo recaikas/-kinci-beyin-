@@ -15,11 +15,12 @@ import * as War from '../src/systems/war.js';
 import * as Modern from '../src/systems/modern.js';
 import * as Charts from '../src/systems/charts.js';
 import * as Genres from '../src/systems/genres.js';
+import * as Engines from '../src/systems/engines.js';
 import { TIER } from '../src/data/genres.js';
 
-const GAME_RESEARCH = ['ihracat', 'alt_tur', 'f_metin', 'motor_ozel', 'f_sprite', 'boyut_orta', 'oz_yayin', 'tur_cas', 'tur_mac', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'f_renk', 'oda_qa', 'tur_nis', 'kopya_koruma', 'oda_uzman',
-  'f_kaydirma', 'tur_sim', 'tur_str', 'tur_aks', 'tur_spo', 'tur_yar', 'tur_bul', 'tur_pla', 'tur_dov', 'f_sescip', 'f_kayit', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'f_256', 'f_3d', 'f_cd', 'boyut_aaa', 'f_fizik',
-  'f_online', 'tur_rit', 'dlc', 'f_shader', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'f_acik', 'f_ray', 'f_ainpc', 'uzaktan'];
+const GAME_RESEARCH = ['ihracat', 'alt_tur', 'motor_ozel', 'boyut_orta', 'oz_yayin', 'tur_cas', 'tur_mac', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'oda_qa', 'tur_nis', 'kopya_koruma', 'oda_uzman',
+  'tur_sim', 'tur_str', 'tur_aks', 'tur_spo', 'tur_yar', 'tur_bul', 'tur_pla', 'tur_dov', 'boyut_buyuk', 'yerel_dunya', 'pazarlama_buyuk', 'boyut_aaa',
+  'tur_rit', 'dlc', 'ia_satis', 'motor_lisans', 'sezon_karti', 'erken_erisim', 'uzaktan'];
 // Tür seçimi ayarları (denge ölçümünde değiştirilebilir)
 const BOT = { win: +(process.env.BOT_WIN ?? 1.5), know: +(process.env.BOT_KNOW ?? 0.02), rep: +(process.env.BOT_REP ?? 0.6), repStaff: +(process.env.BOT_REPSTAFF ?? 6) };
 const ROOM_PLAN = ['gelistirme', 'qa', 'grafik', 'gelistirme', 'ses', 'mola', 'pazarlama', 'gelistirme', 'arastirma', 'musteri', 'gelistirme', 'grafik', 'gelistirme', 'ses', 'qa', 'gelistirme'];
@@ -74,6 +75,32 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     return Object.values(o.need).reduce((a, b) => a + b, 0) / Math.max(0.1, capW) <= o.weeks * 0.85;
   }
   // --- Proje planı
+  // Konu E: motor seçimi. Kalite vekili (türün disiplin ağırlıklarıyla motor çarpanları × hız) eksi bedelin tahmini gelire oranı.
+  function engineChoice(draft) {
+    const y = M.tableYear(ctx), gn = pack.genres.find((x) => x.id === draft.genre);
+    const recent = state.games.slice(-3);
+    const estRev = Math.max(projectCost(ctx, draft) * 3, 60000 * infl(), recent.length ? recent.reduce((a, x) => a + x.revenue, 0) / recent.length : 0);
+    const weeks = pack.sizes.find((z) => z.id === draft.size).weeks;
+    const mws = Engines.mwAvailable(ctx).filter((m) => m.fee < estRev * 0.02).map((m) => m.id);
+    const opts = [{ engineId: null, engineLic: null, mw: mws }];
+    const own = Engines.families(ctx).sort((a, b) => b.builtYear - a.builtYear)[0];
+    if (own) opts.push({ engineId: own.id, engineLic: null, mw: mws });
+    for (const L of Engines.licAvailable(ctx)) if (Engines.licFits(L, draft)) opts.push({ engineId: null, engineLic: L.id, mw: [] });
+    let best = null;
+    for (const o of opts) {
+      const pj = { ...draft, ...o, features: null };
+      const tp = M.techProfile(ctx, pj), sp = M.engineSpeed(ctx, pj);
+      if (o.engineId) sp.speed = Math.max(1, sp.speed); // kendi motoruna alışma bedelini bir kez öder
+      const q = (gn.disc.oyn + gn.disc.gfx * tp.gfx + gn.disc.ses * tp.ses + gn.disc.tek * tp.tek) * sp.speed;
+      const pen = M.techNotes(ctx, pj).filter((x) => x.v < 0).reduce((a, x) => a + x.v, 0);
+      const L = o.engineLic && M.licById(o.engineLic), pay = L ? M.licPay(L, y) : {};
+      const cost = Engines.startFees(ctx, pj) + (pay.royalty || 0) * Math.max(0, estRev - (pay.threshold || 0)) + (pay.seat || 0) * state.staff.length * weeks / 4 + wages() / 4 * weeks * (tp.load - 1) * 0.5; // uzayan süre: yarısı zaten kalite olarak geri döner
+      const v = q + pen * 0.02 - cost / estRev;
+      if (Engines.startFees(ctx, pj) > Math.max(0, state.cash) * 0.25) continue; // yalnız peşin bedel kasaya göre süzülür
+      if (!best || v > best.v) best = { v, o };
+    }
+    return best ? best.o : {};
+  }
   function planGame() {
     const y = M.tableYear(ctx);
     const genres = Genres.knownGenres(ctx);
@@ -136,8 +163,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     draft.regions = pack.regions.list.filter((r) => { const st = regionStatus(ctx, r.id); if (!st.ok) return false; if (st.free) return true;
       const reachable = Regions.netLevel(ctx, r.id) >= 1 || y >= 2008;
       return reachable && wsh[r.id] >= 0.03 && M.regionPref(ctx, r, pick.gn.id) >= 0.85 && locCost(ctx, r.id, size.id, pick.gn.id) < Math.max(0, state.cash) * 0.04; }).map((r) => r.id);
-    const eng = state.engines[state.engines.length - 1];
-    if (eng) draft.engineId = eng.id;
+    Object.assign(draft, engineChoice(draft)); // Konu E: kendi motoru, lisanslı motor ya da sıfırdan kod
     const ip = state.ips.filter((x) => x.value >= 1 && state.week - x.lastRelease >= pack.ip.waitWeeks).sort((a, b) => b.value - a.value)[0];
     if (ip && ip.rightsPub && selfValue() > 0.08) { /* hakları yayıncıda: kendi yayınına engel; yeni IP */ }
     else if (ip) { const base = state.games.find((x) => x.ipId === ip.id); if (base && base.genre === draft.genre) draft.sequelOf = ip.id; }
@@ -288,11 +314,22 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       const cand = Genres.SUBGENRES.filter((s) => s.year > yy && Genres.inventInfo(ctx, s.id).ok).sort((a, b) => a.year - b.year)[0];
       if (cand && state.cash > Genres.inventInfo(ctx, cand.id).cost * 6 + burn() * 6) g.invent(cand.id);
     }
-    // Motor
+    // Konu E: teknoloji hattı (en ucuz yeni basamak) ve motor sürümü (yeni basamak birikince ya da motor eskiyince)
+    if (Engines.techOpen(ctx) && !state.tech.current && !shop) {
+      const next = Engines.techAvailable(ctx).map((f) => ({ f, i: M.featureStats(ctx, f.id) })).sort((a, b) => a.i.rp - b.i.rp)[0];
+      if (next && state.research.rp >= next.i.rp + (state.research.current ? 0 : 20) && state.cash > next.i.cost * 6 + burn() * 6 && state.games.length >= 2) g.startTech(next.f.id);
+    }
+    if (state.research.done.motor_lisans) { // en yeni sürümü dışarıya lisansla, eskileri kapat
+      const last = Engines.families(ctx).sort((a, b) => b.builtYear - a.builtYear)[0];
+      for (const e of state.engines) if (e.licensed !== (e === last)) g.toggleLicence(e.id);
+    }
     if (state.research.done.motor_ozel && !state.engineJob && !shop) {
-      const feats = pack.research.filter((r) => r.engine && state.research.done[r.id]).map((r) => r.id);
-      const last = state.engines[state.engines.length - 1];
-      if (feats.length && (!last || feats.length > last.features.length + 1) && state.cash > 200000 * infl() + burn() * 4) g.buildEngine(`Motor ${state.engines.length + 1}`, feats);
+      const feats = Engines.FEATURES.filter((f) => !f.base && Engines.techDone(ctx, f.id)).map((f) => f.id);
+      const last = Engines.families(ctx).sort((a, b) => b.builtYear - a.builtYear)[0];
+      const fresh = last ? feats.filter((f) => !last.features.includes(f)).length : feats.length;
+      const old = last && M.tableYear(ctx) - last.builtYear >= 4;
+      const b = Engines.buildCost(ctx, feats, last?.id ?? null);
+      if ((fresh >= 3 || (old && fresh >= 1) || (!last && fresh >= 2)) && state.cash > b.cost * 4 + burn() * 4) g.buildEngine(last ? last.name : 'Garaj Motoru', feats, last?.id ?? null);
     }
     // Proje
     const contractTime = (devRooms === 1 && state.contract) || (contractRate > gameRate * 1.1 && state.week - (state.games.at(-1)?.releasedWeek || 0) < 72);

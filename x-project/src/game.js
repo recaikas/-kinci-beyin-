@@ -20,6 +20,7 @@ import * as Charts from './systems/charts.js';
 import * as Pub from './systems/publishers.js';
 import * as Regions from './systems/regions.js';
 import * as Genres from './systems/genres.js';
+import * as Engines from './systems/engines.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na', background = 'salon' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -40,6 +41,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
     home, net: {}, fanMix: { [home]: 1 },
   };
   Genres.initState(state, PACK, background); // Konu D: kurucu geçmişi
+  Engines.initState(state); // Konu E: temel teknoloji
   return state;
 }
 
@@ -62,6 +64,7 @@ function migrate(state) {
   Regions.migrate(state);
   Pub.migrate(state);
   Genres.migrate(state, PACK);
+  Engines.migrate(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -86,6 +89,7 @@ export function makeGame(state, pack = PACK) {
   Pub.wire(ctx);
   Regions.wire(ctx);
   Genres.wire(ctx);
+  Engines.wire(ctx);
   const contracts = () => { Prod.genContracts(ctx); Pub.addTrial(ctx); };
 
   const api = {
@@ -120,6 +124,7 @@ export function makeGame(state, pack = PACK) {
       Prod.weeklyContract(ctx);
       // araştırma
       Prod.weeklyResearch(ctx);
+      Engines.weekly(ctx);
       Con.weeklyConsole(ctx);
       // satış
       Market.weeklySales(ctx);
@@ -135,6 +140,7 @@ export function makeGame(state, pack = PACK) {
       // ekonomi
       if (newMonth) {
         Eco.monthlyEconomy(ctx);
+        Engines.monthly(ctx);
         Market.monthlyMmo(ctx);
         Market.monthlySubsidiaries(ctx);
         Con.monthlyConsole(ctx);
@@ -179,11 +185,15 @@ export function makeGame(state, pack = PACK) {
       const locked = o.platforms.map((id) => M.platformById(ctx, id)).filter((p) => !p || (!p.own && p.tech > maxTech));
       if (locked.some((p) => !p)) return { ok: false, msg: 'Bu platform artık piyasada değil.' };
       if (locked.length) return { ok: false, msg: `${locked[0].name} için daha iyi iş istasyonu lazım.` };
-      const cost = Prod.projectCost(ctx, o);
-      if (state.cash - cost < -Eco.creditLimit(ctx)) return { ok: false, msg: `Geliştirme maliyeti ${cost.toLocaleString('tr-TR')} $; bütçe yetmiyor.` };
+      const engErr = o.kind === 'ek' ? null : Engines.checkStart(ctx, o); // Konu E: motor, lisans, ara yazılım
+      if (engErr) return { ok: false, msg: engErr };
+      const cost = Prod.projectCost(ctx, o), fees = o.kind === 'ek' ? 0 : Engines.startFees(ctx, o);
+      if (state.cash - cost - fees < -Eco.creditLimit(ctx)) return { ok: false, msg: `Geliştirme maliyeti ${(cost + fees).toLocaleString('tr-TR')} $; bütçe yetmiyor.` };
       ledger.post('gelistirme', -cost, `${o.name}: lisans ve kitler`);
       const pj = Prod.newProject(ctx, { ...o, roomId: room.id });
-      pj.cost = cost;
+      Engines.attach(ctx, pj, o, o.kind === 'ek');
+      pj.totalWeeks = Math.round(pj.totalWeeks * M.techProfile(ctx, pj).load);
+      pj.cost = cost + fees;
       state.projects.push(pj);
       for (const rid of o.regions || []) if (!Regions.isNative(ctx, rid)) Regions.localize(ctx, pj.id, rid, 1, false); // sihirbazda seçilen çeviriler
       bus.fire('projectStarted', pj);
@@ -306,11 +316,9 @@ export function makeGame(state, pack = PACK) {
     // --- Sözleşme, araştırma, motor
     acceptContract: (id) => Prod.acceptContract(ctx, id),
     startResearch: (id) => Prod.startResearch(ctx, id),
-    buildEngine: (name, features) => Prod.buildEngine(ctx, name, features),
-    toggleLicence(id) {
-      if (!state.research.done.motor_lisans) return { ok: false, msg: 'Motor lisanslama araştırması gerekli.' };
-      const e = state.engines.find((x) => x.id === id); if (e) e.licensed = !e.licensed; return { ok: true };
-    },
+    buildEngine: (name, features, fromId = null) => Engines.buildEngine(ctx, name, features, fromId),
+    toggleLicence: (id) => Engines.setLicensed(ctx, id),
+    startTech: (fid) => Engines.startTech(ctx, fid),
 
     // --- Ekonomi
     moveOffice: () => Eco.moveOffice(ctx),
@@ -337,4 +345,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres, Engines };

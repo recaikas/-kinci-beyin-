@@ -88,5 +88,6 @@ export function expansionDraft(ctx, g) {
   return {
     name: `${g.name}: Ek Paket`, genre: g.genre, sub: g.sub, topic: g.topic, audience: g.audience,
     platforms: g.platforms.filter((id) => activePlatforms(ctx).some((p) => p.id === id)), size: 'kucuk', kind: 'ek', baseGameId: g.id,
+    engineId: g.engineId ?? null, engineLic: g.lic?.id || null, features: g.features || null, mw: g.mw || [], // aynı motor, yeni lisans bedeli yok
   };
 }

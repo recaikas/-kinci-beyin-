@@ -2,33 +2,37 @@
 import { M, Eco, Staff, Co } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
-import { esc, ICON_OF } from './util.js';
+import { esc } from './util.js';
+import * as Menu from './menu.js';
 
 export function make(u) {
   const { G, app, ctx, icons } = u;
   const personRow = (...a) => u.personRow(...a);
   // ---------- BİLGİSAYAR (patronun masası): tüm yönetim buradan
   function winHub() {
+    const g = G(), s = g.state, c = ctx();
+    const groups = Menu.openCats(c, s).map((k) => `<h3 class="sub">${esc(k.name)}</h3><div class="hub">${Menu.openItems(c, s, k.id).map((it) => `<button class="hubtile" data-act="mi" data-id="${it.id}"><span class="mi-ic">${it.icon}</span><b>${esc(it.name)}</b>${Menu.isNew(s, it) ? '<em class="newtag">YENİ</em>' : ''}${itemExtra(it) ? `<small>${itemExtra(it)}</small>` : ''}</button>`).join('')}</div>`).join('');
+    return `<p class="muted small">Patronun bilgisayarı: bütün başlıklar tek ekranda. Odalara sahnede dokunarak da iş verebilirsin; binalar arasında kaydırarak geç.</p>${groups}`;
+  }
+  // Seçeneğin altındaki kısa durum satırı (menüde ve büyük menüde)
+  function itemExtra(it) {
     const s = G().state, c = ctx();
     const ready = s.projects.filter((p) => p.status === 'debug').length;
-    const tile = (id, label, sub, extra = '') => `<button class="hubtile" data-hub="${id}" ${sub ? `data-hubsub="${sub}"` : ''}><img src="${icons[ICON_OF[id] ? id : id] || icons.bilgisayar}" alt=""><b>${label}</b>${extra ? `<small>${extra}</small>` : ''}</button>`;
-    return `<p class="muted small">Patronun bilgisayarı. Odalara sahnede dokunarak da iş verebilirsin; binalar arasında kaydırarak geç.</p>
-      <div class="hub">
-        ${tile('gelistir', 'Yeni oyun geliştir', 'oyun', `${s.projects.length} proje${ready ? ` · ${ready} hazır` : ''}`)}
-        ${tile('gelistir', 'Ek iş bul', 'sozlesme', s.contract ? 'sözleşme sürüyor' : `${s.contractOffers.length} teklif`)}
-        ${tile('personel', 'Personel bul', '', `${s.staff.length}/${Staff.seats(c)} koltuk`)}
-        ${tile('reklam', 'Reklam ver', '', s.projects.length ? `${s.projects.length} proje` : 'proje yok')}
-        ${tile('arge', 'Araştırma', 'arastirma', s.research.current ? 'sürüyor' : `${Math.floor(s.research.rp)} RP`)}
-        ${tile('pazar', 'Satışlar', 'oyunlar', `${s.games.filter((g) => g.active).length} oyun satışta`)}
-        ${tile('pazar', 'Satış listesi', 'liste')}
-        ${tile('finans', 'Finans', '', money(s.cash))}
-        ${tile('ofis', 'Ofis ve binalar', '', Eco.office(c).name)}
-        ${tile('arge', 'Donanım ve konsol', 'konsol', s.consoleJob ? 'yapım sürüyor' : `${(s.consoleSeries || []).length} aile`)}
-        ${tile('arge', 'Motor', 'motor')}
-        ${tile('ayarlar', 'Ayarlar ve kayıt', '', 'ses, yuvalar')}
-        ${tile('dunya', 'Oyun dünyası', 'yil', `${Math.floor(M.tableYear(c))} · ${s.rivals.length} şirket`)}
-        ${tile('finans', 'Şirket ve borsa', 'sirket', Co.company(s).listed ? `hisse ${Co.company(s).price} $` : 'halka arz')}
-      </div>`;
+    switch (it.id) {
+      case 'projeler': return `${s.projects.length} proje${ready ? ` · ${ready} hazır` : ''}`;
+      case 'sozlesme': return s.contract ? 'sözleşme sürüyor' : `${s.contractOffers.length} teklif`;
+      case 'isealim': return `${s.staff.length}/${Staff.seats(c)} koltuk`;
+      case 'arastirma': return s.research.current ? 'sürüyor' : `${Math.floor(s.research.rp)} RP`;
+      case 'teknoloji': return s.tech?.current ? 'sürüyor' : '';
+      case 'motor': return s.engineJob ? 'yapım sürüyor' : `${s.engines.length} motor`;
+      case 'satistaki': return `${s.games.filter((x) => x.active).length} oyun satışta`;
+      case 'finans': return money(s.cash);
+      case 'ofis': return Eco.office(c).name;
+      case 'dunya': return `${Math.floor(M.tableYear(c))} · ${s.rivals.length} şirket`;
+      case 'borsa': return Co.company(s).listed ? `hisse ${Co.company(s).price} $` : 'halka arz';
+      case 'konsolyap': return s.consoleJob ? 'yapım sürüyor' : `${(s.consoleSeries || []).length} aile`;
+      default: return '';
+    }
   }
   // Reklam: her proje için kampanya düğmeleri (Geliştir penceresinin pazarlama kısmının kısayolu)
   function winAds() {
@@ -85,5 +89,5 @@ export function make(u) {
     }).join('')}</div>${PACK.rooms.types.filter((t) => b.types.includes(t.id)).map((t) => `<p class="small"><b>${t.name}:</b> <span class="muted">${t.desc}</span></p>`).join('')}`;
   }
 
-  return { winHub, winAds, targetSelect, devModeSelect, winRoom, winBuild };
+  return { itemExtra, winHub, winAds, targetSelect, devModeSelect, winRoom, winBuild };
 }

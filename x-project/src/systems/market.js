@@ -1,6 +1,6 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp, lerpTable } from '../kernel.js';
-import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS } from '../models.js';
+import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS, projFeatures, techLowOf } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
@@ -10,6 +10,7 @@ import * as Regions from './regions.js';
 import * as Modern from './modern.js';
 import * as Charts from './charts.js';
 import * as Genres from './genres.js';
+import * as Engines from './engines.js';
 export const publishersAvailable = (ctx) => Pub.list(ctx);
 
 export function release(ctx, { projectId, publisherId, price, model = 'satis', monet = 'dengeli', service = null, printRun = 'normal' }) {
@@ -53,7 +54,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
     royalty: deal ? (deal.kind === 'tek' ? 0 : pack.publishing.net * deal.pay / 100) : null, deal: deal ? { ...deal } : null,
     releasedWeek: state.week, year: Math.floor(tableYear(ctx)), weeks: 0, active: true, sold: {}, units: 0, revenue: 0,
     pirated: !state.research.done.kopya_koruma, mmo: pj.mmo, subs: 0, lastWeek: 0, rival: false,
-    expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId,
+    expansion: isExp, baseGameId: base?.id ?? null, hist: [], patches: 0, ports: 0, bugRate: rv.bugRate, alloc: [...pj.alloc], engineId: pj.engineId, engineLic: pj.engineLic || null, lic: pj.lic ? { ...pj.lic } : null, mw: [...(pj.mw || [])], features: projFeatures(ctx, pj), techLow: techLowOf(ctx, pj),
     devCost: Math.round(pj.cost || 0), postCost: 0, profitHist: [], regions: [...(pj.regions || ALL_REGIONS(ctx))], regionSold: {}, loc: { ...(pj.loc || {}) }, badLoc: pj.badLoc ? { ...pj.badLoc } : undefined, kind: pj.kind,
   };
   if (model === 'f2p') { game.model = 'f2p'; game.monet = m.id; game.players = 0; game.price = pack.sales.priceRef; }
@@ -99,8 +100,7 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   }
   // Deneyim
   for (const p of state.staff) if (['gelistirme', 'grafik', 'ses', 'qa'].includes(roomOf(ctx, p)?.type)) { const o = p.skill; p.skill = Math.min(100, p.skill + pack.production.expGainPerProject * (1 - p.skill / 120) * traitOf(ctx, p, 'learn')); growSkills(ctx, p, o); p.games++; }
-  const eng = state.engines.find((e) => e.id === pj.engineId);
-  if (eng) for (const fid of eng.features) state.usedFeatures[fid] = true;
+  for (const fid of game.features) state.usedFeatures[fid] = true; // Konu E
 
   state.games.push(game);
   state.lastCombo = `${pj.topic}/${pj.genre}`;
@@ -210,6 +210,8 @@ export function weeklySales(ctx) {
     if (f2p) rev = Modern.weeklyF2P(ctx, g, newBy).rev;
     if (g.reach && rev > 0) rev *= Regions.revK(ctx, g); // fiyat endeksi, kur, kampanya indirimi
     if (g.deal) rev = Pub.royaltyCash(ctx, g, rev);
+    const cut = Engines.royaltyCut(ctx, g, rev); // Konu E: motor lisansı yüzdesi
+    if (cut) ledger.post('motor_lisans', -cut, g.name);
     g.units += units; g.lastWeek = units; g.revenue += rev; g.weeks++;
     if (g.regionSplit) for (const r in g.regionSplit) g.regionSold[r] = (g.regionSold[r] || 0) + Math.round(units * g.regionSplit[r]);
     (g.revHist ||= []).push(Math.round(rev)); if (g.revHist.length > 104) g.revHist.shift();
@@ -299,7 +301,7 @@ export function weeklyRivals(ctx) {
     const genre = Genres.rivalGenre(ctx);
     // Aynı tür ve yakın tarihte duyurulmuş güçlü bir oyundan kaçabilir.
     if (Charts.rivalDodges(ctx, rv, genre)) { rv.nextRelease = pack.charts.announce.dodgeWeeks * 2 + 1; continue; }
-    const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + r.scoreBias, r.scoreSpread), 15, 97));
+    const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + r.scoreBias, r.scoreSpread) + Engines.rivalBonus(ctx, rv.name), 15, 97)); // senin motorunu kullanan rakip +1
     rv.drift = clamp((rv.drift || 0) * 0.7 + (score - 70) / 12, -15, 15);
     rv.rep = clamp(rv.rep + (score - 70) / 12, 5, 99);
     rv.games++; rv.lastScore = score;
@@ -348,8 +350,10 @@ function awards(ctx) {
   const mine = state.games.filter((g) => g.releasedWeek > yearStart);
   if (!mine.length) return;
   const best = mine.reduce((a, b) => (b.score > a.score ? b : a));
-  const rivalBest = state.charts.filter((c) => !c.mine && c.week > yearStart).reduce((m, c) => Math.max(m, c.score), 0);
+  const rivalTop = state.charts.filter((c) => !c.mine && c.week > yearStart).reduce((m, c) => (!m || c.score > m.score ? c : m), null);
+  const rivalBest = rivalTop?.score || 0;
   const a = pack.awards;
+  if (rivalTop && best.score < rivalBest) Engines.rivalGoty(ctx, rivalTop.studio, rivalTop.name); // Konu E: senin motorunla yılın oyunu
   if (best.score >= rivalBest) {
     state.prestige = Math.min(pack.prestige.max, state.prestige + a.goty.prestige);
     state.fans += a.goty.fans;

@@ -17,16 +17,12 @@ export function summary(json) {
   } catch { return null; }
 }
 
+// Konu F: öğretici 4 adım; gerisini her ekranın ilk açılış açıklaması öğretir.
 const STEPS = [
-  { sel: null, title: 'X Project\'e hoş geldin', text: '1976, bir garaj, tek bir bilgisayar. Oyun yap, sat, büyü; konsol üret, borsaya açıl. Ya da kaosta boğul. Bu kısa tur 30 saniye sürer.' },
-  { sel: '#hud .stats', title: 'Kasa, hayran, kaos', text: 'Kasa sıfırın altına inip kredi limitini aşarsa 12 haftada iflas edersin. Hayranlar satışları büyütür. Kaos yükseldikçe olaylar sıklaşır ve ofis dağılır.' },
-  { sel: '#hud .projslot', title: 'Proje sayacı', text: 'Süren oyunun oynanış, grafik, ses ve teknik puanları ile hataları burada. Tıklayınca projeyi açar.' },
+  { sel: '#scene', title: 'X Project\'e hoş geldin', text: '1976, bir garaj, tek bir bilgisayar. Odaya dokun: görevini ve çalışanlarını görürsün. Boş alana dokunup oda kurarsın. Masadaki bilgisayar bütün menüyü tek ekranda açar.' },
+  { sel: '[data-cat=is]', title: 'İş › Yeni oyun', text: 'Alt çubukta başlıklar var; her başlığın içinde seçenekler. İş › Yeni oyun ile oyun yaparsın, İş › Sözleşme işleri ile para kazanırsın. Araştırdıkça yeni başlıklar ve seçenekler açılır.' },
   { sel: '#hud .time', title: 'Zaman', text: 'Oynat/durdur ve hız. Boşluk tuşu da durdurur. Pencere açıkken zaman kendiliğinden durur.' },
-  { sel: '[data-open=bilgisayar]', title: 'Patronun bilgisayarı', text: 'Yeni oyun, ek iş, personel, araştırma, donanım, satışlar, finans, oyun dünyası ve ayarlar buradan. Taçlı kurucuna dokunmak da açar.' },
-  { sel: '#scene', title: 'Ofis', text: 'Bir odaya dokun: görevini, çalışanlarını ve odaya özel işleri görürsün. Boş alana dokunup oda kurarsın. Büyüyünce binalar arasında yatay kaydırırsın.' },
-  { sel: '#market', title: 'Satış paneli', text: 'Satıştaki oyunların sırası, maliyeti, geliri ve kârı. Bir karta dokununca oyunun ayrıntısı açılır.' },
-  { sel: '[data-open=gunluk]', title: 'Günlük', text: 'Haberler, tarihî olaylar ve stüdyonda olan her şey. Önemli olanlar ayrıca sağ üstte bildirim olarak düşer.' },
-  { sel: null, title: 'Hadi başlayalım', text: 'Şimdi ilk oyununun sihirbazı açılacak: konu ve tür seç, platformu belirle, ekibin zamanını dağıt. İlk yıllarda küçük oyunlar ve ek işler (sözleşmeler) can simidindir.' },
+  { sel: '[data-cat=sistem]', title: 'Günlük', text: 'Sistem › Günlük: haberler, tarihî olaylar ve yeni açılan her şey (🆕). Şimdi ilk oyununun sihirbazı açılıyor.' },
 ];
 
 export function make(u) {

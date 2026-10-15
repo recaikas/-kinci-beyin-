@@ -54,14 +54,16 @@ export function make(u) {
       <p class="muted small">${esc(PACK.vacation.policies[cur].desc)} Çalışanlar yılda ${PACK.vacation.perYear} hafta izin hakkı biriktirir; yorulunca ya da hak dolunca ister. Çakışan istek reddedilir, moral düşer ve aralarında gerginlik olur.</p>
       ${away.length ? `<p class="small">🏖️ ${away.map((p) => `${esc(p.name)} (${p.statusWeeks} hf)`).join(', ')}</p>` : ''}</section>`;
   }
-  function winStaff() {
+  function winStaff(sub = 'kadro') {
     const s = G().state, c = ctx();
     const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill} · ${People.topSkills(c, p).map(([n, v]) => `${n} ${v}`).join(', ')}${[p.trait, p.trait2].filter(Boolean).map((t) => ' · ' + esc(traitName(t))).join('')}${tastes(p).map((x) => ' · ' + esc(x)).join('')}</small></div>
       <button data-act="hire" data-id="${p.id}" ${s.staff.length >= Staff.seats(c) ? 'disabled' : ''}>${money(p.salary)}/ay</button></div>`).join('');
-    return vacationBox() + `<div class="legend"><span>Beceri</span><span><i class="dot m"></i>Moral</span><span><i class="dot s"></i>Stres</span><span class="muted">Ayrıntı için isme dokun</span></div>
-      <div class="people">${s.staff.map(personRow).join('')}</div>
-      <details class="box" ${s.staff.length < Staff.seats(c) ? 'open' : ''}><summary><h3>İşe alım · ${s.staff.length}/${Staff.seats(c)} koltuk</h3></summary>
-        <p class="muted small">Her ay yenilenir. İşe alım ücreti bir aylık maaş. ${s.staff.length >= Staff.seats(c) ? 'Koltuk yok: Ofis penceresinden oda kur.' : ''}</p>${apps || '<p class="muted">Bu ay başvuru yok.</p>'}</details>`;
+    // Konu F: Ekip › Kadro, İşe al, Tatil politikası ayrı sekmeler
+    if (sub === 'tatil') return vacationBox();
+    if (sub === 'ise_al') return `<section class="box"><h3>İşe alım · ${s.staff.length}/${Staff.seats(c)} koltuk</h3>
+        <p class="muted small">Her ay yenilenir. İşe alım ücreti bir aylık maaş. ${s.staff.length >= Staff.seats(c) ? 'Koltuk yok: Şirket › Ofis ve odalar\'dan oda kur.' : ''}</p>${apps || '<p class="muted">Bu ay başvuru yok.</p>'}</section>`;
+    return `<div class="legend"><span>Beceri</span><span><i class="dot m"></i>Moral</span><span><i class="dot s"></i>Stres</span><span class="muted">Ayrıntı ve eğitim için isme dokun</span></div>
+      <div class="people">${s.staff.map(personRow).join('')}</div>`;
   }
 
   return { personRow, traitName, traitPills, relLine, vacationBox, winStaff };
