@@ -565,7 +565,8 @@ export function weeklyCalendar(ctx) {
   if (moved) q.sort((a, b) => a.at - b.at);
   weeklyAnnounce(ctx);
 }
-export const announceAllowed = (ctx, pj) => !!pj && ['dev', 'debug'].includes(pj.status) && !pj.announce && !pj.annMissed;
+// Konu H: çıkış tarihi duyurusu pazarlama departmanından yapılır
+export const announceAllowed = (ctx, pj) => !!pj && ['dev', 'debug'].includes(pj.status) && !pj.announce && !pj.annMissed && ctx.state.rooms.some((r) => r.type === 'pazarlama');
 export function announce(ctx, pid, weeks) {
   const pj = ctx.state.projects.find((x) => x.id === pid), a = C(ctx).announce;
   if (!announceAllowed(ctx, pj)) return { ok: false, msg: 'Bu proje için tarih duyurulamaz.' };

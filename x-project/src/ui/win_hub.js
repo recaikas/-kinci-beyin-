@@ -1,5 +1,5 @@
 // Bilgisayar masası, reklam, oda penceresi ve oda kurma.
-import { M, Eco, Staff, Co } from '../game.js';
+import { M, Eco, Staff, Co, Crew } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc } from './util.js';
@@ -39,8 +39,8 @@ export function make(u) {
     const s = G().state, c = ctx();
     if (!s.projects.length) return '<p class="muted">Reklam verilecek proje yok. Önce yeni bir oyun başlat.</p>';
     return s.projects.map((pj) => `<section class="box"><div class="head"><h3>${esc(pj.name)}</h3><span class="pill">Hype ${Math.round(pj.hype)}</span></div>
-      <div class="btns">${PACK.hype.campaigns.filter((x) => !x.minYear || M.tableYear(c) >= x.minYear).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pj.id}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('')}</div></section>`).join('')
-      + `<p class="muted small">Pazarlama ve yayın odası projelere her hafta kendiliğinden hype üretir.</p>`;
+      <div class="btns">${PACK.hype.campaigns.filter((x) => (!x.minYear || M.tableYear(c) >= x.minYear) && Crew.campaignAllowed(c, x)).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pj.id}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('')}</div></section>`).join('')
+      + `<p class="muted small">${Staff.hasRoom(c, 'pazarlama') ? 'Pazarlama ve yayın odası projelere her hafta kendiliğinden hype üretir.' : 'Garajda yalnız küçük reklamları kendin verebilirsin. TV, fenomenler ve çıkış tarihi duyurusu için pazarlama departmanı kur.'}</p>`;
   }
 
   // ---------- ODA (sahnede odaya dokununca): görev, hedef proje, kişiler, odaya özel işler

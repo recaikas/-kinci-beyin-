@@ -1,5 +1,5 @@
 // Geliştir: proje listesi, yeni oyun sihirbazı, proje ayrıntısı, sözleşmeler.
-import { M, Prod, Market, Staff, Know, Modern, Charts, Genres, Engines } from '../game.js';
+import { M, Prod, Market, Staff, Know, Modern, Charts, Genres, Engines, Crew } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, fmt, bar, discName } from './util.js';
@@ -32,6 +32,7 @@ export function make(u) {
   }
   function winDevelop(sub) {
     if (sub === 'sozlesme') return contractsView();
+    if (sub === 'lisans') return licenseView(); // Konu H
     const s = G().state;
     const pj = app.sel && s.projects.find((p) => p.id === app.sel);
     if (pj) return projectView(pj);
@@ -59,8 +60,9 @@ export function make(u) {
     const g = G(), s = g.state, c = ctx(), y = M.tableYear(c), kn = Know.known(c);
     const d = (app.draft ||= defaultDraft());
     const done = s.research.done, trend = s.trend || {};
-    const steps = ['Fikir', 'Platform', 'Teknoloji', 'Onay'];
-    const head = `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div><ol class="steps">${steps.map((n, i) => `<li class="${app.wiz === i + 1 ? 'on' : app.wiz > i + 1 ? 'done' : ''}">${i + 1}. ${n}</li>`).join('')}</ol>`;
+    // Konu H: yalnız işe yarayan adım sorulur (teknoloji adımı yalnız seçilecek motor varsa)
+    const steps = [[1, 'Fikir'], [2, 'Platform'], ...(hasTechStep() ? [[3, 'Teknoloji']] : []), [4, 'Onay']];
+    const head = `<div class="foot"><button class="ghost" data-act="back">← Projeler</button><span></span></div><ol class="steps">${steps.map(([k, n], i) => `<li class="${app.wiz === k ? 'on' : app.wiz > k ? 'done' : ''}">${i + 1}. ${n}</li>`).join('')}</ol>`;
     const opt = (v, label, sel, dis = false) => `<option value="${v}" ${sel ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(label)}</option>`;
     const nav = (back, nextLabel) => `<div class="foot">${back ? '<button data-act="wiz" data-id="-1">Geri</button>' : ''}<span></span><button class="primary" data-act="wiz" data-id="1">${nextLabel}</button></div>`;
     if (app.wiz === 1) {
@@ -79,7 +81,9 @@ export function make(u) {
     }
     if (app.wiz === 2) {
       const maxTech = PACK.workstations.tiers[s.stationTier].maxTech;
-      const plats = M.activePlatforms(c).map((p) => {
+      const all = M.activePlatforms(c), hidden = all.filter((p) => !Crew.isLicensed(c, p.id)).length;
+      d.platforms = d.platforms.filter((id) => Crew.isLicensed(c, id));
+      const plats = all.filter((p) => Crew.isLicensed(c, p.id)).map((p) => {
         const locked = !p.own && p.tech > maxTech;
         return `<label class="pick ${locked ? 'locked' : ''}"><input type="checkbox" id="pl-${p.id}" data-plat="${p.id}" ${d.platforms.includes(p.id) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
           <span class="name">${esc(p.name)}${p.own ? ' ★' : ''} ${badgeOf(kn.platGenre(p.id, d.genre))}${d.sub && M.platCap(d.sub, p) ? ` <small class="warn">${esc(Genres.SUB[d.sub].name)}: ${Genres.TIER[M.platCap(d.sub, p)].name.toLowerCase()}</small>` : ''}</span><span class="meta num">${locked ? 'istasyon yetersiz' : `${M.platformBase(c, p).toFixed(1)} M kişi · ${p.licence ? money(p.licence) : 'lisanssız'}`}</span></label>`;
@@ -90,13 +94,14 @@ export function make(u) {
       const regs = PACK.regions.list.map((r) => { const st = Prod.regionStatus(c, r.id), on = d.regions.includes(r.id) || st.free;
         return `<label class="pick ${st.ok ? '' : 'locked'}"><input type="checkbox" id="rg-${r.id}" data-region="${r.id}" ${on ? 'checked' : ''} ${!st.ok || st.free ? 'disabled' : ''}>
           <span class="name">${r.flag || ''} ${esc(r.name)} <small class="muted">pazarın %${Math.round(w[r.id] * 100)} · ${gn.name} ilgisi ×${String(M.regionPref(c, r, d.genre)).replace('.', ',')}</small></span><span class="meta num">${st.free ? 'kendi dilin' : st.ok ? `çeviri ${money(Prod.locCost(c, r.id, d.size, d.genre))}` : st.why}</span></label>`; }).join('');
-      return head + `<fieldset class="picks"><legend>Platformlar <small>rozet: seçili türle bilinen uyum</small></legend>${plats}</fieldset>
-        <fieldset class="picks"><legend>Çeviriler <small>satabileceğin yerleri dağıtım ağın belirler (Dünya › Bölgeler)</small></legend>${regs}</fieldset>
+      const anyLoc = PACK.regions.list.some((r) => { const st = Prod.regionStatus(c, r.id); return st.ok && !st.free; });
+      return head + `<fieldset class="picks"><legend>Platformlar <small>rozet: seçili türle bilinen uyum</small></legend>${plats}${hidden ? `<p class="muted small">Lisansını almadığın ${hidden} platform daha var: Geliştir › Platform lisansları.</p>` : ''}</fieldset>
+        ${anyLoc ? `<fieldset class="picks"><legend>Çeviriler <small>satabileceğin yerleri dağıtım ağın belirler (Dünya › Bölgeler)</small></legend>${regs}</fieldset>` : ''}
         <div class="form">
-          <label>Boyut<select id="f-size" data-draft="size">${PACK.sizes.map((z) => { const lock = z.research && !done[z.research] ? ' (araştır)' : s.office.tier < z.office ? ` (${PACK.offices[z.office - 1].name})` : ''; return opt(z.id, `${z.name} · ${z.weeks} hf${lock}`, d.size === z.id, !!lock); }).join('')}</select></label>
-          <label>Seri<select id="f-ip" data-draft="sequelOf">${opt('', 'Yeni IP', !d.sequelOf)}${s.ips.map((ip) => opt(ip.id, `${ip.name} ★${ip.value.toFixed(1)}`, String(d.sequelOf) === String(ip.id))).join('')}</select></label>
-          <label>Geliştirme odası<select id="f-room" data-draft="roomId">${free.map((r) => opt(r.id, `${Staff.roomType(c, r.type).name} #${r.id} · ${Staff.membersOf(c, r).length} kişi`, String(d.roomId) === String(r.id))).join('')}</select></label>
-        </div>` + nav(true, 'Teknolojiye geç');
+          <label>Boyut<select id="f-size" data-draft="size">${PACK.sizes.filter((z) => !(z.research && !done[z.research]) && s.office.tier >= z.office).map((z) => opt(z.id, `${z.name} · ${z.weeks} hf`, d.size === z.id)).join('')}</select></label>
+          ${s.ips.length ? `<label>Seri<select id="f-ip" data-draft="sequelOf">${opt('', 'Yeni IP', !d.sequelOf)}${s.ips.map((ip) => opt(ip.id, `${ip.name} ★${ip.value.toFixed(1)}`, String(d.sequelOf) === String(ip.id))).join('')}</select></label>` : ''}
+          ${free.length > 1 ? `<label>Geliştirme odası<select id="f-room" data-draft="roomId">${free.map((r) => opt(r.id, `${Staff.roomType(c, r.type).name} #${r.id} · ${Staff.membersOf(c, r).length} kişi`, String(d.roomId) === String(r.id))).join('')}</select></label>` : ''}
+        </div>` + nav(true, hasTechStep() ? 'Teknolojiye geç' : 'Özete geç');
     }
     if (app.wiz === 3) return head + u.techStep(d) + nav(true, 'Özete geç'); // Konu E
     const genre = PACK.genres.find((x) => x.id === d.genre), topic = PACK.topics.find((t) => t[0] === d.topic);
@@ -116,7 +121,7 @@ export function make(u) {
     const pv = g.previewReview(pj.id);
     const pid = pj.id;
     const discs = ['oyn', 'gfx', 'ses', 'tek'].map((d) => { const v = (pj.points[d] / M.target(c, d, pj.size)) * 100; return `<div class="disc"><span>${discName(d)}</span>${bar(v, 'd-' + d)}<b class="num">${Math.round(Math.min(v, 999))}%</b></div>`; }).join('');
-    const camps = PACK.hype.campaigns.filter((x) => !x.minYear || M.tableYear(c) >= x.minYear).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pid}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('');
+    const camps = PACK.hype.campaigns.filter((x) => (!x.minYear || M.tableYear(c) >= x.minYear) && Crew.campaignAllowed(c, x)).map((x) => { const lock = x.research && !s.research.done[x.research]; return `<button data-act="campaign" data-pid="${pid}" data-id="${x.id}" ${lock ? 'disabled' : ''}>${x.name}<small>${lock ? 'araştır' : money(x.cost * M.inflation(c) ** 0.7)}</small></button>`; }).join('');
     const outs = PACK.outsource.rows.map((_, i) => Prod.outsourceRow(c, i)).filter((r) => r.office <= s.office.tier).map((r) => `<div class="row-item"><div><b>${esc(r.name)}</b><small>${discName(r.disc)} · +${fmt(r.points)} puan</small></div><button data-act="outsource" data-pid="${pid}" data-id="${r.i}" ${pj.status !== 'dev' ? 'disabled' : ''}>${money(r.fee)}</button></div>`).join('');
     let release = '';
     if (pj.status === 'debug') {
@@ -174,5 +179,15 @@ export function make(u) {
       ${cur}${offers || (cur ? '' : '<p class="muted">Bu ay teklif yok.</p>')}`;
   }
 
-  return { defaultDraft, badgeOf, winDevelop, projectList, wizard, projectView, contractsView };
+  // Konu H: Kairosoft gibi platform lisansları
+  function hasTechStep() { const c = ctx(); return Engines.families(c).length > 0 || Engines.licAvailable(c).length > 0 || Engines.mwAvailable(c).length > 0; }
+  function licenseView() {
+    const c = ctx(), s = G().state;
+    const rows = M.activePlatforms(c).filter((p) => !p.own).sort((a, b) => M.platformBase(c, b) - M.platformBase(c, a)).map((p) => {
+      const has = Crew.isLicensed(c, p.id), fee = Crew.licenseFee(c, p.id);
+      return `<div class="row-item"><div><b>${esc(p.name)}</b><small>${{ pc: 'bilgisayar', konsol: 'ev konsolu', el: 'el konsolu', mobil: 'telefon' }[p.kind] || p.kind} · ${M.platformBase(c, p).toFixed(1)} M oyuncu · her projede ${p.licence ? money(p.licence) : 'lisans ücreti yok'}</small></div>${has ? '<span class="pill">lisanslı</span>' : `<button data-act="buylic" data-id="${p.id}" ${s.cash >= fee ? '' : 'disabled'}>Lisans al<small>${money(fee)}</small></button>`}</div>`;
+    }).join('');
+    return `<p class="muted small">Bir platforma oyun yapmak için önce geliştirici lisansı alırsın (bir kez). Başta yalnız Kişisel Bilgisayar lisanslı; yeni platformlar çıktıkça günlüğe düşer. Kendi konsolların her zaman lisanslı.</p><div class="board">${rows}</div>`;
+  }
+  return { hasTechStep, licenseView, defaultDraft, badgeOf, winDevelop, projectList, wizard, projectView, contractsView };
 }

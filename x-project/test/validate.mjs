@@ -3,7 +3,8 @@
 import { PACK } from '../src/data/pack.js';
 import { createState, makeGame, newGame as rawNewGame, loadGame, Prod, Staff, Con, Post, Know, World, People, Co, Eco, Market, War, Modern, Charts, Pub, Regions, Genres } from '../src/game.js';
 // Konu D öncesi testler 6 eski türün hepsini bilinen sayar; yeni tür testleri rawNewGame kullanır.
-const newGame = (o) => { const g = rawNewGame(o); for (const gg of PACK.genres.slice(0, 6)) g.state.research.done[gg.research] ??= 0; return g; };
+// Konu H öncesi testler lisans kavramını bilmez: her platform lisanslı başlar (lisans testleri rawNewGame kullanır).
+const newGame = (o) => { const g = rawNewGame(o); for (const gg of PACK.genres.slice(0, 6)) g.state.research.done[gg.research] ??= 0; for (const p of PACK.platforms) g.state.platLic[p.id] = true; return g; };
 import { EXTRA_PUBS, TRAITS } from '../src/data/publishers.js';
 import { COMPANIES, YEARS } from '../src/data/history.js';
 import { readFileSync } from 'node:fs';
@@ -972,8 +973,9 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   const g = rawNewGame({ seed: 80, difficulty: 'kolay' });
   const cats = () => Menu.openCats(g.ctx, g.state).map((k) => k.id).join();
   Menu.check(g);
-  check('1976\'da Tanıtım ve Pazar saklı', cats() === 'is,ekip,arge,sirket,sistem', cats());
-  check('7 başlık, 34 seçenek', Menu.CATS.length === 7 && Menu.ITEMS.length === 34, String(Menu.ITEMS.length));
+  const bilgi = () => Menu.openItems(g.ctx, g.state, 'bilgi').map((i) => i.id).join();
+  check('1976: Kairosoft başlıkları, Bilgi\'de yalnız Günlük', cats() === 'gelistir,personel,eylem,bilgi,arge,departman,sistem' && bilgi() === 'gunluk', `${cats()} · ${bilgi()}`);
+  check('7 başlık, 35 seçenek', Menu.CATS.length === 7 && Menu.ITEMS.length === 35, String(Menu.ITEMS.length));
   check('Her seçenek var olan bir pencereye ve sekmeye gider', Menu.ITEMS.every((it) => WIN_NAMES[it.win] && (!it.sub || (SUBS[it.win] || []).some(([k]) => k === it.sub))));
   check('Kapalı seçeneğin ipucu var', Menu.ITEMS.filter((it) => !it.open(g.ctx, g.state)).every((it) => it.hint));
   check('Pazar sekmesinde Yayıncılar ilk oyuna kadar saklı', !Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar') && Menu.tabVisible(g.ctx, g.state, 'gelistir', 'sozlesme'));
@@ -983,7 +985,7 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   check('"Kendi motorunu yap" Teknoloji\'yi açar ve haber düşer, YENİ rozeti', Menu.isOpen(g.ctx, g.state, Menu.ITEM.teknoloji) && g.state.news.some((n) => n.t === '🆕 Ar-Ge › Teknoloji açıldı.') && Menu.isNew(g.state, Menu.ITEM.teknoloji));
   g.state.games.push({ id: 1, name: 'X', weeks: 0, active: true, score: 50 });
   Menu.check(g);
-  check('İlk oyundan sonra Pazar açılır', cats().includes('pazar') && Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar'));
+  check('İlk oyundan sonra satış raporları açılır', bilgi().includes('satistaki') && Menu.tabVisible(g.ctx, g.state, 'pazar', 'yayincilar'));
   check('Görülen kayıtla taşınır', JSON.parse(g.save()).ui.known.teknoloji > 0);
 }
 
@@ -1103,6 +1105,72 @@ for (const e of PACK.events) check(`Olay ${e.id} seçenekli`, Array.isArray(e.ch
   delete old.plat; delete old.coRel; old.rivals[0].acquired = true; old.rivals[0].price = 1e6; delete old.rivals[0].stake;
   const lg = loadGame(JSON.stringify(old));
   check('Eski kayıt: satın alınmış şirket %100 hisse olur', lg.state.rivals[0].stake === 100 && lg.state.plat.rate === 0.3);
+}
+
+// 38) Konu H: karakterler, departmanlar, müdürler, platform lisansları
+{
+  const Menu = await import('../src/ui/menu.js');
+  const Cr = await import('../src/systems/crew.js');
+  const { personaOf, PERSONAS } = await import('../src/data/crew.js');
+  const tick = (g, n) => { for (let i = 0; i < n; i++) { g.state.pending = []; g.state.nextEventWeek = 1e9; g.tick(); } };
+  const g = rawNewGame({ seed: 81, difficulty: 'kolay', length: 50 });
+  const st = g.state, c = g.ctx;
+  st.cash = 5e8;
+  check('Herkesin kişiliği var, kayıttan bağımsız aynı', [...st.staff, ...st.applicants].every((p) => PERSONAS.includes(personaOf(p))) && personaOf(st.staff[0]) === personaOf(JSON.parse(JSON.stringify(st.staff[0]))));
+  const founderIds = () => Menu.CATS.flatMap((k) => Menu.openItems(c, st, k.id)).map((i) => i.id);
+  check('Kurucu menüsünde departmana ait işler yok', !['duyuru', 'fenomen', 'konsolyap'].some((id) => founderIds().includes(id)) && founderIds().includes('arastirma'));
+  // Araştırma odası kurulunca Ar-Ge kurucudan departmana taşınır
+  st.office.tier = 2; g.buildRoom('arastirma');
+  check('Araştırma odası kurulunca Ar-Ge kurucudan kalkar, departmana geçer', !Menu.openItems(c, st, 'arge').length && Menu.deptItems(c, st, 'arastirma').some((i) => i.id === 'arastirma'));
+  // Reklam pazarlama departmanı ister
+  const pj = g.startProject({ name: 'H', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['pc'], size: 'kucuk' }).project;
+  st.research.done.pazarlama_buyuk = 1; st.research.done.pazarlama_kucuk = 1;
+  check('Pazarlama departmanı olmadan TV kampanyası yok, el ilanı var', !g.campaign(pj.id, 'tv').ok && g.campaign(pj.id, 'flyer').ok && !Charts.announceAllowed(c, pj));
+  g.buildRoom('pazarlama');
+  check('Pazarlama departmanıyla TV kampanyası ve çıkış duyurusu', g.campaign(pj.id, 'tv').ok && Charts.announceAllowed(c, pj));
+  // Müdürler
+  const g1 = rawNewGame({ seed: 82, difficulty: 'kolay' });
+  const r1 = g1.state.rooms[0];
+  check('Müdürler küçük ofisle açılır', !g1.setManager(r1.id, g1.state.staff[0].id).ok);
+  const room = st.rooms.find((r) => r.type === 'arastirma');
+  for (let i = 0; i < 2; i++) { const a = st.applicants[0]; if (a) { g.hire(a.id); g.moveStaff(st.staff.at(-1).id, room.id); } }
+  const mem = Staff.membersOf(c, room);
+  const base = Staff.roomOutK(c, room);
+  const sm = g.setManager(room.id, mem[0].id);
+  check('Müdür verimi artırır, stresi azaltır', sm.ok && base === 1 && Staff.roomOutK(c, room) > 1 && Staff.roomStressK(c, room) < 1);
+  const prem0 = st.ledger.total.mudur_primi || 0; Cr.monthly(c);
+  check('Müdür primi ödenir', (st.ledger.total.mudur_primi || 0) < prem0);
+  // Otomatik araştırma
+  st.research.current = null; st.research.rp = 1000;
+  check('Otomasyon müdür ister', g.setAuto(room.id, true).ok);
+  Cr.weekly(c);
+  check('Araştırma müdürü sıradaki araştırmayı başlatır', !!st.research.current);
+  // Müdür taşınırsa makam boşalır
+  const dev = st.rooms.find((r) => r.type === 'gelistirme');
+  g.moveStaff(mem[0].id, dev.id);
+  check('Müdür odadan çıkınca makam boşalır', !Staff.managerOf(c, room) && !room.auto);
+  // Geliştirme müdürü faz dağılımı
+  const dm = Staff.membersOf(c, dev)[0]; g.setManager(dev.id, dm.id); g.setAuto(dev.id, true);
+  check('Geliştirme müdürü faz dağılımını üstlenir', Cr.devAuto(c, pj));
+  // Platform lisansları
+  const gl = rawNewGame({ seed: 83, difficulty: 'kolay', length: 50 });
+  gl.state.week = Math.round((1985 - 1976) * 48 * gl.state.lengthMult); gl.state.cash = 1e7;
+  check('Başta yalnız Kişisel Bilgisayar lisanslı', Object.keys(gl.state.platLic).join() === 'pc');
+  const bad = gl.startProject({ name: 'L', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['komodor'], size: 'kucuk' });
+  check('Lisanssız platforma oyun yapılamaz', !bad.ok && /lisans/.test(bad.msg));
+  const c0 = gl.state.cash, bl = gl.buyLicense('komodor');
+  check('Lisans bir kez alınır: bedeli = proje lisansı + 2 kit', bl.ok && c0 - gl.state.cash === 3000 + 3000 * 2 && !gl.buyLicense('komodor').ok);
+  check('Lisansla oyun yapılır', gl.startProject({ name: 'L', genre: 'aksiyon', topic: 'uzay', audience: 'genc', platforms: ['komodor'], size: 'kucuk' }).ok);
+  // Yeni platform haberi
+  tick(gl, 4);
+  gl.state.platSeen = Object.fromEntries(Object.keys(gl.state.platSeen).filter((id) => id !== 'amigo').map((id) => [id, 1]));
+  Cr.monthly(gl.ctx);
+  check('Yeni platform çıkınca haber düşer', gl.state.news.some((n) => n.t.startsWith('🆕 Yeni platform: Amigo')));
+  // Eski kayıt
+  const old = JSON.parse(rawNewGame({ seed: 84 }).save());
+  delete old.platLic; old.games = [{ id: 1, name: 'E', genre: 'aksiyon', topic: 'uzay', size: 'kucuk', score: 50, year: 1980, platforms: ['ataro'], regions: ['na'], regionSplit: { na: 1 }, regionSold: {}, active: false, units: 0 }];
+  const lo = loadGame(JSON.stringify(old));
+  check('Eski kayıt: kullanılmış platformlar lisanslı, ilk ay piyasadakiler de', lo.state.platLic.ataro && lo.state.platLicAll === true);
 }
 
 console.log(`\n${pass} geçti, ${fail} kaldı.`);

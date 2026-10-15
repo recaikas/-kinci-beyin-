@@ -15,13 +15,13 @@ export function make(u) {
   // ---------- Sihirbaz: ana türler
   function genreTiles(d) {
     const c = ctx(), s = G().state, y = M.tableYear(c), kn = Know.known(c), trend = s.trend || {};
-    return Genres.DISPLAY.map((id) => {
-      const g = M.genreById(c, id), known = Genres.knows(c, id), born = y >= g.year;
-      const res = PACK.research.find((r) => r.id === g.research);
-      if (!known) return `<button class="tile locked" disabled title="${born ? `Araştırma: ${esc(res?.name || '')}` : `${g.year}'de doğar`}">${g.icon} ${esc(g.name)}<em>${born ? '🔒 araştır' : `🥚 ${g.year}`}</em></button>`;
+    // Konu H: yalnız bilinen türler; araştırılabilecekler tek satırda, doğmamışlar saklı
+    const later = Genres.DISPLAY.filter((id) => !Genres.knows(c, id) && y >= M.genreById(c, id).year).length;
+    return Genres.DISPLAY.filter((id) => Genres.knows(c, id)).map((id) => {
+      const g = M.genreById(c, id);
       const ms = M.mastery(c, id), x = Math.floor(M.genreXp(c, id));
       return `<button class="tile ${d.genre === id ? 'on' : ''}" data-pick="genre" data-id="${id}" title="${esc(g.soul)}">${g.icon} ${esc(g.name)}${trend.genre === id ? '<em>trend</em>' : ''}${kn.topicGenre(d.topic, id) != null ? chip(tierOfV(kn.topicGenre(d.topic, id))) : ''}<small class="ms">${ms.name} ${x}</small></button>`;
-    }).join('');
+    }).join('') + (later ? `<button class="tile tease" disabled title="Ar-Ge › Araştırma">??? <small class="ms">${later} tür daha araştırılabilir</small></button>` : '');
   }
   // ---------- Sihirbaz: alt türler (önce kendi ana türünün alt türleri, diğerleri katlanır gruplarda)
   function subPicker(d) {

@@ -4,6 +4,7 @@ import * as Regions from './regions.js';
 import { marketSkill, salaryFor, traitOf, personWeekly, inflation, careerLevel, designOf, relAvg } from '../models.js';
 import { genSkills, growSkills, weeklyVacations, weeklyRelations, ensureSkills } from './people.js';
 import * as Genres from './genres.js';
+import { leadOf } from '../data/crew.js';
 
 // --- Odalar
 export const officeOf = (ctx) => ctx.pack.offices.find((o) => o.tier === ctx.state.office.tier);
@@ -14,6 +15,31 @@ export const seats = (ctx) => ctx.state.rooms.length * roomSeats(ctx);
 export const roomOf = (ctx, p) => ctx.state.rooms.find((r) => r.id === p.room);
 export const membersOf = (ctx, room) => ctx.state.staff.filter((p) => p.room === room.id);
 export const hasRoom = (ctx, type) => ctx.state.rooms.some((r) => r.type === type);
+// --- Konu H: müdürler. Oda müdürü odadaki biri olmalı; yoksa en kıdemli çalışan sözcüdür (bonussuz).
+export const managersOpen = (ctx) => ctx.state.office.tier >= ctx.pack.crew.managerTier;
+export function managerOf(ctx, room) {
+  if (!room?.manager) return null;
+  const p = ctx.state.staff.find((x) => x.id === room.manager && x.room === room.id);
+  if (!p) room.manager = null;
+  return p || null;
+}
+export const spokesOf = (ctx, room) => managerOf(ctx, room) || membersOf(ctx, room).sort((a, b) => (a.hiredWeek ?? 0) - (b.hiredWeek ?? 0) || a.id - b.id)[0] || null;
+export const roomOutK = (ctx, room) => { const m = managersOpen(ctx) && managerOf(ctx, room); return m ? 1 + ctx.pack.crew.outK * leadOf(m) / 100 : 1; };
+export const roomStressK = (ctx, room) => { const m = managersOpen(ctx) && managerOf(ctx, room); return m ? 1 - ctx.pack.crew.stressK * leadOf(m) / 100 : 1; };
+export function setManager(ctx, roomId, personId) {
+  const room = ctx.state.rooms.find((r) => r.id === roomId);
+  if (!room) return { ok: false, msg: 'Oda yok.' };
+  if (!managersOpen(ctx)) return { ok: false, msg: `Müdürler "${ctx.pack.offices[ctx.pack.crew.managerTier - 1].name}" ile açılır.` };
+  if (personId == null) { room.manager = null; room.auto = false; return { ok: true }; }
+  const p = ctx.state.staff.find((x) => x.id === personId);
+  if (!p || p.room !== room.id) return { ok: false, msg: 'Müdür bu odada çalışan biri olmalı.' };
+  room.manager = p.id;
+  ctx.news(`🎖️ ${p.name} ${roomType(ctx, room.type).name} müdürü oldu.`, 'good');
+  return { ok: true };
+}
+function vacateManager(ctx, p) {
+  for (const r of ctx.state.rooms) if (r.manager === p.id && p.room !== r.id) { r.manager = null; r.auto = false; ctx.news(`🪑 ${roomType(ctx, r.type).name} müdürsüz kaldı (${p.name} ayrıldı).`, 'warn'); }
+}
 
 export function freeRoom(ctx, prefer = 'gelistirme') {
   const cap = roomSeats(ctx);
@@ -59,6 +85,7 @@ export function moveStaff(ctx, id, roomId) {
   if (p.room === roomId) return { ok: true };
   if (membersOf(ctx, room).length >= roomSeats(ctx)) return { ok: false, msg: 'O oda dolu.' };
   p.room = roomId;
+  vacateManager(ctx, p);
   return { ok: true };
 }
 
@@ -153,6 +180,7 @@ export function hire(ctx, id) {
 
 export function removePerson(ctx, p, reason) {
   ctx.state.staff = ctx.state.staff.filter((x) => x.id !== p.id);
+  p.room = null; vacateManager(ctx, p);
   ctx.bus.fire('staffFired', { person: p, reason });
 }
 
@@ -251,7 +279,7 @@ export function weeklyStaff(ctx) {
     if (state.flags.union && state.crunch) ds -= 2;
     if (restRoom) ds += pack.rooms.restRoomStress;
     const des = designOf(ctx, p);
-    p.stress = clamp(p.stress + ds * (ds > 0 ? traitOf(ctx, p, 'stress') * des.stress : 1), 0, 100);
+    p.stress = clamp(p.stress + ds * (ds > 0 ? traitOf(ctx, p, 'stress') * des.stress * roomStressK(ctx, room) : 1), 0, 100);
 
     const market = salaryFor(ctx, p.skill) * Math.pow(pack.careerRules.salaryPerLevel, careerLevel(p));
     const underpaid = p.founder ? 0 : Math.max(0, 1 - p.salary / market) * 100 * wb.moraleUnderpaidK;
@@ -295,7 +323,7 @@ export function weeklyOutput(ctx, roomFilter) {
   const out = [];
   for (const p of working(ctx.state)) {
     const room = roomOf(ctx, p);
-    if (room && roomFilter(room)) out.push({ p, w: personWeekly(ctx, p, n), room });
+    if (room && roomFilter(room)) out.push({ p, w: personWeekly(ctx, p, n) * roomOutK(ctx, room), room });
   }
   return out;
 }

@@ -17,6 +17,8 @@ import * as Charts from '../src/systems/charts.js';
 import * as Genres from '../src/systems/genres.js';
 import * as Engines from '../src/systems/engines.js';
 import * as Platform from '../src/systems/platform.js';
+import * as Crew from '../src/systems/crew.js';
+import { leadOf } from '../src/data/crew.js';
 import { TIER } from '../src/data/genres.js';
 
 const GAME_RESEARCH = ['ihracat', 'alt_tur', 'motor_ozel', 'boyut_orta', 'oz_yayin', 'tur_cas', 'tur_mac', 'tur_rpg', 'yerel_jp', 'pazarlama_kucuk', 'oda_qa', 'tur_nis', 'kopya_koruma', 'oda_uzman',
@@ -157,6 +159,8 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
     const cheap = (p) => p.own || p.licence <= Math.max(5000, (size.devCost || 1) * 50000 * infl() ** 0.5);
     for (const p of pick.ps.filter((x) => size.target >= 1 || cheap(x))) {
       if (draft.platforms.length >= 2) break;
+      // Konu H: lisansı yoksa ucuzsa al, pahalıysa geç
+      if (!Crew.isLicensed(ctx, p.id) && !(Crew.licenseFee(ctx, p.id) < Math.max(0, state.cash) * (+process.env.BOTLIC || 0.06) && g.buyLicense(p.id).ok)) continue;
       const cost = projectCost(ctx, { ...draft, platforms: [...draft.platforms, p.id] });
       if (cost < Math.max(0, state.cash) * 0.35 || p.own) draft.platforms.push(p.id);
     }
@@ -378,7 +382,7 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
         if (Modern.crowdAllowed(ctx, pj) && runway() < 24) g.crowdfund(pj.id);
       }
       if (pj.status === 'dev' && !pj.campaigned && pj.week > pj.totalWeeks / 2) {
-        const camps = pack.hype.campaigns.filter((x) => (!x.research || state.research.done[x.research]) && (!x.minYear || y >= x.minYear));
+        const camps = pack.hype.campaigns.filter((x) => (!x.research || state.research.done[x.research]) && (!x.minYear || y >= x.minYear) && Crew.campaignAllowed(ctx, x));
         const best = [...camps].reverse().find((x) => x.cost * infl() ** 0.7 * 8 < state.cash - burn() * 6);
         if (best) pj.campaigned = g.campaign(pj.id, best.id).ok;
         else pj.campaigned = true;
@@ -447,6 +451,8 @@ export function runSmartBot({ seed = 1, difficulty = 'orta', years = 50, length 
       // Yayın sonrası: iyi oyunlara indirilebilir içerik (en fazla 2) ve yayıncı anahtarları
       for (const gm of state.games.filter((x) => x.active && x.score >= 75 && (x.dlcs || 0) < 2 && x.weeks > 8)) if (Modern.dlcAllowed(ctx, gm) && state.cash > Modern.dlcCost(ctx, gm) * 6 + burn() * 6) g.releaseDLC(gm.id);
       for (const gm of state.games.filter((x) => x.active && x.score >= 70 && x.weeks < 6 && !x.streamed)) if (M.tableYear(ctx) >= pack.modern.stream.year && state.cash > Modern.streamCost(ctx, gm) * 10 + burn() * 6) g.streamKeys(gm.id);
+      // Konu H: müdürler (liderliği en yüksek olan)
+      if (Staff.managersOpen(ctx)) for (const r of state.rooms) if (!Staff.managerOf(ctx, r)) { const best = Staff.membersOf(ctx, r).sort((a, b) => leadOf(b) - leadOf(a))[0]; if (best) g.setManager(r.id, best.id); }
       // Konu G: zenginken en iyi değerli oyuna süreli özel anlaşma (aynı anda bir tane); çok zenginken hisse
       const liveK = state.consoles.filter((x) => x.launched && !x.retired && !x.ended);
       if (liveK.length && !state.plat.deals.some((d) => (!d.done || state.week - d.signedWeek < 48) && d.type !== 'pazarlama')) {

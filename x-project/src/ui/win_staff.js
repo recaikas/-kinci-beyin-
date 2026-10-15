@@ -1,5 +1,6 @@
 // Personel: çalışan satırı, yetenek/huy/ilişki, tatil politikası, işe alım.
-import { M, Staff, People, Genres } from '../game.js';
+import { M, Staff, People, Genres, Crew } from '../game.js';
+import { personaOf, leadOf } from '../data/crew.js';
 import { PACK } from '../data/pack.js';
 import { money } from '../kernel.js';
 import { esc, bar, STATUS, move } from './util.js';
@@ -30,7 +31,7 @@ export function make(u) {
     return `<div class="person ${p.status !== 'ok' ? 'away' : ''} ${open ? 'open' : ''}">
       <button class="who" data-act="expand" data-id="${p.id}" aria-expanded="${open}">
         <span class="name">${p.founder ? '♛ ' : ''}${esc(p.name)}</span><span class="num pay">${p.founder ? 'kurucu' : money(p.salary)}</span>
-        <span class="tagline"><span class="spec s-${p.spec}">${car.name} ${lvl}</span><span class="muted">${esc(Staff.roomType(c, room?.type || 'gelistirme').name)}</span>${status}</span>
+        <span class="tagline"><span class="spec s-${p.spec}">${car.name} ${lvl}</span><span class="muted">${esc(Staff.roomType(c, room?.type || 'gelistirme').name)}${room && Staff.managerOf(c, room)?.id === p.id ? ' · 🎖️ müdür' : ''}</span><span class="muted">${esc(personaOf(p).name)}</span>${status}</span>
         <span class="vit"><span class="num" title="Beceri">${Math.round(p.skill)}</span><span title="Moral">${bar(p.morale, 'm')}</span><span title="Stres">${bar(p.stress, 's')}</span></span>
       </button>${actions}</div>`;
   }
@@ -56,6 +57,7 @@ export function make(u) {
   }
   function winStaff(sub = 'kadro') {
     const s = G().state, c = ctx();
+    if (sub === 'mudur') return managersView(); // Konu H
     const apps = s.applicants.map((p) => `<div class="row-item"><div><b>${esc(p.name)}</b><small><span class="spec s-${p.spec}">${Staff.career(c, p.career).name} ${p.careers[p.career]}</span> beceri ${p.skill} · ${People.topSkills(c, p).map(([n, v]) => `${n} ${v}`).join(', ')}${[p.trait, p.trait2].filter(Boolean).map((t) => ' · ' + esc(traitName(t))).join('')}${tastes(p).map((x) => ' · ' + esc(x)).join('')}</small></div>
       <button data-act="hire" data-id="${p.id}" ${s.staff.length >= Staff.seats(c) ? 'disabled' : ''}>${money(p.salary)}/ay</button></div>`).join('');
     // Konu F: Ekip › Kadro, İşe al, Tatil politikası ayrı sekmeler
@@ -66,5 +68,17 @@ export function make(u) {
       <div class="people">${s.staff.map(personRow).join('')}</div>`;
   }
 
-  return { personRow, traitName, traitPills, relLine, vacationBox, winStaff };
+  // Konu H: her odanın müdürü ve otomasyonu
+  function managersView() {
+    const s = G().state, c = ctx();
+    if (!Staff.managersOpen(c)) return `<p class="muted">Müdürler "${PACK.offices[PACK.crew.managerTier - 1].name}" ile açılır.</p>`;
+    const rows = s.rooms.map((r) => {
+      const m = Staff.managerOf(c, r), mem = Staff.membersOf(c, r), auto = Crew.AUTO[r.type];
+      return `<div class="row-item"><div><b>${esc(Staff.roomType(c, r.type).name)} #${r.id}</b><small>${m ? `🎖️ ${esc(m.name)} · ${esc(personaOf(m).name)} · liderlik ${leadOf(m)} · verim +%${Math.round(PACK.crew.outK * leadOf(m))}` : 'Müdür yok: en kıdemli çalışan sözcü, bonus yok'}</small>
+        ${auto && m ? `<small>${r.auto ? '⚙️ Otomatik: ' : 'Otomatik kapalı: '}${esc(auto)}</small>` : ''}</div>
+        <div class="btns"><select data-mgr="${r.id}"><option value="">Müdür yok</option>${mem.map((p) => `<option value="${p.id}" ${m?.id === p.id ? 'selected' : ''}>${esc(p.name)} · ${leadOf(p)}</option>`).join('')}</select>${auto && m ? `<button class="mini ${r.auto ? 'on' : ''}" data-act="pauto" data-id="${r.id}">${r.auto ? 'Otomatik açık' : 'Otomatiği aç'}</button>` : ''}</div></div>`;
+    }).join('');
+    return `<p class="muted small">Müdür odanın verimini liderliğiyle en çok %${Math.round(PACK.crew.outK * 100)} artırır, oda stresini en çok %${Math.round(PACK.crew.stressK * 100)} azaltır; maaşına %${Math.round(PACK.crew.premium * 100)} müdür primi alır. Müdürlü oda bazı işleri kendisi yapabilir.</p><div class="board">${rows}</div>`;
+  }
+  return { managersView, personRow, traitName, traitPills, relLine, vacationBox, winStaff };
 }

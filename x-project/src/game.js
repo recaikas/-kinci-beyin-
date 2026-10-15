@@ -22,6 +22,7 @@ import * as Regions from './systems/regions.js';
 import * as Genres from './systems/genres.js';
 import * as Engines from './systems/engines.js';
 import * as Platform from './systems/platform.js';
+import * as Crew from './systems/crew.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na', background = 'salon' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -43,6 +44,7 @@ export function createState({ companyName = 'X Project Stüdyo', founderName = '
   };
   Genres.initState(state, PACK, background); // Konu D: kurucu geçmişi
   Engines.initState(state); // Konu E: temel teknoloji
+  state.platLic = { pc: true }; // Konu H: başta yalnız Kişisel Bilgisayar lisanslı
   return state;
 }
 
@@ -67,6 +69,7 @@ function migrate(state) {
   Genres.migrate(state, PACK);
   Engines.migrate(state);
   Platform.migrate(state);
+  Crew.migrate(state);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -128,6 +131,7 @@ export function makeGame(state, pack = PACK) {
       // araştırma
       Prod.weeklyResearch(ctx);
       Engines.weekly(ctx);
+      Crew.weekly(ctx);
       Con.weeklyConsole(ctx);
       Platform.weekly(ctx);
       // satış
@@ -150,6 +154,7 @@ export function makeGame(state, pack = PACK) {
         Con.monthlyConsole(ctx);
         War.monthlyWar(ctx);
         Platform.monthly(ctx);
+        Crew.monthly(ctx);
         Staff.genApplicants(ctx);
         if (!state.contract || state.contractOffers.length === 0) contracts();
         state.cashHist.push(Math.round(state.cash));
@@ -190,6 +195,8 @@ export function makeGame(state, pack = PACK) {
       const locked = o.platforms.map((id) => M.platformById(ctx, id)).filter((p) => !p || (!p.own && p.tech > maxTech));
       if (locked.some((p) => !p)) return { ok: false, msg: 'Bu platform artık piyasada değil.' };
       if (locked.length) return { ok: false, msg: `${locked[0].name} için daha iyi iş istasyonu lazım.` };
+      const unlic = o.kind === 'ek' ? [] : Crew.unlicensed(ctx, o.platforms); // Konu H: platform lisansı
+      if (unlic.length) return { ok: false, msg: `${M.platformById(ctx, unlic[0])?.name || unlic[0]} lisansı yok (Geliştir › Platform lisansları).` };
       const engErr = o.kind === 'ek' ? null : Engines.checkStart(ctx, o); // Konu E: motor, lisans, ara yazılım
       if (engErr) return { ok: false, msg: engErr };
       const cost = Prod.projectCost(ctx, o), fees = o.kind === 'ek' ? 0 : Engines.startFees(ctx, o);
@@ -218,20 +225,7 @@ export function makeGame(state, pack = PACK) {
     },
     release(o) { return Market.release(ctx, o); },
     previewReview(pid) { const pj = api.projectById(pid); return pj ? M.review({ ...ctx, rng: makeRng({ rng: 7 }) }, pj) : null; },
-    campaign(pid, id) {
-      const c = pack.hype.campaigns.find((x) => x.id === id);
-      const pj = api.projectById(pid);
-      if (!pj) return { ok: false, msg: 'Pazarlanacak proje yok.' };
-      if (c.research && !state.research.done[c.research]) return { ok: false, msg: 'Araştırma gerekli.' };
-      const cc = Math.round(c.cost * M.inflation(ctx) ** 0.7);
-      ledger.post('pazarlama', -cc, `${c.name}: ${pj.name}`);
-      pj.cost = (pj.cost || 0) + cc;
-      pj.hype = clamp(pj.hype + c.hype, 0, pack.hype.max);
-      // Fenomenler: büyük tur viral olabilir ya da oyunu gömebilir
-      if (c.viral && rng.chance(c.viral.p)) { pj.hype = clamp(pj.hype + c.viral.hype, 0, pack.hype.max); state.fans += c.viral.fans; ctx.news(`🔥 "${pj.name}" fenomen turunda viral oldu!`, 'good'); }
-      else if (c.flop && rng.chance(c.flop.p)) { pj.hype = clamp(pj.hype + c.flop.hype, 0, pack.hype.max); ctx.news(`🥶 Bir mega fenomen "${pj.name}" için "sıkıcı" dedi. Kampanya geri tepti.`, 'bad'); }
-      return { ok: true };
-    },
+    campaign: (pid, id) => Crew.campaign(ctx, pid, id), // Konu H: büyük kampanya pazarlama departmanı ister
     // --- Yayın sonrası
     patch: (id) => Post.patch(ctx, id),
     priceDrop: (id) => Post.priceDrop(ctx, id),
@@ -333,6 +327,10 @@ export function makeGame(state, pack = PACK) {
     setPolicy: (rid, pol) => Platform.setPolicy(ctx, rid, pol),
     setBoost: (rid, lvl) => Platform.setBoost(ctx, rid, lvl),
     mergeStudio: (rid) => Platform.merge(ctx, rid),
+    // --- Konu H: müdürler, otomasyon, platform lisansları
+    setManager: (roomId, pid) => Staff.setManager(ctx, roomId, pid),
+    setAuto: (roomId, on) => Crew.setAuto(ctx, roomId, on),
+    buyLicense: (id) => Crew.buyLicense(ctx, id),
     startTech: (fid) => Engines.startTech(ctx, fid),
 
     // --- Ekonomi
@@ -360,4 +358,4 @@ export function makeGame(state, pack = PACK) {
 
 export function newGame(opts) { return makeGame(createState(opts)).init(); }
 export function loadGame(json) { return makeGame(JSON.parse(json)); }
-export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres, Engines, Platform };
+export { M, Prod, Eco, Market, Staff, Con, Post, Know, World, People, Co, War, Modern, Charts, Pub, Regions, Genres, Engines, Platform, Crew };

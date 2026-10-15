@@ -367,6 +367,7 @@ const MENU = {
   pazar: ['......x', '.....x.', 'x...x..', '.x.x...', '..x....', '.......', 'xxxxxxx'],
   finans: ['..xxx..', '.x.x.x.', '.x.x...', '..xxx..', '...x.x.', '.x.x.x.', '..xxx..'],
   gunluk: ['.xxxxx.', 'x.....x', 'x.xxx.x', 'x.....x', 'x.xx..x', 'x.....x', '.xxxxx.'],
+  kaydet: ['xxxxxx.', 'x.xx.xx', 'x.xx..x', 'xxxxxxx', 'x.....x', 'x.xxx.x', 'xxxxxxx'],
   tanitim: ['.....xx', '...xx.x', 'xxx...x', 'x.x...x', 'xxx...x', '...xx.x', '.....xx'],
 };
 export function menuIcon(name, color = '#f3e9ff') {

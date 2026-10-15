@@ -304,6 +304,14 @@ export const PACK = {
     dealCost: 600000, dealMult: 1.35, dealWeeks: 30, dealThirdParty: 3, dealCooldown: 48,
   },
 
+  // Konu H: müdürler, otomasyon, platform lisansları (P). dept: true kampanyalar pazarlama departmanı ister.
+  crew: {
+    _tag: 'P',
+    managerTier: 2, outK: 0.1, stressK: 0.2, premium: 0.15,
+    autoResearchCashK: 10, autoAdHype: 30, autoAdWeeks: 8, autoAdCashK: 20,
+    licenseDevK: 2,
+  },
+
   // Konu G: platform payı, özel oyun anlaşmaları, hisse kademeleri, bağlı stüdyolar, tekelin bedeli (P).
   platform: {
     _tag: 'P',
@@ -630,10 +638,10 @@ export const PACK = {
     campaigns: [
       { id: 'flyer', name: 'Fotokopi el ilanı', cost: 2000, hype: 6, research: null },
       { id: 'dergi', name: 'Dergi reklamı', cost: 15000, hype: 14, research: 'pazarlama_kucuk' },
-      { id: 'tv', name: 'TV kampanyası', cost: 150000, hype: 35, research: 'pazarlama_buyuk' },
+      { id: 'tv', name: 'TV kampanyası', cost: 150000, hype: 35, research: 'pazarlama_buyuk', dept: true },
       { id: 'yayinci_k', name: 'Küçük yayıncılar', cost: 8000, hype: 8, research: null, minYear: 2009 },
-      { id: 'yayinci_o', name: 'Orta ölçekli fenomenler', cost: 40000, hype: 18, research: 'pazarlama_kucuk', minYear: 2011 },
-      { id: 'influencer', name: 'Mega fenomen turu', cost: 200000, hype: 30, research: 'pazarlama_buyuk', minYear: 2014, viral: { p: 0.25, hype: 30, fans: 20000 }, flop: { p: 0.15, hype: -15 } },
+      { id: 'yayinci_o', name: 'Orta ölçekli fenomenler', cost: 40000, hype: 18, research: 'pazarlama_kucuk', minYear: 2011, dept: true },
+      { id: 'influencer', name: 'Mega fenomen turu', cost: 200000, hype: 30, research: 'pazarlama_buyuk', minYear: 2014, dept: true, viral: { p: 0.25, hype: 30, fans: 20000 }, flop: { p: 0.15, hype: -15 } },
     ],
   },
 

@@ -18,11 +18,12 @@ export function summary(json) {
 }
 
 // Konu F: öğretici 4 adım; gerisini her ekranın ilk açılış açıklaması öğretir.
+// Konu H: öğretici 4 adım (Kairosoft gibi: ana karakter, departmanlar, zaman, günlük).
 const STEPS = [
-  { sel: '#scene', title: 'X Project\'e hoş geldin', text: '1976, bir garaj, tek bir bilgisayar. Odaya dokun: görevini ve çalışanlarını görürsün. Boş alana dokunup oda kurarsın. Masadaki bilgisayar bütün menüyü tek ekranda açar.' },
-  { sel: '[data-cat=is]', title: 'İş › Yeni oyun', text: 'Alt çubukta başlıklar var; her başlığın içinde seçenekler. İş › Yeni oyun ile oyun yaparsın, İş › Sözleşme işleri ile para kazanırsın. Araştırdıkça yeni başlıklar ve seçenekler açılır.' },
-  { sel: '#hud .time', title: 'Zaman', text: 'Oynat/durdur ve hız. Boşluk tuşu da durdurur. Pencere açıkken zaman kendiliğinden durur.' },
-  { sel: '[data-cat=sistem]', title: 'Günlük', text: 'Sistem › Günlük: haberler, tarihî olaylar ve yeni açılan her şey (🆕). Şimdi ilk oyununun sihirbazı açılıyor.' },
+  { sel: '#scene', title: 'X Project\'e hoş geldin', text: '1976, bir garaj, tek bir bilgisayar. Taçlı karakter sensin: kendine dokununca patronun menüsü açılır (yeni oyun, personel, şirket, raporlar).' },
+  { sel: '[data-act=kmenu]', title: 'Menü', text: 'Alttaki Menü de aynı menüyü açar. Bir başlığa dokun, yanında seçenekler çıkar; ekran ancak seçeneğe basınca açılır. Odalardaki çalışanlara dokunmak o departmanın menüsünü açar.' },
+  { sel: '#hud .time', title: 'Zaman', text: 'Oynat/durdur ve hız. Boşluk tuşu da durdurur. Menü ya da pencere açıkken zaman kendiliğinden durur.' },
+  { sel: '[data-act=knews]', title: 'Günlük', text: 'Haberler, tarihî olaylar ve yeni açılan her şey (🆕). Şimdi ilk oyununun sihirbazı açılıyor.' },
 ];
 
 export function make(u) {

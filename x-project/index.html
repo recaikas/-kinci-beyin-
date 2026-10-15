@@ -173,9 +173,29 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .hubtile { display: grid; justify-items: start; gap: 4px; padding: 12px; text-align: left; min-height: 92px; }
 .hubtile img { width: 28px; height: 28px; image-rendering: pixelated; }
 .hubtile small { color: var(--ink-2); font-size: var(--s-1); }
+/* Konu H: Kairosoft açılır menüsü */
+#kpop { position: fixed; left: 10px; top: 70px; z-index: 9; max-width: calc(100vw - 20px); max-height: calc(100vh - 160px); overflow: auto; background: var(--panel); border: 3px solid var(--candy); box-shadow: 4px 4px 0 var(--shadow); }
+#kpop .khead { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; background: var(--candy); color: var(--night); font-family: var(--font-display); font-size: var(--s-1); }
+#kpop .kx { min-height: 26px; padding: 0 8px; }
+#kpop .kcols { display: flex; align-items: flex-start; }
+#kpop .kcol { display: grid; gap: 4px; padding: 6px; min-width: 170px; }
+#kpop .kcol.sub { border-left: 2px solid var(--line); background: var(--panel-2); min-width: 190px; }
+#kpop .krow { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; padding: 8px 10px; min-height: 40px; }
+#kpop .krow img { width: 20px; height: 20px; image-rendering: pixelated; }
+#kpop .krow small { color: var(--ink-2); font-size: 0.7rem; }
+#kpop .krow.on { background: var(--mint); color: var(--night); border-color: var(--mint); }
+#kpop .krow.on small { color: var(--night); }
+#kpop .krow.tease { opacity: 0.5; border-style: dashed; }
+#kpop .krow .newtag { top: -6px; right: -4px; }
+#kpop .kcard { margin: 6px; padding: 6px 8px; border: 2px dashed var(--line); display: grid; gap: 3px; max-width: 360px; }
+#kpop .kc-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+#kpop .kc-say { margin: 0; font-style: italic; font-size: var(--s-1); }
+#kpop .kc-bars { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 6px; align-items: center; font-size: 0.7rem; }
+#kpop .kpad { margin: 4px 10px; }
+@media (max-width: 600px) { #kpop { left: 6px; top: 96px; max-height: calc(100vh - 190px); } #kpop .kcol { min-width: 140px; } #kpop .kcol.sub { min-width: 150px; } }
 .hubtile { position: relative; }
 .hubtile .mi-ic { font-size: 1.5rem; line-height: 1; }
-.hubtile.tease { opacity: 0.5; border-style: dashed; }
+.hubtile.tease, .tile.tease { opacity: 0.5; border-style: dashed; }
 .hubtile.tease .mi-ic { font-family: var(--font-display); color: var(--ink-2); }
 .newtag, .badge.new { position: absolute; top: -8px; right: -6px; font-style: normal; font-size: 0.62rem; background: var(--amber); color: var(--night); padding: 1px 4px; border: 2px solid var(--night); }
 .firstnote { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 6px 10px; border: 2px dashed var(--sky); font-size: var(--s-1); }
@@ -470,6 +490,7 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
     <div id="market" aria-label="Satıştaki oyunlar"></div>
     <div id="bnav" aria-label="Binalar"></div>
   </div>
+  <div id="kpop" hidden></div>
   <nav id="menu" aria-label="Menü"></nav>
 </div>
 <div id="win" hidden>

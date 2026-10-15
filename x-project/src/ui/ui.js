@@ -1,7 +1,7 @@
 // Arayüz (GDT/Kairosoft esinli): tam ekran sahne, üstte HUD ve proje sayacı, altta ikonlu menü,
 // menüden açılan pencereler (açıkken oyun durur), adım adım yeni oyun sihirbazı, faz başında dağılım
 // penceresi, yayında eleştirmen ekranı. Oyun mantığı game.js'te; burası yalnızca çağırır ve gösterir.
-import { newGame, loadGame, M, Staff, Co, Charts, Engines } from '../game.js';
+import { newGame, loadGame, M, Staff, Co, Charts, Engines, Crew } from '../game.js';
 import { PACK } from '../data/pack.js';
 import { makeRenderer, menuIcon } from './render.js';
 import { money } from '../kernel.js';
@@ -19,6 +19,7 @@ import { make as make_win_regions } from './win_regions.js';
 import { make as make_win_genres } from './win_genres.js';
 import { make as make_win_engines } from './win_engines.js';
 import { make as make_win_platform } from './win_platform.js';
+import { make as make_kmenu } from './kmenu.js';
 import { make as make_win_finance } from './win_finance.js';
 import { make as make_win_world } from './win_world.js';
 import { make as make_dialogs } from './dialogs.js';
@@ -33,7 +34,7 @@ export function boot(root, hotData = {}) {
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
-  const el = { bnav: $('#bnav'), market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
+  const el = { pop: $('#kpop'), bnav: $('#bnav'), market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
   const R = makeRenderer(el.canvas);
   // Ortak bağlam: pencere modülleri (src/ui/win_*.js, dialogs.js, chart.js) buradan okur ve fonksiyonlarını buraya ekler.
   const u = { app, el, root, R, G: () => app.game, ctx: () => app.game.ctx, audio: makeAudio() };
@@ -102,7 +103,7 @@ export function boot(root, hotData = {}) {
     if (on) app.timer = setInterval(step, PACK.meta.msPerWeek[app.speed]);
     renderHud();
   }
-  const blocked = () => app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.();
+  const blocked = () => app.win || app.pop || app.dialog || !el.modal.hidden || u.tutorialOpen?.();
   function step() {
     const g = G();
     if (!g || blocked()) return;
@@ -116,7 +117,7 @@ export function boot(root, hotData = {}) {
     render();
     if (g.state.pending.length || g.state.gameOver) return showEvent();
     for (const pj of g.state.projects) {
-      if (pj.status === 'dev' && app.phaseSeen[pj.id] !== pj.phase) return phaseDialog(pj);
+      if (pj.status === 'dev' && app.phaseSeen[pj.id] !== pj.phase) { if (Crew.devAuto(g.ctx, pj)) { app.phaseSeen[pj.id] = pj.phase; note(`🎖️ Geliştirme müdürü "${pj.name}" için faz dağılımını ayarladı.`, 'info'); continue; } return phaseDialog(pj); }
       if (pj.status === 'debug' && !app.readySeen[pj.id]) return readyDialog(pj);
     }
   }
@@ -133,6 +134,7 @@ export function boot(root, hotData = {}) {
     renderMarket();
     renderBnav();
     renderMenu();
+    if (app.pop) u.renderPop();
     if (app.win) {
       const a = document.activeElement;
       const typing = a && el.win.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'SELECT');
@@ -236,35 +238,22 @@ export function boot(root, hotData = {}) {
   });
 
   // --- alt menü (Konu F): Kairosoft gibi başlıklar. Başlığın içinde seçenekler, seçeneğin içinde ekran; kapalı olanlar saklı.
-  const icons = Object.fromEntries([...Object.keys(WIN_NAMES), ...Menu.CATS.map((k) => k.icon)].map((id) => [id, menuIcon(ICON_OF[id] || id)]));
+  const icons = Object.fromEntries([...Object.keys(WIN_NAMES), ...Menu.CATS.map((k) => k.icon), 'kaydet'].map((id) => [id, menuIcon(ICON_OF[id] || id)]));
   Object.assign(u, { icons });
+  // Konu H: alt çubuk Kairosoft gibi sade: Kaydet · Günlük · Menü (menü kurucunun açılır menüsünü açar).
   function renderMenu() {
     const g = G(), s = g?.state;
     if (!s) return;
-    const cats = Menu.openCats(g.ctx, s);
-    const sig = cats.map((k) => k.id).join(',');
-    if (el.menu._sig !== sig) { el.menu._sig = sig; el.menu.innerHTML = cats.map((k) => `<button data-cat="${k.id}"><img src="${icons[k.icon]}" alt=""><span>${k.name}</span><em class="badge" hidden></em></button>`).join(''); }
+    if (!el.menu.children.length) el.menu.innerHTML = [['ksave', 'Kaydet', 'kaydet'], ['knews', 'Günlük', 'gunluk'], ['kmenu', 'Menü', 'bilgisayar']].map(([a, n, ic]) => `<button data-act="${a}"><img src="${icons[ic] || icons.bilgisayar}" alt=""><span>${n}</span><em class="badge" hidden></em></button>`).join('');
     const unread = Math.max(0, s.news.length - app.seenNews);
-    const badge = {
-      is: s.projects.some((p) => p.status === 'debug') ? '!' : '',
-      ekip: s.staff.some((p) => p.status === 'tukenmis') ? '!' : '',
-      sirket: Co.company(s).pressure >= PACK.ipo.boardAt ? '!' : '',
-      sistem: unread ? String(Math.min(unread, 99)) : '',
-    };
+    const alert = s.projects.some((p) => p.status === 'debug') || s.staff.some((p) => p.status === 'tukenmis') || Co.company(s).pressure >= PACK.ipo.boardAt;
+    const badge = { knews: unread ? String(Math.min(unread, 99)) : '', kmenu: alert ? '!' : Menu.anyNew(g.ctx, s) ? 'YENİ' : '' };
     for (const b of el.menu.children) {
-      const id = b.dataset.cat, em = b.querySelector('.badge');
-      const txt = badge[id] || (Menu.catNew(g.ctx, s, id) ? 'YENİ' : '');
-      b.classList.toggle('on', !!app.win && app.win !== 'oda' && app.win !== 'insaat' && (app.cat === id && (app.win === 'kat' || app.fromCat === id)));
+      const id = b.dataset.act, em = b.querySelector('.badge'), txt = badge[id] || '';
+      b.classList.toggle('on', (id === 'kmenu' && !!app.pop) || (id === 'knews' && app.win === 'gunluk'));
       em.hidden = !txt; em.classList.toggle('new', txt === 'YENİ');
       if (em.textContent !== txt) em.textContent = txt;
     }
-  }
-  // Başlık penceresi: seçenekler büyük düğmeler; en çok iki kapalı seçenek "?" ile ipucu verir.
-  function winCat() {
-    const g = G(), s = g.state, c = g.ctx, cat = Menu.CATS.find((k) => k.id === app.cat) || Menu.CATS[0];
-    const items = Menu.openItems(c, s, cat.id).map((it) => `<button class="hubtile" data-act="mi" data-id="${it.id}"><span class="mi-ic">${it.icon}</span><b>${esc(it.name)}</b>${Menu.isNew(s, it) ? '<em class="newtag">YENİ</em>' : ''}${u.itemExtra?.(it) ? `<small>${u.itemExtra(it)}</small>` : ''}</button>`).join('');
-    const teas = Menu.teasers(c, s, cat.id).map((it) => `<button class="hubtile tease" data-act="tease" data-id="${it.id}"><span class="mi-ic">?</span><b>???</b><small>dokun: ipucu</small></button>`).join('');
-    return `<div class="hub">${items}${teas}</div>`;
   }
   function openItem(id) {
     const it = Menu.ITEM[id];
@@ -272,18 +261,12 @@ export function boot(root, hotData = {}) {
     const s = G().state, ui = Menu.uiState(s);
     ui.seen[id] = 1;
     if (!app.win) app.wasRunning = app.running;
-    app.cat = it.cat; app.fromCat = it.cat; app.item = id; app.fromHub = false; app.confirm = null;
+    app.cat = it.cat; app.fromCat = it.cat; app.item = id; app.fromHub = false; app.confirm = null; app.leaf = true;
     if (it.sub) app.sub[it.win] = it.sub;
     if (it.win === 'gelistir') { app.sel = null; app.wizOn = !!it.wizard && G().freeDevRooms().length > 0; if (app.wizOn) app.wiz = 1; }
     if (it.win === 'pazar') app.selGame = null;
     if (it.win === 'gunluk') app.seenNews = s.news.length;
     app.win = it.win; el.win.hidden = false; play(false);
-    el.winBody.scrollTop = 0; renderWindow(); renderMenu();
-  }
-  function openCat(id) {
-    if (app.win === 'kat' && app.cat === id) return closeWin();
-    if (!app.win) app.wasRunning = app.running;
-    app.cat = id; app.fromCat = null; app.item = null; app.fromHub = false; app.win = 'kat'; el.win.hidden = false; play(false);
     el.winBody.scrollTop = 0; renderWindow(); renderMenu();
   }
 
@@ -311,17 +294,18 @@ export function boot(root, hotData = {}) {
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return goBuilding(dx < 0 ? 1 : -1);
     const r = el.canvas.getBoundingClientRect();
     const h = R.hit((e.clientX - r.left) * (el.canvas.width / r.width), (e.clientY - r.top) * (el.canvas.height / r.height));
+    if (app.pop) return u.closePop(); // açık menü: sahneye dokunmak kapatır
     if (!h) return;
-    if (h.kind === 'boss') return openWin('bilgisayar');
+    if (h.kind === 'boss') return u.openPop({ kind: 'founder', cat: null }); // Konu H: ana karakter → Kairosoft menüsü
     if (h.kind === 'slot') { app.buildFor = h.building; return openWin('insaat'); }
     if (h.kind === 'locked') return openWin('ofis');
-    app.room = h.room || h.id; openWin('oda');
+    u.openPop({ kind: 'room', roomId: h.room || h.id, personId: h.kind === 'person' ? h.id : null }); // departman menüsü
   });
 
   // --- pencereler
   function openWin(id, fromHub = false) {
     if (!app.win) app.wasRunning = app.running;
-    app.fromHub = fromHub; app.win = id; app.confirm = null;
+    app.fromHub = fromHub; app.win = id; app.confirm = null; app.leaf = false; app.fromCat = null; app.item = null; app.popBack = null;
     if (id === 'gunluk') app.seenNews = G().state.news.length;
     el.win.hidden = false;
     play(false);
@@ -329,7 +313,7 @@ export function boot(root, hotData = {}) {
     el.winBody.scrollTop = 0;
   }
   function closeWin() {
-    app.win = null; app.fromCat = null; app.item = null; el.win.hidden = true;
+    app.win = null; app.fromCat = null; app.item = null; app.leaf = false; el.win.hidden = true;
     renderMenu();
     if (app.wasRunning && !app.dialog) play(true);
   }
@@ -339,14 +323,15 @@ export function boot(root, hotData = {}) {
     const subs = SUBS[id]?.filter(([k]) => Menu.tabVisible(ctx(), G().state, id, k)); // Konu F: kapalı sekmeler saklı
     if (subs && !subs.some(([k]) => k === app.sub[id])) app.sub[id] = subs[0]?.[0];
     const sub = app.sub[id] || subs?.[0]?.[0];
-    const fn = { kat: winCat, platform: (s) => u.winPlatform(s), hisse: (s) => u.winStakes(s), dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews, ayarlar: winSettings }[id];
+    const fn = { platform: (s) => u.winPlatform(s), hisse: (s) => u.winStakes(s), dunya: winWorld, bilgisayar: winHub, oda: winRoom, insaat: winBuild, reklam: winAds, gelistir: winDevelop, personel: winStaff, ofis: winOffice, arge: winResearch, pazar: winMarket, finans: winFinance, gunluk: winNews, ayarlar: winSettings }[id];
     const cat = Menu.CATS.find((k) => k.id === app.cat), item = app.item && Menu.ITEM[app.item];
-    const crumb = id === 'kat' && cat ? cat.name : app.fromCat && item && item.win === id && cat ? `${cat.name} › ${item.name}` : null;
+    const from = app.popBack?.kind === 'room' ? (() => { const r = G().state.rooms.find((x) => x.id === app.popBack.roomId); return r ? Staff.roomType(ctx(), r.type).name : null; })() : cat?.name;
+    const crumb = id === 'kat' && cat ? cat.name : app.fromCat && item && item.win === id && from ? `${from} › ${item.name}` : null;
     const title = crumb || (id === 'oda' ? (() => { const r = G().state.rooms.find((x) => x.id === app.room); return r ? Staff.roomType(ctx(), r.type).name : 'Oda'; })() : WIN_NAMES[id]);
-    const back = app.fromCat && id !== 'kat' ? `<button class="back" data-act="cat-back" aria-label="${esc(cat?.name || '')} menüsüne dön">◀</button>` : app.fromHub && id !== 'bilgisayar' ? '<button class="back" data-act="hub" aria-label="Bilgisayara dön">◀</button>' : '';
+    const back = app.fromCat && id !== 'kat' ? `<button class="back" data-act="cat-back" aria-label="${esc(from || '')} menüsüne dön">◀</button>` : app.fromHub && id !== 'bilgisayar' ? '<button class="back" data-act="hub" aria-label="Bilgisayara dön">◀</button>' : '';
     setHTML(el.winTitle, `${back}<img src="${icons[id === 'kat' && cat ? cat.icon : id] || icons.bilgisayar}" alt=""> ${esc(title)}`);
     const note1 = item && item.first && item.win === id && !Menu.uiState(G().state).notes[item.id] ? `<div class="firstnote"><span>ℹ️ ${esc(item.first)}</span><button class="mini" data-act="note-ok" data-id="${item.id}">Tamam</button></div>` : '';
-    const tabs = subs ? `<div class="seg" role="tablist">${subs.map(([k, n]) => `<button role="tab" data-sub="${k}" aria-selected="${sub === k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
+    const tabs = subs && !app.leaf ? `<div class="seg" role="tablist">${subs.map(([k, n]) => `<button role="tab" data-sub="${k}" aria-selected="${sub === k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
     const top = el.winBody.scrollTop;
     setHTML(el.winBody, note1 + tabs + fn(sub));
     el.winBody.scrollTop = top;
@@ -362,7 +347,7 @@ export function boot(root, hotData = {}) {
     play(true);
     if (game.state.pending.length) return showEvent();
     const fresh = !game.state.projects.length && !game.state.games.length;
-    const wizard = () => { app.sub.gelistir = 'oyun'; app.wizOn = true; openWin('gelistir'); };
+    const wizard = () => { app.sub.gelistir = 'oyun'; app.wizOn = true; openWin('gelistir'); app.leaf = true; renderWindow(); };
     if (fresh && !u.tutorialSeen()) return tutorial(() => { app.wasRunning = true; wizard(); });
     if (fresh) wizard();
   }
@@ -380,6 +365,7 @@ export function boot(root, hotData = {}) {
   Object.assign(u, make_win_genres(u));
   Object.assign(u, make_win_engines(u));
   Object.assign(u, make_win_platform(u));
+  Object.assign(u, make_kmenu(u));
   Object.assign(u, make_win_finance(u));
   Object.assign(u, make_win_world(u));
   Object.assign(u, make_dialogs(u));
@@ -394,8 +380,8 @@ export function boot(root, hotData = {}) {
     if (!b || b.disabled) return;
     audio.play('click');
     const g = G();
-    if (b.dataset.cat) return openCat(b.dataset.cat);
-    if (b.dataset.open) { app.fromCat = null; app.item = null; }
+    if (b.dataset.pcat) { app.pop.cat = app.pop.cat === b.dataset.pcat ? null : b.dataset.pcat; return u.renderPop(); }
+    if (b.dataset.open) { u.closePop(); app.fromCat = null; app.item = null; }
     if (b.dataset.open) return app.win && (app.win === b.dataset.open || (b.dataset.open === 'bilgisayar' && app.win !== 'gunluk')) ? closeWin() : openWin(b.dataset.open, false);
     if (b.dataset.hub) { if (b.dataset.hubsub) app.sub[b.dataset.hub] = b.dataset.hubsub; if (b.dataset.hub === 'gelistir') { app.sel = null; app.wizOn = b.dataset.hubsub === 'oyun' && !G().state.projects.length; } app.selGame = null; app.win = b.dataset.hub; app.fromHub = true; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
     if (b.dataset.sub) { const mi = app.fromCat && Menu.ITEMS.find((it) => it.win === app.win && it.sub === b.dataset.sub); if (mi) app.item = mi.id; app.sub[app.win] = b.dataset.sub; el.winBody.scrollTop = 0; return renderWindow(); }
@@ -405,8 +391,19 @@ export function boot(root, hotData = {}) {
     const twice = (key, fn) => { if (app.confirm === key) { app.confirm = null; return run(fn()); } app.confirm = key; return render(); };
     switch (act) {
       case 'close-win': return closeWin();
-      case 'mi': return openItem(id);
-      case 'cat-back': app.fromCat = null; app.item = null; app.win = 'kat'; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'mi': { if (!app.pop) return openItem(id); app.popBack = { ...app.pop }; const was = app.popWas; app.pop = null; u.renderPop(); openItem(id); app.wasRunning = was; return; }
+      case 'cat-back': { const back = app.popBack || { kind: 'founder', cat: app.cat }; const was = app.wasRunning; closeWin(); u.openPop(back); app.popWas = was; return; }
+      // Konu H: Kairosoft açılır menüsü, departmanlar, müdürler
+      case 'kmenu': return app.pop?.kind === 'founder' ? u.closePop() : u.openPop({ kind: 'founder', cat: null });
+      case 'ksave': save(); return note('💾 Kaydedildi.', 'good');
+      case 'knews': u.closePop(); return app.win === 'gunluk' ? closeWin() : openWin('gunluk');
+      case 'pclose': return u.closePop();
+      case 'pdept': { const r = g.state.rooms.find((x) => x.id === +id); if (r) { const bi = buildings().findIndex((bb) => bb.types.includes(r.type)); if (bi >= 0) { app.bIdx = bi; renderBnav(); } } return u.openPop({ kind: 'room', roomId: +id }); }
+      case 'proom': { const was = app.popWas; app.pop = null; u.renderPop(); app.room = +id; openWin('oda'); app.wasRunning = was; return; }
+      case 'pmgr': app.pop.sub = app.pop.sub === 'mgr' ? null : 'mgr'; return u.renderPop();
+      case 'setmgr': { const r = g.setManager(+id, b.dataset.pid ? +b.dataset.pid : null); if (app.pop) app.pop.sub = null; run(r); return u.renderPop(); }
+      case 'pauto': { const r = g.state.rooms.find((x) => x.id === +id); run(g.setAuto(+id, !r?.auto)); return u.renderPop(); }
+      case 'buylic': return run(g.buyLicense(id));
       case 'tease': { const it = Menu.ITEM[id]; return note(`🔒 ${it.hint}`, 'info'); }
       case 'note-ok': Menu.uiState(g.state).notes[id] = 1; return renderWindow();
       case 'sound': audio.unlock(); audio.cycle(); return renderHud();
@@ -422,8 +419,14 @@ export function boot(root, hotData = {}) {
       case 'bprev': return goBuilding(-1);
       case 'bnext': return goBuilding(1);
       case 'goto': if (b.dataset.sub) app.sub[id] = b.dataset.sub; if (id === 'gelistir') { app.sel = null; app.wizOn = false; } app.win = id; app.fromHub = false; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
-      case 'open-proj': app.win = 'gelistir'; app.sub.gelistir = 'oyun'; app.sel = pid; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
-      case 'new-in-room': app.win = 'gelistir'; app.sub.gelistir = 'oyun'; app.sel = null; app.wizOn = true; app.wiz = 1; app.draft = { ...defaultDraft(), roomId: id }; el.winBody.scrollTop = 0; renderWindow(); return renderMenu();
+      case 'open-proj': case 'new-in-room': {
+        const fromPop = !!app.pop, was = app.popWas;
+        if (fromPop) { app.popBack = { ...app.pop }; app.pop = null; u.renderPop(); }
+        app.sub.gelistir = 'oyun';
+        if (act === 'open-proj') { app.sel = pid; app.wizOn = false; } else { app.sel = null; app.wizOn = true; app.wiz = 1; app.draft = { ...defaultDraft(), roomId: id }; }
+        if (!app.win) { openWin('gelistir'); if (fromPop) app.wasRunning = was; } else { app.win = 'gelistir'; el.winBody.scrollTop = 0; renderWindow(); renderMenu(); }
+        app.leaf = true; return renderWindow();
+      }
       case 'hire-here': { const res = g.hire(+id); if (res.ok) { const p = g.state.staff[g.state.staff.length - 1]; g.moveStaff(p.id, +b.dataset.room); } return run(res); }
       case 'report': { const gm = g.state.games.find((x) => x.id === +id); const res = g.playerReport(+id); if (!res.ok) return run(res); app.win = 'pazar'; app.sub.pazar = 'oyunlar'; app.selGame = gm.id; el.winBody.scrollTop = 0; renderWindow(); return renderMenu(); }
       case 'close-dialog': return closeDialog();
@@ -437,7 +440,8 @@ export function boot(root, hotData = {}) {
       case 'speed': app.speed = SPEEDS[(SPEEDS.indexOf(app.speed) + 1) % SPEEDS.length]; return play(app.running);
       case 'wiz': {
         if (+id > 0 && app.wiz === 2 && !app.draft.platforms.length) return note('En az bir platform seç.', 'bad');
-        app.wiz = Math.max(1, Math.min(4, app.wiz + +id)); el.winBody.scrollTop = 0; return renderWindow();
+        app.wiz = Math.max(1, Math.min(4, app.wiz + +id));
+        if (app.wiz === 3 && !u.hasTechStep()) app.wiz += +id; // Konu H: seçilecek motor yoksa teknoloji adımı atlanır el.winBody.scrollTop = 0; return renderWindow();
       }
       case 'new': app.wizOn = true; app.wiz = 1; app.draft = null; el.winBody.scrollTop = 0; return renderWindow();
       case 'back': app.sel = null; app.wizOn = false; app.confirm = null; el.winBody.scrollTop = 0; return renderWindow();
@@ -557,6 +561,7 @@ export function boot(root, hotData = {}) {
     if (t.dataset.plat) { const set = new Set(app.draft.platforms); t.checked ? set.add(t.dataset.plat) : set.delete(t.dataset.plat); app.draft.platforms = [...set]; return; }
     if (t.dataset.feat) { t.checked ? app.engineSel.add(t.dataset.feat) : app.engineSel.delete(t.dataset.feat); return; }
     if (t.dataset.eng) { app.engineName = t.value; return; }
+    if (t.dataset.mgr) { t.blur(); return run(g.setManager(+t.dataset.mgr, t.value ? +t.value : null)); }
     if (t.dataset.order) { (((app.order ||= {})[+t.dataset.id]) ||= {})[t.dataset.order] = t.value; t.blur(); return renderWindow(); }
     if (t.dataset.engfrom) { app.engFrom = t.value; app.engineSel.clear(); t.blur(); return renderWindow(); }
     if (t.dataset.wfeat) { u.onWfeat(t.dataset.wfeat, t.checked); return renderWindow(); }
@@ -580,6 +585,7 @@ export function boot(root, hotData = {}) {
   document.addEventListener('keydown', (e) => {
     if (!G()) return;
     if (e.key === 'Escape' && u.tutorialOpen()) return u.tutNext(true);
+    if (e.key === 'Escape' && app.pop) return u.closePop();
     if (e.key === 'Escape' && app.win) return closeWin();
     if (e.key === ' ' && !blocked() && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName || '')) { e.preventDefault(); play(!app.running); }
   });

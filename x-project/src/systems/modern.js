@@ -84,6 +84,7 @@ export function streamKeys(ctx, id) {
   const s = X(ctx).stream;
   const g = state.games.find((x) => x.id === id);
   if (!g || !g.active || tableYear(ctx) < s.year) return { ok: false, msg: 'Yayıncılar henüz yok ya da oyun satışta değil.' };
+  if (!state.rooms.some((r) => r.type === 'pazarlama')) return { ok: false, msg: 'Fenomen anahtarları pazarlama departmanından dağıtılır.' }; // Konu H
   if (g.streamed && state.week - g.streamed < s.cooldown) return { ok: false, msg: 'Yayıncılar bu oyunu yakın zamanda oynadı.' };
   const cost = streamCost(ctx, g);
   if (state.cash < cost) return { ok: false, msg: `Anahtar kampanyası ${cost.toLocaleString('tr-TR')} $.` };
