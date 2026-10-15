@@ -7,24 +7,26 @@
 /* Düzen (GDT/Kairosoft): ekranın tamamı ofis sahnesi. Üstte ince HUD (ortada proje sayacı),
    altta ikonlu menü; yönetim sahnenin üstünde açılan pencerelerde. Tek görünüm: gece CRT'si üstünde şeker pikseller. */
 :root {
-  --ink: #f6eeff;
-  --ink-2: #bba9d3;
-  --night: #140f1c;
-  --panel: #241b33;
-  --panel-2: #30243f;
-  --line: #4a3a63;
-  --candy: #ff8fc7;
-  --mint: #8ff0c4;
-  --amber: #ffc85a;
-  --blood: #ff5a6e;
-  --sky: #8fd3f2;
-  --shadow: #0a0710;
-  --c-oyn: #ff8fc7; --c-gfx: #7fd0f5; --c-ses: #c3a6ff; --c-tek: #8fe89a;
-  --font-display: 'Silkscreen', 'Courier New', monospace;
+  --ink: #241f35;
+  --ink-2: #5e5670;
+  --night: #f2dfc0;
+  --panel: #fff6e3;
+  --panel-2: #f7e7c6;
+  --line: #241f35;
+  --candy: #3d7be0;
+  --mint: #2e9e4f;
+  --amber: #b07800;
+  --blood: #d9363e;
+  --sky: #2f6fd6;
+  --shadow: #241f35;
+  --bar: #24508f;
+  --gold: #ffc83d;
+  --c-oyn: #e07a12; --c-gfx: #2f6fd6; --c-ses: #8b3fd9; --c-tek: #0e8f86;
+  --font-display: 'Pixelify Sans', 'Trebuchet MS', sans-serif;
   --font-body: 'Pixelify Sans', 'Trebuchet MS', system-ui, sans-serif;
   --font-num: 'VT323', 'Courier New', monospace;
   --s-1: 0.78rem; --s0: 0.92rem; --s1: 1.05rem; --s2: 1.4rem; --s3: 2.6rem;
-  color-scheme: dark;
+  color-scheme: light;
 }
 html, body { height: 100%; }
 [hidden] { display: none !important; }
@@ -480,6 +482,42 @@ tr.dim { opacity: 0.55; } tr.tot td { border-top: 2px solid var(--line); }
 .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .filebtn.small { font-size: var(--s-1); margin: 6px 0; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- Konu I: yeni görünüm (açık, sıcak palet; yatayda büyük ofis, ince çubuklar) */
+#hud { background: var(--bar); color: #fff; border-bottom: 3px solid var(--shadow); }
+#hud .brand b { color: var(--gold); }
+#hud small, #hud .stat small, #hud .brand small { color: #d6e2ff; }
+#hud .stars { color: var(--gold); }
+#hud .stat b { color: #fff; }
+#hud .proj { background: var(--panel); color: var(--ink); border: 2px solid var(--shadow); }
+#hud .proj small { color: var(--ink-2); }
+#hud button { border-color: var(--shadow); }
+#menu { background: var(--bar); border-top: 3px solid var(--shadow); }
+#menu button { background: var(--panel); color: var(--ink); border: 2px solid var(--shadow); }
+#menu button.on, #menu button:last-child { background: var(--gold); color: var(--ink); border-color: var(--shadow); }
+#menu button.on img { filter: none; }
+#kpop { border: 3px solid var(--shadow); box-shadow: 0 4px 0 rgba(36,31,53,0.4); }
+#kpop .khead { background: var(--candy); color: #fff; }
+#kpop .krow.on { background: var(--gold); color: var(--ink); }
+#kpop .krow { background: #fff; color: var(--ink); border: 2px solid var(--shadow); }
+button { border-color: var(--shadow); }
+.btn-primary, button.primary { background: var(--gold); color: var(--ink); }
+@media (orientation: landscape) and (max-height: 520px) {
+  #hud { display: flex !important; flex-wrap: nowrap; align-items: center; gap: 10px; padding: 3px 10px; height: 40px; }
+  #hud > * { min-width: 0; }
+  #hud .projslot { flex: 1; }
+  #hud .stats { gap: 10px; }
+  #hud .brand small { display: none; }
+  #hud .brand b { font-size: var(--s0); }
+  #hud .stat small { display: none; }
+  #hud .stat b { font-size: 1.05rem; }
+  #hud .proj { padding: 2px 8px; }
+  #hud .kaos { min-width: 0; }
+  #menu { padding: 3px 8px calc(3px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
+  #menu button { grid-auto-flow: column; min-width: 0; padding: 3px 12px; gap: 6px; align-items: center; }
+  #menu img { width: 18px; height: 18px; }
+  #kpop { top: 46px; left: 8px; max-height: calc(100vh - 100px); max-width: 46vw; }
+}
 </style>
 
 <div id="game">

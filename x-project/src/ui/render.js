@@ -3,10 +3,10 @@
 // Canvas boyutu dışarıdan ayarlanır (masaüstünde yatay, telefonda dikey); yerleşim her karede ona göre hesaplanır.
 import { slots, roomSeats, membersOf, roomBusy } from '../systems/staff.js';
 
-const WALL = { 1: ['#7a7288', '#665f75', '#8e86a0'], 2: ['#f4c4d0', '#dca2b4', '#fde0e8'], 3: ['#b4e8d4', '#8fcfb6', '#d4f6e8'], 4: ['#cfc2f6', '#ab9ce0', '#e4dcff'] };
+const WALL = { 1: ['#e8d2ac', '#d8bf94', '#f2dfc0'], 2: ['#f4c4d0', '#dca2b4', '#fde0e8'], 3: ['#b4e8d4', '#8fcfb6', '#d4f6e8'], 4: ['#cfc2f6', '#ab9ce0', '#e4dcff'] };
 const BWALL = { studyo: ['#f6c6e0', '#e0a3c4', '#ffe0f0'], arge: ['#b8e0e8', '#93c6d2', '#d8f2f8'], yayin: ['#f6dcb0', '#e0bf8c', '#fff0d4'] };
-const FLOOR = { 1: ['#55506a', '#4d4860'], 2: ['#b9835f', '#a97553'], 3: ['#cdb68f', '#bea781'], 4: ['#9a94b6', '#8d87a8'] };
-const DISC_COLOR = { oyn: '#ff8fc7', gfx: '#7fd0f5', ses: '#c3a6ff', tek: '#8fe89a' };
+const FLOOR = { 1: ['#c98e55', '#b97f4a'], 2: ['#b9835f', '#a97553'], 3: ['#cdb68f', '#bea781'], 4: ['#9a94b6', '#8d87a8'] };
+const DISC_COLOR = { oyn: '#f2892b', gfx: '#3d7be0', ses: '#a855f7', tek: '#14a39a' };
 const SCREEN = ['#8fbf7a', '#9cc4ea', '#a8ecff', '#d4b8ff', '#ffc4ec'];
 
 const ICON = {
@@ -44,27 +44,39 @@ export function makeRenderer(canvas) {
   let seed = 1;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
-  // --- Çalışan: masanın arkasında, izleyiciye dönük (yüz monitörün yanında görünür)
+  // --- Çalışan (Konu I): 16×24 çerçeveli karakter; saç biçimi kişilikten. Masada üst gövde görünür.
   function person(x, y, p, frame, sitting = true) {
     const blink = (frame + p.id * 13) % 180 < 4;
     const bob = sitting ? 0 : Math.round(Math.sin((frame + p.id * 9) / 10));
-    // gövde
-    px(x + 2, y + 9 + bob, 10, 7, p.shirt);
-    px(x + 2, y + 9 + bob, 10, 1, shade(p.shirt, 1.15));
-    px(x + 6, y + 10 + bob, 2, 3, shade(p.shirt, 0.85));
-    // kafa
-    px(x + 3, y + 1 + bob, 8, 8, p.look.skin);
-    px(x + 3, y + 7 + bob, 8, 1, shade(p.look.skin, 0.9));
-    px(x + 2, y + bob, 10, 3, p.look.hair);
-    px(x + 2, y + 3 + bob, 2, 4, p.look.hair);
-    px(x + 10, y + 3 + bob, 2, 2, p.look.hair);
-    if (p.founder) { px(x + 3, y - 2 + bob, 8, 2, '#ffd36f'); px(x + 3, y - 3 + bob, 1, 1, '#ffd36f'); px(x + 6, y - 3 + bob, 2, 1, '#ffd36f'); px(x + 10, y - 3 + bob, 1, 1, '#ffd36f'); }
-    // yüz
-    if (p.status === 'tukenmis') { px(x + 5, y + 4 + bob, 1, 1, '#2a2030'); px(x + 8, y + 4 + bob, 1, 1, '#2a2030'); px(x + 5, y + 7 + bob, 4, 1, '#2a2030'); }
-    else if (!blink) { px(x + 5, y + 4 + bob, 1, 2, '#2a2030'); px(x + 8, y + 4 + bob, 1, 2, '#2a2030'); }
-    if (p.stress > 70) px(x + 10, y + 3 + bob, 1, 2, '#9fd8ff');
-    if (p.morale > 60) { px(x + 6, y + 7 + bob, 2, 1, '#c24d6a'); px(x + 4, y + 6 + bob, 1, 1, '#f7a0b4'); px(x + 9, y + 6 + bob, 1, 1, '#f7a0b4'); }
-    else if (p.morale < 30) px(x + 6, y + 7 + bob, 2, 1, '#5a4a6a');
+    const g2 = spriteOf(p, blink);
+    const ox = x - 3, oy = y - 6 + bob;
+    for (let j = 0; j < 19; j++) { const row = g2[j]; for (let i = 0; i < 16; i++) { const c = row[i]; if (c) px(ox + i, oy + j, 1, 1, c); } }
+    if (p.stress > 70) px(ox + 13, oy + 7, 1, 2, '#5fb8ff');
+  }
+  const SPR_BASE = ['................', '................', '....oooooooo....', '...ohhhhhhhho...', '..ohhhhhhhhhho..', '..ohhhhhhhhhho..', '..ohhsssssshho..', '..ohssssssssho..', '..ossessssesso..', '..ossessssesso..', '..osbssmmssbso..', '..ossssssssssso..'.slice(0, 16), '...oSSSSSSSSo...', '...occcwwccco...', '..occcccccccco..', '.occcccccccccco.', '.occCccccccCcco.', '.osoccccccccoso.', '..oooCCCCCCooo..'];
+  const HAIR = { lider: 'kisa', anne: 'topuz', pratik: 'kisa', rekabet: 'kep', mukemmel: 'gozluk', filozof: 'kel', sakaci: 'diken', hayal: 'uzun', tekno: 'gozluk', dedikodu: 'uzun', sanatci: 'uzun', sessiz: 'kisa' };
+  const sprCache = new Map();
+  function spriteOf(p, blink) {
+    const key = `${p.id}|${p.persona || ''}|${p.look.hair}|${p.shirt}|${p.founder ? 1 : 0}|${blink ? 1 : 0}|${p.status === 'tukenmis' ? 1 : 0}|${p.morale > 60 ? 1 : 0}`;
+    if (sprCache.has(key)) return sprCache.get(key);
+    const g0 = SPR_BASE.map((r) => r.padEnd(16, '.').slice(0, 16).split(''));
+    const set = (y, x, ch) => { if (g0[y] && x >= 0 && x < 16) g0[y][x] = ch; };
+    const pid = p.persona || ['lider', 'anne', 'pratik', 'rekabet', 'mukemmel', 'filozof', 'sakaci', 'hayal', 'tekno', 'dedikodu', 'sanatci', 'sessiz'][(p.id * 7) % 12];
+    const style = HAIR[pid] || 'kisa';
+    if (style === 'uzun') { for (let y = 6; y <= 13; y++) { set(y, 1, 'o'); set(y, 2, 'h'); set(y, 13, 'h'); set(y, 14, 'o'); } set(14, 1, 'o'); set(14, 14, 'o'); }
+    if (style === 'topuz') { g0[0] = '......oooo......'.split(''); g0[1] = '.....ohhhho.....'.split(''); g0[2] = '....oohhhhoo....'.split(''); }
+    if (style === 'diken') { g0[1] = '....o..o..o.....'.split(''); g0[2] = '...ohoohoohoo...'.split(''); }
+    if (style === 'kep') { g0[3] = '...okkkkkkkko...'.split(''); g0[4] = '..okkkkkkkkkkkoo'.split(''); }
+    if (style === 'kel') for (let y = 3; y <= 7; y++) for (let x = 3; x <= 12; x++) if (g0[y][x] === 'h') g0[y][x] = 's';
+    if (style === 'gozluk' || style === 'kel') { g0[7] = '..osgggsgggsso..'.split(''); g0[8] = '..osgegssgegso..'.split(''); g0[9] = '..osgggssgggso..'.split(''); }
+    if (p.founder) { g0[0] = '....y..yy..y....'.split(''); g0[1] = '....yyyyyyyy....'.split(''); }
+    if (blink || p.status === 'tukenmis') for (const y of [8, 9]) for (let x = 0; x < 16; x++) if (g0[y][x] === 'e') g0[y][x] = y === 9 ? 'o' : 's';
+    if (!(p.morale > 60)) for (let x = 0; x < 16; x++) if (g0[10][x] === 'b') g0[10][x] = 's';
+    const C = { o: '#241f35', h: p.look.hair, s: p.look.skin, S: shade(p.look.skin, 0.88), e: '#241f35', b: '#f49aae', m: '#b8435a', c: p.shirt, C: shade(p.shirt, 0.8), w: '#ffffff', k: '#d63b3b', y: '#ffc83d', g: '#241f35' };
+    const out = g0.map((r) => r.map((ch) => (ch === '.' ? null : C[ch] || null)));
+    sprCache.set(key, out);
+    if (sprCache.size > 400) sprCache.delete(sprCache.keys().next().value);
+    return out;
   }
 
   function emote(p, x, y, frame, state, resting) {
