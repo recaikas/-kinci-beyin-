@@ -310,8 +310,18 @@ export const tau = (ctx, d, y = tableYear(ctx)) => (d === 'tek' ? lerpTable(ctx.
 export function target(ctx, d, sizeId, y = tableYear(ctx)) {
   const size = ctx.pack.sizes.find((s) => s.id === sizeId);
   const pr = ctx.pack.prestige;
-  return H(ctx, y) * difficulty(ctx).D * tau(ctx, d, y) * Math.pow(pr.base, ctx.state.prestige) * size.target;
+  return H(ctx, y) * difficulty(ctx).D * tau(ctx, d, y) * Math.pow(pr.base, ctx.state.prestige) * size.target * targetK(ctx, y) * expectation(ctx);
 }
+export const targetK = (ctx, y = tableYear(ctx)) => lerpTable(ctx.pack.review.targetK, y);
+// Konu I: eleştirmen beklentisi. Son oyunların ortalaması yükseldikçe çıta yükselir (aynı kalite tekrarlanınca not düşer).
+export function expectation(ctx) {
+  const r = ctx.pack.review, gs = (ctx.state.games || []).filter((g) => !g.portOf && !g.expansion && !g.ext).slice(-r.expectGames);
+  if (!gs.length) return 1;
+  const avg = gs.reduce((a, g) => a + g.score, 0) / gs.length;
+  return 1 + r.expectK * clamp((avg - r.expectFrom) / r.expectSpan, 0, 1);
+}
+// Konu I: hedefe göre kalite. Hedefin altı doğrusal, üstü azalan getiri (hedefin 10 katı boşa).
+export const quality = (r, x) => (x <= 1 ? x * r.atTarget : r.atTarget + (1 - r.atTarget) * (1 - Math.exp(-(x - 1) * r.overK)));
 export function sizePenalty(ctx, sizeId, y = tableYear(ctx)) {
   const size = ctx.pack.sizes.find((s) => s.id === sizeId);
   let pen = 0;
@@ -323,13 +333,14 @@ export function review(ctx, project) {
   const g = ctx.pack.genres.find((x) => x.id === project.genre);
   const hiza = alignment(ctx, project);
   const F = fitFactor(ctx, project);
-  const parts = {};
+  const parts = {}, raw = {};
   let sum = 0;
   for (const d of ['oyn', 'gfx', 'ses', 'tek']) {
     const T = target(ctx, d, project.size);
-    const ratio = Math.min(1, (project.points[d] * hiza) / T);
-    parts[d] = Math.round(ratio * 100);
-    sum += g.disc[d] * r.cap * ratio;
+    const x = (project.points[d] * hiza) / T;
+    raw[d] = Math.round(x * 100);
+    parts[d] = Math.round(Math.min(1, x) * 100);
+    sum += g.disc[d] * r.cap * quality(r, x);
   }
   let score = F * sum;
   const notes = [];
@@ -357,7 +368,7 @@ export function review(ctx, project) {
   if (score >= r.cap - 0.01) score = r.cap + ctx.rng.range(0, r.randTop);
   score = clamp(score, 1, 100);
   const critics = criticPanel(ctx, score, project.genre);
-  return { score: Math.round(score * 10) / 10, parts, hiza, F, bugRate, notes, critics, genreNote: genreNote(project.genre, score), combo: c.overall, legend: c.legend?.id || null };
+  return { score: Math.round(score * 10) / 10, parts, raw, hiza, F, bugRate, notes, critics, genreNote: genreNote(project.genre, score), combo: c.overall, legend: c.legend?.id || null };
 }
 
 // Eleştirmen puanı: 5'in altında tam sayı, üstünde 0,2'lik adım. Her eleştirmen kendi kademesinden farklı bir yorum seçer.
@@ -389,10 +400,13 @@ export function genreNote(genre, score) {
 
 // --- Sales
 export const Pz = (ctx, y = tableYear(ctx)) => logTable(ctx.pack.sales.pzCurve, y);
-export function S(ctx, n) {
-  const s = ctx.pack.sales;
-  return n >= s.sCut ? Math.exp(s.sA * (n - s.sCenter)) : Math.exp(s.sLow) * Math.exp(s.sLowK * (n - s.sCut));
+export function S(ctx, n, s = ctx.pack.sales) {
+  // Konu I: merkez yıla bağlı olabilir (pazar olgunlaştıkça vasat oyun daha az satar)
+  const c = Array.isArray(s.sCenter) ? lerpTable(s.sCenter, tableYear(ctx)) : s.sCenter;
+  const low = Array.isArray(s.sCenter) ? s.sA * (s.sCut - c) : s.sLow;
+  return n >= s.sCut ? Math.exp(s.sA * (n - c)) : Math.exp(low) * Math.exp(s.sLowK * (n - s.sCut));
 }
+export const Srv = (ctx, n) => S(ctx, n, ctx.pack.sales.rival); // rakip oyunlar eski ölçekte
 // Oyuncunun kendi konsolları da platform gibi davranır (kurulu taban state'te).
 export function ownPlatforms(ctx) {
   const c = ctx.pack.console;

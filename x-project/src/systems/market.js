@@ -1,6 +1,6 @@
 // Pazar: yayın, haftalık satış, MMO abonelik, trendler, rakipler, fuar, ödüller, listeler.
 import { clamp, lerpTable } from '../kernel.js';
-import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, difficulty, traitOf, regionMix, ALL_REGIONS, projFeatures, techLowOf } from '../models.js';
+import { review, peakWeekly, platformBase, inflation, tableYear, selfPublishPower, gamePrice, eraMult, salaryFor, platformById, Pz, S, Srv, difficulty, traitOf, regionMix, ALL_REGIONS, projFeatures, techLowOf } from '../models.js';
 import { roomOf, hasRoom, weeklyOutput } from './staff.js';
 import { learn } from './knowledge.js';
 import { growSkills } from './people.js';
@@ -111,10 +111,10 @@ export function release(ctx, { projectId, publisherId, price, model = 'satis', m
   state.charts.unshift({ name: game.name, studio: state.companyName, score: game.score, week: state.week, mine: true, genre: game.genre });
   if (deal) Pub.onRelease(ctx, game, pj); else Pub.onSelfRelease(ctx, game);
   bus.fire('afterReleaseGame', game);
-  const mood = rv.score >= 85 ? '🎉' : rv.score >= 70 ? '🙂' : rv.score >= 50 ? '😐' : '💩';
-  ctx.news(`${mood} "${game.name}" yayında! Not: ${rv.score}. Hayran ${dFans >= 0 ? '+' : ''}${Math.round(dFans)}.`, rv.score >= 70 ? 'good' : 'bad');
-  for (const p of state.staff) p.morale = clamp(p.morale + (rv.score - 65) / 3, 0, 100);
-  if (rv.score < 40) state.heat += 8;
+  const mood = rv.score >= 80 ? '🎉' : rv.score >= 60 ? '🙂' : rv.score >= 40 ? '😐' : '💩';
+  ctx.news(`${mood} "${game.name}" yayında! Not: ${rv.score}. Hayran ${dFans >= 0 ? '+' : ''}${Math.round(dFans)}.`, rv.score >= 55 ? 'good' : 'bad');
+  for (const p of state.staff) p.morale = clamp(p.morale + (rv.score - 55) / 3, 0, 100);
+  if (rv.score < 30) state.heat += 8;
   return { ok: true, game, review: rv, report };
 }
 
@@ -262,7 +262,7 @@ export function initRivals(ctx) {
   for (const rv of [...state.rivals].sort((a, b) => b.rep - a.rep).slice(0, 6)) {
     const score = Math.round(clamp(rng.normal(rv.rep * r.repScoreK + 5, r.scoreSpread), 20, 95));
     const s = pack.sales, power = rv.rep / 100;
-    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
+    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * Srv(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
     const rg = { id: state.nextId++, name: `${rng.pick(r.gameNamesA)} ${rng.pick(r.gameNamesB)}`, studio: rv.name, score, genre: Genres.rivalGenre(ctx), weeks: rng.int(0, 8), peak, lastWeek: 0, units: 0, active: true };
     Charts.tagRival(ctx, rg, { owner: rv.hw ? rv.cid : null });
     Charts.advanceRival(ctx, rg, rg.weeks);
@@ -310,7 +310,7 @@ export function weeklyRivals(ctx) {
     state.charts.unshift({ name, studio: rv.name + (rv.acquired ? ' (sizin)' : ''), score, week: state.week, mine: rv.acquired, genre });
     // Satış listesi için rakip oyunun haftalık satış zirvesi (stüdyo gücü + not + pazar büyüklüğü)
     const s = pack.sales, power = rv.rep / 100;
-    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
+    const peak = s.B * Pz(ctx) * difficulty(ctx).Z * Srv(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * rng.pick(r.sizePick) * r.salesPeakK;
     const rg = Charts.tagRival(ctx, { id: state.nextId++, name, studio: rv.name, score, genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true }, { owner: rv.hw ? rv.cid : null });
     state.rivalGames.push(rg);
     if (!rv.hw && !rv.acquired) ctx.bus.fire('rivalRelease', { studio: rv.name, name, big: false, cid: rv.cid });

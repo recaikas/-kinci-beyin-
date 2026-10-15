@@ -45,6 +45,9 @@ export const PACK = {
     oldEngineYears: 5, oldEnginePenalty: 2, // P
     repeatComboPenalty: 3, // L (aynı konu×tür art arda)
     newFeatureBonus: 1, // L
+    // Konu I: puan enflasyonu. Hedef ×3, hedefte not tavanın %85'i, üstünde azalan getiri; beklenti son 3 oyunla çıtayı en çok %25 yükseltir.
+    targetK: [[1976, 3], [1980, 2.6], [1985, 2.2], [1995, 1.8], [2005, 1.3], [2015, 1.1], [2025, 1]], atTarget: 0.85, overK: 1.5,
+    expectK: 0.25, expectFrom: 60, expectSpan: 30, expectGames: 3,
   },
 
   // Konu D: tür sistemi (P). Kademeler, alt türler ve sözler data/genres.js'te.
@@ -91,7 +94,9 @@ export const PACK = {
     // yeniden kalibre edildi: garaj 1977 iyi oyun ≈ 300/hafta, 1992 yerleşik hit ≈ 40 bin/hafta (P).
     B: 145000,
     pzCurve: [[1976, 0.5], [1985, 0.7], [1992, 1], [2025, 8]],
-    sA: 0.09, sCenter: 90, sCut: 60, sLow: -2.7, sLowK: 0.2,
+    // Konu I: notlar yeni ölçekte (ilk oyunlar 40–50, ustalar 75–85) → eğri daha yatık ve 75 merkezli. Rakipler eski eğride kalır.
+    sA: 0.04, sCenter: [[1976, 66], [1990, 72], [2005, 80], [2025, 86]], sCut: 30, sLowK: 0.12,
+    rival: { sA: 0.09, sCenter: 90, sCut: 60, sLow: -2.7, sLowK: 0.2 },
     fanRef: 10000, fanK: 0.5, hypeK: 0.15,
     priceRef: 35, priceExp: 1.5,
     yA: 0.15, yB: 0.85, stA: 0.3, stB: 0.7, stCap: 5, iA: 0.5, iB: 0.5, ipK: 0.2,
@@ -319,7 +324,7 @@ export const PACK = {
     cartMedia: ['kartus', 'oyunkarti'], cartAttract: 0.15, cartFee: 4, // kartuş tekeli: adet başı basım ücreti (1976 $)
     tpUnits: 7000, tpDecay: 0.85, tpWeeks: 26, tpBigK: 3, tpBaseRef: 5, priceRef: 20, // başka stüdyo oyununun konsolundaki satışı
     deal: {
-      base: 600000, scoreRef: 70, scoreExp: 3, shareK: 1.6, seatDiscount: 0.25, offers: 6, horizon: 1, rivalOffers: 3,
+      base: 600000, scoreRef: 60, scoreExp: 3, shareK: 1.6, seatDiscount: 0.25, offers: 6, horizon: 1, rivalOffers: 3,
       types: {
         pazarlama: { name: 'Pazarlama', k: 0.25, mult: 1.08, weeks: 12, tp: 1, heat: 0, rel: 5 },
         sureli: { name: 'Süreli özel', k: 1, mult: 1.25, weeks: 30, tp: 3, heat: 3, rel: 10, scale: true },
@@ -359,7 +364,7 @@ export const PACK = {
     // Erken erişim
     ea: { year: 2013, research: 'erken_erisim', minProgress: 0.33, priceShare: 0.7, unitsK: 0.5, bugFix: 0.03, polishWeeks: 8, polishBonus: 2, peakCut: 0.18 },
     // Kitle fonlama
-    crowd: { from: 2012, to: 2023, minFans: 5000, perFan: 0.8, cap: 2000000, hype: 15, angryBelow: 70, angryFans: 0.08, happyAt: 85, happyFans: 0.05 },
+    crowd: { from: 2012, to: 2023, minFans: 5000, perFan: 0.8, cap: 2000000, hype: 15, angryBelow: 55, angryFans: 0.08, happyAt: 78, happyFans: 0.05 },
     // Abonelik servisleri: önden ödeme; satış ×salesMult, hayran +fans
     services: { salesMult: 0.6, fans: 15000, list: [
       { id: 'pasos', name: 'X-Kutu Oyun Pasosu', owner: 'mikroyumusak', year: 2017, base: 900000 },
@@ -386,7 +391,7 @@ export const PACK = {
     net: 0.55, payBase: 20, payPowerK: 0.06, payMin: 5, payMax: 30, earlyPay: -4, tierPay: [0, 2, 4, 6],
     hitPay: 4, hitAt: 1.5, kozMax: 3, rightsPay: 3, distPay: 70, distPower: 0.6, multiPay: 1,
     buyoutShare: 0.6, advWeeks: 12, lifeWeeks: 100, fund: [1.0, 1.1], milestones: [0.3, 0.3, 0.4], dueSlack: 6, lateWithdraw: 8, withdrawRepay: 0.5,
-    thresholdA: 20, thresholdK: 0.55, need: 3, jitter: 3,
+    thresholdA: 0, thresholdK: 0.6, need: 3, jitter: 3, // Konu I: yeni not ölçeği (büyük yayıncı ≈ 60 ister)
     err: { finished: 6, early: 12, doc: 2, relMin: 0.4 },
     tiers: { big: 80, mid: 60 },
     door: { open: 60, known: 75, knownRel: 20 },
@@ -400,7 +405,7 @@ export const PACK = {
     neg: { base: 50, kE: 2, koz: 5, min: 10, max: 90, withdraw: 0.15, rounds: 2, rightsBase: 40, dateBase: 60, rival: 0.5 },
     meet: { big: 2, mid: 1, catchBase: 0.2, catchRel: 0.005, catchMin: 0.15, catchMax: 0.7, caught: -10, caughtRel: -5 },
     reputation: { base: -60, top10: 2, fansK: 5, fansMax: 15, min: -10, max: 30, none: -10 },
-    orders: { chance: 0.25, minGames: 2, scoreA: 55, scoreK: 0.2, scoreMin: 60, scoreMax: 80, slackWeeks: 12, penalty: 0.5 },
+    orders: { chance: 0.25, minGames: 2, scoreA: 45, scoreK: 0.2, scoreMin: 50, scoreMax: 72, slackWeeks: 12, penalty: 0.5 },
     trial: { minGames: 2, minAvg: 60, rel: 25, relFast: 35, fastShare: 0.7, failRel: -20, banWeeks: 96, payK: 0.85 },
     agent: { good: { fee: 0.10, retainer: 3000, doors: 2 }, cheap: { fee: 0.05, retainer: 800, doors: 1, scamKaos: 0.004 } },
     showcase: { fans: 3000, morale: 5, skill: 1, top3Rel: 10, onePctRel: 5, modRel: 15, festPrize: 15000, jamHype: 10 },
@@ -629,8 +634,8 @@ export const PACK = {
     raiseOnDemand: 0.12,
   },
 
-  fans: { _tag: 'P', threshold: 60, perPointAbove: 400, lossBelow: 50, lossPerPoint: 300, scaleByMarket: true },
-  ip: { _tag: 'L', waitWeeks: 48, max: 5, gainScoreRef: 70, gainK: 0.05, minGain: -0.5 },
+  fans: { _tag: 'P', threshold: 35, perPointAbove: 400, lossBelow: 25, lossPerPoint: 300, scaleByMarket: true },
+  ip: { _tag: 'L', waitWeeks: 48, max: 5, gainScoreRef: 60, gainK: 0.05, minGain: -0.5 },
 
   hype: {
     _tag: 'P',

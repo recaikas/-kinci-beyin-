@@ -2,7 +2,7 @@
 // Şirketler yıllara göre kurulur, güçlenir, zayıflar ve piyasadan çekilir; rakip listesi ve yayıncılar buradan beslenir.
 import { COMPANIES, YEARS } from '../data/history.js';
 import { lerpTable, clamp } from '../kernel.js';
-import { tableYear, Pz, S, difficulty, inflation, activePlatforms } from '../models.js';
+import { tableYear, Pz, S, Srv, difficulty, inflation, activePlatforms } from '../models.js';
 import { tagRival, pickMonths } from './charts.js';
 
 export const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
@@ -67,7 +67,7 @@ function releaseHit(ctx, h) {
   const studio = c?.name || 'Bağımsız';
   const score = histScore(ctx, h.score);
   const power = Math.max(W.hitPower, c ? companyRep(c, tableYear(ctx)) : 60) / 100;
-  const peak = s.B * Pz(ctx) * difficulty(ctx).Z * S(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * 1.7 * pack.rivals.salesPeakK * W.hitPeakK * (1 - W.hitRankDecay * h.rank) * rng.range(0.85, 1.15);
+  const peak = s.B * Pz(ctx) * difficulty(ctx).Z * Srv(ctx, score) * (s.yA + s.yB * power) * (s.stA + s.stB * power) * 1.7 * pack.rivals.salesPeakK * W.hitPeakK * (1 - W.hitRankDecay * h.rank) * rng.range(0.85, 1.15);
   state.charts.unshift({ name: h.name, studio, score, week: state.week, mine: false, genre: h.genre, hist: true });
   const rg = tagRival(ctx, { id: state.nextId++, name: h.name, studio, score, genre: h.genre, weeks: 0, peak, lastWeek: 0, units: 0, active: true, hist: true }, { rank: h.rank, owner: c?.kind.includes('hw') ? h.cid : null });
   state.rivalGames.push(rg);

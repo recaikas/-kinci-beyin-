@@ -50,7 +50,7 @@ export function releaseDLC(ctx, id) {
   g.postCost = (g.postCost || 0) + cost;
   g.dlcs = (g.dlcs || 0) + 1;
   const owners = g.model === 'f2p' ? (g.players || 0) * d.f2pAttach : g.units;
-  const attach = d.attach * Math.pow(d.attachDecay, g.dlcs - 1) * clamp(g.score / 75, 0.4, 1.4);
+  const attach = d.attach * Math.pow(d.attachDecay, g.dlcs - 1) * clamp(g.score / 65, 0.4, 1.4);
   const price = (g.model === 'f2p' ? d.f2pPrice : g.price * d.priceShare) * (g.model === 'f2p' ? inflation(ctx) ** 0.4 : 1);
   queueRevenue(g, owners * attach * price, d.weeks);
   revive(ctx, g, d.weeksBack);
@@ -91,7 +91,7 @@ export function streamKeys(ctx, id) {
   ledger.post('pazarlama', -cost, `${g.name}: yayıncı anahtarları`);
   g.postCost = (g.postCost || 0) + cost;
   g.streamed = state.week;
-  const good = rng.chance(clamp(s.baseChance + (g.score - 70) / 60, 0.1, 0.9));
+  const good = rng.chance(clamp(s.baseChance + (g.score - 60) / 60, 0.1, 0.9));
   state.gameMods.push({ mult: good ? s.goodMult : s.badMult, untilWeek: state.week + s.weeks, gameId: g.id });
   if (good) state.fans += Math.round(s.fans * inflation(ctx) ** 0.3);
   ctx.news(good ? `📺 Yayıncılar "${g.name}" oyununu çok sevdi; canlı yayınlar satışları uçurdu.` : `📺 Yayıncılar "${g.name}" oyununu açıp sıkıldı. Sohbet kanalı acımasızdı.`, good ? 'good' : 'warn');
@@ -162,7 +162,7 @@ export function crowdOnRelease(ctx, pj, score) {
 // --- Abonelik servisleri (2017+): önden ödeme karşılığında oyun servise girer; satış düşer, oyuncu ve hayran artar.
 export function serviceOffers(ctx, pj, previewScore) {
   const s = X(ctx).services, y = tableYear(ctx);
-  return s.list.filter((o) => y >= o.year).map((o) => ({ ...o, pay: Math.round(o.base * sizeOf(ctx, pj.size).sales * Math.pow(clamp(previewScore, 30, 100) / 80, 2) * (1 + pj.hype / 100) * inflation(ctx) ** 0.5) }));
+  return s.list.filter((o) => y >= o.year).map((o) => ({ ...o, pay: Math.round(o.base * sizeOf(ctx, pj.size).sales * Math.pow(clamp(previewScore, 30, 100) / 70, 2) * (1 + pj.hype / 100) * inflation(ctx) ** 0.5) }));
 }
 
 // Haftalık: indirilebilir içerik gelirleri, erken erişim satışları, sezon kartı sözleri.
