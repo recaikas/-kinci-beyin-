@@ -40,7 +40,7 @@ Fiyatlar ve katsayılar **oyun dengesi değerleridir**, tarihî satış fiyatı 
 
 ## Sonraki bölümler
 
-Nihai izometrik çizimler ve yeni karakter sanatları, bakım/arızanın ayrıntılı döngüsü, ikinci el pazarı, birden çok eşya seçimi ve taşıması, elle duvar parçaları çizme, çarpışan kalabalık ve gerçek hizmet kuyrukları henüz tamamlanmadı. Şu anki karakter ve mobilya sprite'ları geçicidir. Bu teslim görsel sanatın son hali değildir.
+Nihai izometrik çizimler ve yeni karakter sanatları, bakım/arızanın ayrıntılı döngüsü, ikinci el pazarı, birden çok eşya seçimi ve taşıması, elle duvar parçaları çizme, çarpışan kalabalık ve gerçek hizmet kuyrukları henüz tamamlanmadı. Başlangıç karakter ve mobilya seti yeniden çizildi; kaynaklar, yeni arayüz ve kalan açı/model çeşitliliği sınırları `ART-DIRECTION.md` içinde. Bu set bütün dönemlerin son sanat kapsamı değildir.
 
 ## Doğrulama sınırı
 

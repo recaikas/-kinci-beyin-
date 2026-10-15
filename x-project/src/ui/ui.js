@@ -6,7 +6,7 @@ import { PACK } from '../data/pack.js';
 import { menuIcon } from './icons.js';
 import { makeOfficeRenderer } from '../office/renderer.js';
 import * as Office from '../systems/office.js';
-import { GROUPS } from '../data/office.js';
+import { catalogHTML, conditionHTML } from './office-panel.js';
 const { FURNITURE, SKU } = Office;
 import { money } from '../kernel.js';
 import { SAVE_KEY, esc, fmt, pct, bar, discName, SPEEDS, kaosLabel, store, WIN_NAMES, ICON_OF, SUBS, move } from './util.js';
@@ -34,7 +34,7 @@ import { makeAudio } from './audio.js';
 export function boot(root, hotData = {}) {
   const app = {
     game: null, running: false, speed: 1, timer: null, win: null, sub: {}, wasRunning: false, wasRunningD: false, dialog: null,
-    editOffice: false, officeEditInfo: null,
+    editOffice: false, officeEditInfo: null, officeTab: 'furnish',
     draft: null, wiz: 1, engineSel: new Set(), engineName: 'Motor', consoleDraft: { type: 'konsol', series: 'yeni', seriesName: 'X Kutu', price: 'normal', parts: {} },
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
@@ -43,7 +43,7 @@ export function boot(root, hotData = {}) {
   el.officeTools = $('#office-tools');
   const R = makeOfficeRenderer(el.canvas, {
     view: () => ({ game: app.game, building: app.game ? curBuilding().id : 'ana', paused: !app.running || !!blocked(), speed: app.speed,
-      editing: app.editOffice, blocked: !!(app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.()) }),
+      editing: app.editOffice, compact: window.innerWidth <= 680 && window.innerHeight > 420, blocked: !!(app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.()) }),
     onHit: (h) => officeHit(h),
     onEditChange: (info) => { app.officeEditInfo = info; renderOfficeTools(); },
     onPlace: (roomId, item) => { const res = G().placeFurniture(roomId, item); if (res.ok) { save(); renderHud(); } else note(res.msg, 'bad'); return res; },
@@ -310,9 +310,15 @@ export function boot(root, hotData = {}) {
     el.stage.classList.toggle('paused', !!G() && !app.editOffice && (!app.running || !!blocked()) && !app.win);
     if (!G()) return;
     const edit = tools.querySelector('[data-office=edit]');
-    edit.setAttribute('aria-pressed', String(app.editOffice)); edit.textContent = app.editOffice ? '✓ Yerleşimi bitir' : 'Yerleşim ve mağaza';
+    edit.setAttribute('aria-pressed', String(app.editOffice)); edit.textContent = app.editOffice ? '✓ Bitir' : 'Ofisi düzenle';
     tools.querySelector('.office-edit').hidden = !app.editOffice;
+    el.stage.classList.toggle('office-editing', app.editOffice);
+    tools.querySelector('[data-office-location]').textContent = Staff.officeOf(ctx()).name;
+    tools.querySelector('[data-office-location-info]').textContent = `${G().state.staff.length} kişilik ekip · ${G().state.rooms.length} oda`;
+    tools.querySelector('#office-selection').hidden = !app.editOffice || !(app.officeEditInfo?.draft || app.officeEditInfo?.roomDraft);
     if (!app.editOffice) return;
+    for (const tab of tools.querySelectorAll('[data-office=tab]')) { const on = tab.dataset.value === app.officeTab; tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1; }
+    for (const panel of tools.querySelectorAll('[data-office-panel]')) panel.hidden = panel.dataset.officePanel !== app.officeTab;
     const c = ctx(), s = G().state, info = app.officeEditInfo, draft = info?.draft, rd = info?.roomDraft;
     const room = s.officeWorld.rooms[info?.roomId], model = s.rooms.find((r) => r.id === info?.roomId);
     const select = tools.querySelector('[data-office-room]');
@@ -328,17 +334,21 @@ export function boot(root, hotData = {}) {
     sell.textContent = draft?.id ? `Sat · ${money(Math.round(((room?.items.find((f) => f.id === draft.id)?.paid || 0) + (room?.items.find((f) => f.id === draft.id)?.computerPaid || 0)) * 0.35))}` : 'Sat';
     const people = s.staff.filter((p) => p.room === info?.roomId), reports = people.map((p) => Office.workReport(c, p));
     tools.querySelector('#office-summary').textContent = model ? `${Office.workstations(c, model.id).length} hazır çalışma yeri · ${people.length} çalışan${reports.length ? ` · verim ×${(reports.reduce((a, r) => a + r.factor, 0) / reports.length).toFixed(2)} · ${Math.round(reports[0].temperature)}°C` : ''}${people.length > Staff.roomSeats(c, model) ? ' · Çalışma yeri eksik!' : ''}` : '';
-    tools.querySelector('[data-office-budget]').textContent = `${Math.floor(Office.year(c))} · Kasa ${money(s.cash)}`;
-    const list = Office.catalog(c, info?.roomId), groups = Object.entries(GROUPS).filter(([id]) => list.some((p) => p.group === id));
-    const group = tools.querySelector('[data-office-group]');
-    if (!groups.some(([id]) => id === app.officeGroup)) app.officeGroup = groups[0]?.[0];
-    setHTML(group, groups.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')); group.value = app.officeGroup;
-    const products = list.filter((p) => p.group === app.officeGroup), product = tools.querySelector('[data-office-product]');
-    if (!products.some((p) => p.id === app.officeProduct)) app.officeProduct = products.find((p) => p.year <= Office.year(c))?.id || products[0]?.id;
-    setHTML(product, products.map((p) => `<option value="${p.id}" ${p.year > Office.year(c) ? 'disabled' : ''}>${esc(p.name)} · ${p.year > Office.year(c) ? p.year + ' yılında' : money(Office.price(c, p.id))}</option>`).join('')); product.value = app.officeProduct;
+    tools.querySelector('[data-office-budget]').textContent = `${Math.floor(Office.year(c))} / EKİPMAN
+${money(s.cash)}`;
+    const catalog = catalogHTML(c, info?.roomId, app.officeGroup, app.officeProduct, (id) => R.thumbnail(id));
+    app.officeGroup = catalog.group; app.officeProduct = catalog.selected;
+    setHTML(tools.querySelector('#office-categories'), catalog.categories);
+    setHTML(tools.querySelector('#office-products'), catalog.products);
+    const condition = conditionHTML(c, info?.roomId);
+    setHTML(tools.querySelector('#office-metrics'), condition.metrics); setHTML(tools.querySelector('#office-needs'), condition.needs);
     const selected = SKU[app.officeProduct];
     tools.querySelector('#office-product-info').textContent = selected ? `${selected.year} · ${selected.type === 'computer' ? `Güç ×${selected.power.toFixed(2)} · teknoloji ${selected.tech} · önce bir masa seç.` : selected.quality ? `Çalışma katsayısı ×${selected.quality}` : selected.cooling ? `Soğutma ${selected.cooling} · aylık işletme ${money(selected.running)}` : selected.service ? `${selected.service} kişilik hizmet` : selected.seats ? `${selected.seats} dinlenme koltuğu` : selected.bonus ? `Uygun departmanda +%${Math.round(selected.bonus * 100)}` : 'Konfor katkısı sınırlıdır.'}` : '';
     tools.querySelector('[data-office=buy]').disabled = !room || !!rd || !selected || selected.year > Office.year(c) || selected.type === 'computer' && (!draft?.id || draft.type !== 'desk');
+    const help = rd ? 'Odayı boş alana sürükle. Yeşil olduğunda yerleştir.' : draft?.type === 'chair' ? 'Sandalyeyi masanın yeşil işaretine taşı. Yönleri aynı olmalı.' : draft?.type === 'desk' ? 'Masayı yerleştir; ardından sandalye ve bilgisayar ekle.' : selected?.type === 'computer' ? 'Önce sahnedeki bir masaya dokun, sonra bilgisayarı seç.' : 'Bir eşya seç. Sahneye dokunarak yerini belirle.';
+    tools.querySelector('#office-help').textContent = help;
+    const buy = tools.querySelector('[data-office=buy]');
+    buy.textContent = selected?.type === 'computer' && !draft?.id ? 'Bilgisayar için önce bir masa seç' : 'Seç ve yerleştir';
     const bound = `${room?.roomId}:${s.officeWorld.revision}`;
     if (room && tools.dataset.bound !== bound && !rd) {
       for (const field of ['x', 'y', 'w', 'h', 'door', 'floor']) tools.querySelector(`#office-room-${field}`).value = room[field];
@@ -376,7 +386,10 @@ export function boot(root, hotData = {}) {
     if (action === 'zoom-in') return R.zoom(1.2);
     if (action === 'zoom-out') return R.zoom(1 / 1.2);
     if (action === 'fit') return R.fit();
-    if (action === 'buy') return R.action('add', root.querySelector('[data-office-product]').value);
+    if (action === 'tab') { app.officeTab = value; return renderOfficeTools(); }
+    if (action === 'category') { app.officeGroup = value; app.officeProduct = null; return renderOfficeTools(); }
+    if (action === 'product') { app.officeProduct = value; renderOfficeTools(); return R.action('add', value); }
+    if (action === 'buy') return R.action('add', app.officeProduct);
     if (action === 'renovate') { const data = {}; for (const f of ['x', 'y', 'w', 'h', 'door']) data[f] = +root.querySelector(`#office-room-${f}`).value; data.floor = root.querySelector('#office-room-floor').value; return R.action('renovate', data); }
     R.action(action, value);
   }
@@ -637,6 +650,10 @@ export function boot(root, hotData = {}) {
       case 'dividend': return run(g.dividend());
       case 'buyback': return run(g.buyback());
     }
+  });
+  root.addEventListener('keydown', (e) => {
+    if (e.target.matches('[data-office=tab]') && ['ArrowLeft','ArrowRight'].includes(e.key)) { e.preventDefault(); const tabs = [...el.officeTools.querySelectorAll('[data-office=tab]')], n = (tabs.indexOf(e.target) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length; officeAction('tab', tabs[n].dataset.value); tabs[n].focus(); }
+    if (e.key === 'Escape' && app.editOffice && (app.officeEditInfo?.draft || app.officeEditInfo?.roomDraft)) { e.preventDefault(); R.action('cancel'); }
   });
   root.addEventListener('change', (e) => {
     if (e.target.matches('[data-office-room]')) return R.action('room', e.target.value);

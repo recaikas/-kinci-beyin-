@@ -34,15 +34,19 @@ test('Phaser Canvas sahnesi açılır; çalışan yürür, durur, düzenler ve y
     const frozen = { x: worker.x, y: worker.y, frame: worker.sprite.frame.name, elapsed: scene.elapsed };
     for (let i = 0; i < 10; i++) scene.update(i * 100, 100);
     assert.deepEqual({ x: worker.x, y: worker.y, frame: worker.sprite.frame.name, elapsed: scene.elapsed }, frozen);
-    view.editing = true; renderer.setEditing();
+    assert.equal(scene.textures.get('studio-furniture').getSourceImage().width, 1254);
+    assert.ok(scene.textures.exists('studio-worker-0'));
+    assert.match(renderer.thumbnail('desk-basic'), /^data:image\/png/);
+    view.editing = true; renderer.setEditing(); scene.update(0, 0);
+    assert.equal(scene.cameras.main.width, renderer.game.scale.width - 370, 'sağ panel için kamera alanı ayrıldı');
     scene.cameras.main.preRender();
     const desk = scene.rooms[0].items.find((f) => f.type === 'desk'), o = roomOrigin(scene.rooms[0]), size = dimensions(desk);
     const c = scene.cameras.main, corner = c.getWorldPoint(0, 0);
     const pointer = (x, y) => ({ x: ((o.x + x) * CELL - corner.x) * c.zoom, y: ((o.y + y) * CELL - corner.y) * c.zoom, isDown: true });
     scene.input.emit('pointerdown', pointer(desk.x + size.w / 2, desk.y + size.h / 2));
-    scene.input.emit('pointermove', pointer(6 + size.w / 2, 5 + size.h / 2));
-    scene.input.emit('pointerup', pointer(6 + size.w / 2, 5 + size.h / 2));
-    assert.equal(info.draft.x, 6); assert.equal(info.draft.y, 5);
+    scene.input.emit('pointermove', pointer(4 + size.w / 2, 4 + size.h / 2));
+    scene.input.emit('pointerup', pointer(4 + size.w / 2, 4 + size.h / 2));
+    assert.equal(info.draft.x, 4); assert.equal(info.draft.y, 4);
     assert.ok(info.valid.ok); assert.equal(g.save(), before, 'sürükleme önce yalnız taslak oluşturur');
     renderer.action('cancel');
     assert.equal(info.draft, null); assert.equal(g.save(), before, 'iptal ilk konumu korur');
@@ -74,8 +78,12 @@ test('Phaser Canvas sahnesi açılır; çalışan yürür, durur, düzenler ve y
     assert.ok(visitedRest, 'çalışan odalar arasında dinlenme koltuğuna yürüdü');
     assert.ok(privateToilet, 'tuvalet kullanımında karakter gizlendi');
     const layout = JSON.stringify(g.state.officeWorld);
+    view.editing = true; view.compact = true;
     renderer.resize(390, 620); scene.update(0, 0);
+    assert.equal(scene.cameras.main.height, 334, 'mobil çekmece sahnenin üstüne çizilmez');
+    view.compact = false;
     renderer.resize(844, 300); scene.update(0, 0);
+    assert.equal(scene.cameras.main.width, 532, 'yatay ekranda katalog sağa geçer');
     assert.equal(JSON.stringify(g.state.officeWorld), layout);
     assert.ok(scene.cameras.main.zoom > 0);
     // Phaser'ın gerçek CanvasRenderer'ı bütün DisplayList'i boyasın.

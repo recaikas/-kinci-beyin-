@@ -1,10 +1,18 @@
 // Node entegrasyon ortamı: gerçek tarayıcı değildir. Phaser'ın Canvas çizicisini yerel raster ile çalıştırır.
 import { JSDOM } from 'jsdom';
-import { createCanvas, Image } from '@napi-rs/canvas';
+import { readFileSync } from 'node:fs';
+import { createCanvas, Image as NativeImage } from '@napi-rs/canvas';
 
 export function canvasDOM(html = '<canvas id="scene"></canvas>') {
   const dom = new JSDOM(html, { url: 'https://x-project.test/', pretendToBeVisual: true });
   const { window } = dom;
+  class Image extends NativeImage {
+    set src(value) {
+      const match = typeof value === 'string' && value.match(/(?:^|\/)assets\/(studio-(?:furniture|characters)\.png)$/);
+      super.src = match ? readFileSync(new URL('../../assets/' + match[1], import.meta.url)) : value;
+    }
+    get src() { return super.src; }
+  }
   for (const [key, value] of Object.entries({ window, document: window.document, navigator: window.navigator, Image,
     HTMLCanvasElement: window.HTMLCanvasElement, HTMLVideoElement: window.HTMLVideoElement, HTMLImageElement: Image,
     Element: window.Element, screen: window.screen, self: window,

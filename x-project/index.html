@@ -1,13 +1,9 @@
-<title>X Project</title>
 <!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <title>X Project — Oyun Stüdyosu</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
 <style>
 /* Düzen (GDT/Kairosoft): ekranın tamamı ofis sahnesi. Üstte ince HUD (ortada proje sayacı),
    altta ikonlu menü; yönetim sahnenin üstünde açılan pencerelerde. Tek görünüm: gece CRT'si üstünde şeker pikseller. */
@@ -540,6 +536,7 @@ button { border-color: var(--shadow); }
   #kpop { top: 46px; left: 8px; max-height: calc(100vh - 100px); max-width: 46vw; }
 }
 </style>
+<link rel="stylesheet" href="interface.css">
 </head>
 <body>
 
@@ -548,41 +545,33 @@ button { border-color: var(--shadow); }
   <div id="stage">
     <canvas id="scene" aria-label="Stüdyonun piksel görünümü"></canvas>
     <section id="office-tools" aria-label="Ofis yerleşimi ve kamera" hidden>
+      <div class="office-location"><span class="eyebrow">X PROJECT / STÜDYO</span><b data-office-location>Garaj</b><small data-office-location-info></small></div>
       <div class="office-camera">
-        <button type="button" data-office="edit" aria-pressed="false">Yerleşim ve mağaza</button>
-        <button type="button" data-office="zoom-out" aria-label="Uzaklaş">−</button>
-        <button type="button" data-office="zoom-in" aria-label="Yakınlaş">+</button>
-        <button type="button" data-office="fit">Sığdır</button>
+        <button type="button" data-office="edit" aria-pressed="false">Ofisi düzenle</button>
+        <div class="camera-cluster"><button type="button" data-office="zoom-out" aria-label="Uzaklaş">−</button><button type="button" data-office="fit" aria-label="Ofisi ekrana sığdır">⌖</button><button type="button" data-office="zoom-in" aria-label="Yakınlaş">+</button></div>
       </div>
       <div class="office-edit" hidden>
-        <label>Oda<select data-office-room aria-label="Düzenlenecek oda"></select></label>
-        <output aria-live="polite">Eşyaya dokun, sürükle ve Yerleştir ile onayla.</output>
-        <div class="office-actions">
-          <button type="button" data-office="rotate" disabled>Döndür</button>
-          <button type="button" data-office="confirm" disabled>Yerleştir</button>
-          <button type="button" data-office="cancel" disabled>İptal</button>
-          <button type="button" data-office="remove" disabled>Kaldır</button>
+        <header class="workshop-head"><div><span class="eyebrow">YERLEŞİM ATÖLYESİ</span><h2>Ofisini kur.</h2></div><small data-office-budget></small></header>
+        <div class="workshop-tabs" role="tablist" aria-label="Yerleşim araçları"><button role="tab" id="tab-furnish" aria-controls="panel-furnish" data-office="tab" data-value="furnish">Donat</button><button role="tab" id="tab-room" aria-controls="panel-room" data-office="tab" data-value="room">Oda</button><button role="tab" id="tab-status" aria-controls="panel-status" data-office="tab" data-value="status">Durum</button></div>
+        <div class="workshop-body">
+          <section id="panel-furnish" role="tabpanel" aria-labelledby="tab-furnish" data-office-panel="furnish">
+            <div id="office-categories" class="catalog-categories" aria-label="Eşya kategorileri"></div>
+            <div id="office-products" class="catalog-grid" aria-label="Dönemsel eşya kataloğu"></div>
+            <p id="office-product-info" class="catalog-detail"></p>
+            <button type="button" class="catalog-buy" data-office="buy">Seç ve yerleştir</button>
+          </section>
+          <section id="panel-room" role="tabpanel" aria-labelledby="tab-room" data-office-panel="room" hidden>
+            <label class="room-picker">Düzenlenen oda<select data-office-room aria-label="Düzenlenecek oda"></select></label>
+            <button class="new-room" type="button" data-act="build-menu">＋ Yeni oda kur</button>
+            <div class="office-dimensions"><label>Genişlik<input type="number" min="6" max="20" id="office-room-w"></label><label>Derinlik<input type="number" min="6" max="20" id="office-room-h"></label><label>Kapı sütunu<input type="number" min="1" id="office-room-door"></label><label>Zemin<select id="office-room-floor"><option value="wood">Ahşap</option><option value="tile">Fayans</option><option value="carpet">Halı</option></select></label></div>
+            <details class="precise-room"><summary>Hassas konum</summary><div class="office-dimensions"><label>X<input type="number" min="1" id="office-room-x"></label><label>Y<input type="number" min="2" id="office-room-y"></label></div></details>
+            <div class="office-actions"><button type="button" data-office="room-move">Odayı taşı</button><button type="button" data-office="renovate">Değişikliği uygula</button></div>
+          </section>
+          <section id="panel-status" role="tabpanel" aria-labelledby="tab-status" data-office-panel="status" hidden><div id="office-metrics"></div><p id="office-summary"></p><div id="office-needs"></div></section>
         </div>
-        <p id="office-summary" class="small"></p>
-        <div class="office-shop">
-          <b>Yerleşim mağazası <small data-office-budget></small></b>
-          <button type="button" data-act="build-menu">Yeni oda kur</button>
-          <label>Kategori<select data-office-group aria-label="Ekipman kategorisi"></select></label>
-          <label>Model<select data-office-product aria-label="Satın alınacak model"></select></label>
-          <small id="office-product-info"></small>
-          <button type="button" data-office="buy">Seç ve yerleştir</button>
-        </div>
-        <details><summary>Oda: alan, kapı ve zemin</summary>
-          <div class="office-dimensions">
-            <label>X<input type="number" min="1" id="office-room-x"></label><label>Y<input type="number" min="2" id="office-room-y"></label>
-            <label>Genişlik<input type="number" min="6" max="20" id="office-room-w"></label><label>Derinlik<input type="number" min="6" max="20" id="office-room-h"></label>
-            <label>Kapı sütunu<input type="number" min="1" id="office-room-door"></label>
-            <label>Zemin<select id="office-room-floor"><option value="wood">Ahşap</option><option value="tile">Fayans</option><option value="carpet">Halı</option></select></label>
-          </div>
-          <div class="office-actions"><button type="button" data-office="room-move">Odayı sahnede taşı</button><button type="button" data-office="renovate">Alanı uygula</button></div>
-        </details>
-        <small>Masa + sandalye + bilgisayar = çalışma yeri. Sandalyeyi masanın önündeki yeşil noktaya aynı yönde koy. Bilgisayar için önce masaya dokun.</small>
+        <footer class="workshop-foot"><span class="step-dot">i</span><p id="office-help">Bir eşya seç. Sahneye dokunarak yerini belirle.</p></footer>
       </div>
+      <aside id="office-selection" hidden aria-label="Yerleşim önizlemesi"><div class="selection-copy"><span class="eyebrow">SEÇİLİ ÖĞE</span><output aria-live="polite"></output></div><div class="office-actions"><button type="button" data-office="rotate" disabled aria-label="Seçili eşyayı döndür">↻ Döndür</button><button type="button" data-office="remove" disabled>Sat</button><button type="button" data-office="cancel" disabled>İptal</button><button type="button" data-office="confirm" disabled>✓ Yerleştir</button></div></aside>
     </section>
     <div id="notes" aria-live="polite"></div>
     <div id="market" aria-label="Satıştaki oyunlar"></div>

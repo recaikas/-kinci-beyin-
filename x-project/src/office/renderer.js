@@ -15,6 +15,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
   let scene = null;
   class OfficeScene extends Phaser.Scene {
     constructor() { super('office'); }
+    preload() { this.load.image('studio-furniture','assets/studio-furniture.png'); this.load.image('studio-characters','assets/studio-characters.png'); }
     create() {
       scene = this;
       this.worldObjects = []; this.workers = new Map(); this.furniture = [];
@@ -37,6 +38,8 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       if (!view.game) { this.cameras.main.setVisible(false); return; }
       this.cameras.main.setVisible(true);
       const { state } = view.game;
+      const key = `${view.editing}:${view.compact}:${this.scale.width}:${this.scale.height}`;
+      if (this.viewportKey !== key) { this.viewportKey = key; this.applyViewport(view); }
       const sig = `${state.seed}:${state.officeWorld.revision}:${view.building}:${state.office.tier}`;
       if (this.lastState !== state || this.signature !== sig) {
         const newCareer = this.lastState !== state;
@@ -56,7 +59,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     }
     keep(obj) { this.worldObjects.push(obj); return obj; }
     text(x, y, text, size = 14, color = '#40505b') {
-      return this.keep(this.add.text(x, y, text, { fontFamily: 'Trebuchet MS, sans-serif', fontSize: `${size}px`, color, fontStyle: 'bold', padding: { x: 2, y: 2 } }).setDepth(y + 1));
+      return this.keep(this.add.text(x, y, text, { fontFamily: 'DejaVu Sans, Arial, sans-serif', fontSize: `${size}px`, color, fontStyle: 'bold', padding: { x: 2, y: 2 } }).setDepth(y + 1));
     }
     rebuild(view) {
       for (const obj of this.worldObjects) obj.destroy();
@@ -73,6 +76,7 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       this.building = view.building;
       const plot = Office.plotSize(state, view.building); let right = plot.w, bottom = plot.h;
       const floor = this.keep(this.add.graphics().setDepth(-10));
+      for (let gy=0;gy<plot.h*CELL;gy+=24) for (let gx=0;gx<plot.w*CELL;gx+=24) { const n=(gx*17+gy*13)%11; floor.fillStyle(n<4?0x9eb491:0xb0c19d,0.35); floor.fillRect(gx+5,gy+8,2,4); floor.fillRect(gx+8,gy+6,2,6); }
       for (const room of this.rooms) {
         const origin = roomOrigin(room), x = origin.x * CELL, y = origin.y * CELL, { w: rw, h: rh } = sizeOf(room), door = doorOf(room);
         right = Math.max(right, origin.x + rw + 1); bottom = Math.max(bottom, origin.y + rh + 2);
@@ -81,8 +85,9 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
         for (let row = 0; row < rh; row++) for (let col = 0; col < rw; col++) {
           const wall = row === 0 || row === rh - 1 || col === 0 || col === rw - 1;
           const isDoor = row === rh - 1 && col === door.x;
-          floor.fillStyle(wall && !isDoor ? 0xe6d7b7 : room.floor === 'tile' ? ((row + col) % 2 ? 0xc5d5ce : 0xdce4d9) : room.floor === 'carpet' ? ((row + col) % 2 ? 0x92a4a0 : 0x9daea7) : (row + col) % 2 ? 0xd2b68f : 0xdac29f);
-          floor.fillRect(x + col * CELL, y + row * CELL, CELL - 1, CELL - 1);
+          floor.fillStyle(wall && !isDoor ? 0xe6d7b7 : room.floor === 'tile' ? ((row + col) % 2 ? 0xc5d5ce : 0xdce4d9) : room.floor === 'carpet' ? ((row + col) % 2 ? 0x92a4a0 : 0x9daea7) : 0xd8bd92);
+          floor.fillRect(x + col * CELL, y + row * CELL, room.floor === 'wood' ? CELL : CELL-1, room.floor === 'wood' ? CELL : CELL-1);
+          if (!wall && room.floor === 'wood') { floor.lineStyle(1,0x9d794b,0.18); floor.lineBetween(x+col*CELL,y+row*CELL+15,x+(col+1)*CELL,y+row*CELL+15); floor.lineBetween(x+col*CELL,y+(row+1)*CELL-1,x+(col+1)*CELL,y+(row+1)*CELL-1); const seam=x+col*CELL+(row%2?16:0); floor.lineBetween(seam,y+row*CELL,seam,y+row*CELL+15); }
           if (row === 0) { floor.fillStyle(0xb6aa92); floor.fillRect(x + col * CELL, y + CELL - 6, CELL, 5); }
         }
         floor.fillStyle(0xf2e7cc); floor.fillRect(x, y - 20, rw * CELL, 20);
@@ -93,8 +98,12 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
         }
         const capacity = Office.capacity(view.game.ctx, model);
         const usage = model.type === 'tuvalet' ? `${room.items.filter((f) => f.type === 'toilet').length} klozet` : model.type === 'mola' ? `${capacity} dinlenme yeri` : `${state.staff.filter((p) => p.room === room.roomId).length}/${capacity}`;
-        this.text(x + 7, y - 46, `${type.name} · ${usage}`);
-        this.text(x + door.x * CELL - 3, y + (rh - 1) * CELL + 4, 'GİRİŞ', 9, '#897656');
+        floor.fillStyle(0x916c49); floor.fillRect(x+CELL,y+CELL-3,(rw-2)*CELL,3);
+        floor.fillStyle(0xcfbb95); floor.fillRect(x,y+(rh-1)*CELL,CELL, CELL); floor.fillRect(x+(rw-1)*CELL,y+(rh-1)*CELL,CELL,CELL);
+        if (rw >= 8) this.keep(this.add.image(x+5*CELL,y+21,'noticeboard').setDepth(y+30));
+        const label = {gelistirme:'Geliştirme',mola:'Dinlenme',arastirma:'Araştırma',pazarlama:'Pazarlama',musteri:'Destek',donanim:'Donanım'}[model.type] || type.name;
+        this.text(x + 7, y - 36, `${label} · ${usage}`, 11, '#3f6246');
+        this.text(x + door.x * CELL - 3, y + (rh - 1) * CELL + 4, '▾', 9, '#897656');
         for (const item of room.items) {
           const { w, h } = dimensions(item), px = (origin.x + item.x + w / 2) * CELL, py = (origin.y + item.y + h) * CELL;
           const image = this.keep(this.add.image(px, py + 4, `${item.type}-${item.rotation}`).setOrigin(0.5, 1).setDepth(py));
@@ -109,10 +118,10 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       const shown = this.rooms.length ? this.rooms : [{ x: 1, y: 2, w: 12, h: 12 }];
       this.viewBounds = { width: Math.max(...shown.map((r) => roomOrigin(r).x + sizeOf(r).w + 2)) * CELL, height: Math.max(...shown.map((r) => roomOrigin(r).y + sizeOf(r).h + 2)) * CELL };
       if (this.roomDraft) this.viewBounds = this.worldBounds;
-      this.cameras.main.setBackgroundColor('#e8e1cf');
+      this.cameras.main.setBackgroundColor('#c3cdb5');
       if (!this.rooms.length) this.text(64, 160, 'Bu binada henüz oda yok.\nOda kurmak için boş alana dokun.', 18);
       const spare = Office.roomSite(view.game.ctx, 'mola', { building: view.building, w: 6, h: 6 }).ok ? 1 : 0;
-      this.buildSign = this.text(40, this.viewBounds.height - 20, spare > 0 ? '+ ODA KUR' : 'OFİSİ BÜYÜT', 13, '#587880');
+      this.buildSign = this.text(40, this.viewBounds.height - 20, spare > 0 ? '+ YENİ ODA' : 'OFİSİ BÜYÜT', 10, '#587880');
       this.buildSign.setInteractive({ useHandCursor: true }).on('pointerup', () => {
         if (!this.view().blocked && !this.view().editing) bridge.onHit({ kind: spare > 0 ? 'slot' : 'locked', building: this.building });
       });
@@ -124,11 +133,18 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
       }
       this.notify();
     }
+    applyViewport(view) {
+      const w = this.scale.width, h = this.scale.height;
+      const bottom = view.editing && (view.compact ?? (w <= 680 && h > 320)) ? 286 : 0;
+      const right = view.editing && !bottom ? (h <= 310 ? 312 : 370) : 0;
+      this.cameras.main.setViewport(0, 0, Math.max(100,w-right), Math.max(100,h-bottom));
+      this.fitCamera();
+    }
     fitCamera() {
       if (!this.worldBounds) return;
       const c = this.cameras.main, b = this.roomDraft ? this.worldBounds : this.viewBounds;
-      c.setZoom(Math.max(0.12, Math.min(1.5, (c.width - 20) / b.width, Math.max(60, c.height - 80) / b.height)));
-      c.centerOn(b.width / 2, b.height / 2);
+      c.setZoom(Math.max(0.12, Math.min(1.5, (c.width - 20) / b.width, Math.max(60, c.height - 110) / b.height)));
+      c.centerOn(b.width / 2, b.height / 2 - 0.5 * CELL);
     }
     zoomBy(factor) {
       if (!this.view().game || this.view().blocked) return;
@@ -311,9 +327,9 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     }
   }
   const game = new Phaser.Game({
-    type, canvas, width: 800, height: 600, backgroundColor: '#e8e1cf',
+    type, canvas, width: 800, height: 600, backgroundColor: '#c3cdb5',
     render: { pixelArt: true, antialias: false, roundPixels: true },
-    audio: { noAudio: true }, input: { activePointers: 2 },
+    audio: { noAudio: true }, loader: { imageLoadType: 'HTMLImageElement' }, input: { activePointers: 2 },
     scale: { mode: Phaser.Scale.NONE }, scene: OfficeScene,
     banner: false, fps: { target: 60 },
   });
@@ -327,5 +343,16 @@ export function makeOfficeRenderer(canvas, bridge, { type } = {}) {
     destroy: () => game.destroy(false),
     // Başsız entegrasyon testinin sahnenin hazır olmasını gözlemesine izin verir.
     getScene: () => scene,
+    portrait(person) {
+      if (!scene) return ''; scene.portraits ||= new Map(); const key=characterTexture(scene,person);
+      if (!scene.portraits.has(key)) { const c=document.createElement('canvas'); c.width=64;c.height=64;const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(scene.textures.get(key).getSourceImage(),0,0,32,28,0,0,64,64);scene.portraits.set(key,c.toDataURL()); }
+      return scene.portraits.get(key);
+    },
+    thumbnail(sku) {
+      if (!scene) return '';
+      scene.thumbnails ||= new Map();
+      if (!scene.thumbnails.has(sku)) { const p = Office.SKU[sku]; if (!p) return ''; const key = p.type === 'computer' ? computerTexture(scene, sku) : `${p.type}-0`; const image = scene.textures.get(key).getSourceImage(); scene.thumbnails.set(sku, image.toDataURL ? image.toDataURL() : ''); }
+      return scene.thumbnails.get(sku);
+    },
   };
 }

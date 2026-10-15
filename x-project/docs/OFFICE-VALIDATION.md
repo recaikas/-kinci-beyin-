@@ -6,8 +6,8 @@
 |---|---|
 | `npm run test:office` | 14 geçti, 0 başarısız |
 | `npm run build` | Başarılı |
-| `npm test` | 410 geçti, 12 başarısız |
-| Orta zorluk, üç tohum, 50 yıl bot | 3/3 tamamladı; medyan kasa 373 M $ |
+| `npm test` | 411 geçti, 11 başarısız |
+| Orta zorluk, üç tohum, 50 yıl bot | 3/3 tamamladı; medyan kasa 390 M $ |
 | Gerçek tarayıcı/telefon/WebGL | Yapılmadı |
 
 Phaser CanvasRenderer Node altında gerçek sprite/display listesiyle çalıştırıldı. HTML menüleri jsdom ortamında kontrol edildi. 390×620 ve 844×300 boyutlarında sahne boyutlandırması, dokunmatik cihaz testi değildir.
@@ -28,8 +28,6 @@ Eski ekonomi senaryoları hazır döşenmiş ofis varsayar; yalnız test fikstü
 - [Tutarlılık] Eşikler: Mantar ~40 (kumarbaz), Ataro ~68
 - [Tutarlılık] Garajın ilk oyunu: Finans hayır, tek seferlik satış — tam finans 0.8
 
-Bu değişiklikle eklenen başarısız kontrol:
+Görsel yenileme sonrası genel paket yeniden çalıştırıldı: **411 geçti, 11 başarısız**. Yukarıdaki 11 beklenti önceki sürümle ortaktır. Orta zorluk üç tohumda 50 yılı tamamladı; Efsanevi denemelerinden biri de 2025'e ulaştı. Bu sonuç kusursuz denge anlamına gelmez.
 
-- [Duman] Efsanevi kazanılabilir: bot en az bir tohumda 2025’e ulaşır — iflas,iflas,iflas
-
-Efsanevi zorluğun yeni donanım/hizmet maliyetleriyle yeniden dengelenmesi gerekir. İlk sürümün geçici çizimleri ve ayrıntılı kuyruk/bakım sınırları `PHASER-MIGRATION.md` içinde listelenmiştir.
+14 ofis testi yeni PNG atlaslarını gerçekten yükler. Ürün görselleri, açılış illüstrasyonu bağlantısı, katlanmış kariyer ayarları, gelecek dönem cihaz kilidi, Donat/Oda/Durum sekmeleri, yerleştirme ve oda kurma akışları doğrulanır. Phaser kamerasının sağ katalog ve alt mobil çekmece için alan bırakması kontrol edilir. Gerçek tarayıcı ve telefon denemesi yapılmadı.

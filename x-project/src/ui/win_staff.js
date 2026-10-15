@@ -32,7 +32,7 @@ export function make(u) {
     }
     return `<div class="person ${p.status !== 'ok' ? 'away' : ''} ${open ? 'open' : ''}">
       <button class="who" data-act="expand" data-id="${p.id}" aria-expanded="${open}">
-        <span class="name">${p.founder ? '♛ ' : ''}${esc(p.name)}</span><span class="num pay">${p.founder ? 'kurucu' : money(p.salary)}</span>
+        ${u.R.portrait(p) ? `<img class="crew-portrait" src="${u.R.portrait(p)}" alt="">` : ''}<span class="name">${p.founder ? '♛ ' : ''}${esc(p.name)}</span><span class="num pay">${p.founder ? 'kurucu' : money(p.salary)}</span>
         <span class="tagline"><span class="spec s-${p.spec}">${car.name} ${lvl}</span><span class="muted">${esc(Staff.roomType(c, room?.type || 'gelistirme').name)}${room && Staff.managerOf(c, room)?.id === p.id ? ' · 🎖️ müdür' : ''}</span><span class="muted">${esc(personaOf(p).name)}</span>${status}</span>
         <span class="vit"><span class="num" title="Beceri">${Math.round(p.skill)}</span><span title="Moral">${bar(p.morale, 'm')}</span><span title="Stres">${bar(p.stress, 's')}</span></span>
       </button>${actions}</div>`;

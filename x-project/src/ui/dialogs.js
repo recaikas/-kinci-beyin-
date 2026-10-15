@@ -77,23 +77,24 @@ export function make(u) {
   }
   function setupScreen() {
     const has = store((s) => s.getItem(SAVE_KEY));
-    dialog(`<h1>X PROJECT</h1><p class="tag">Garajdan imparatorluğa. Ya da iflasa.</p>
+    dialog(`<div class="opening-art"><img src="assets/studio-opening.png" alt="Güneşli bir garajda ilk oyununu geliştiren küçük stüdyo"><div class="opening-brand"><span>1976 / BİR STÜDYONUN HİKÂYESİ</span><h1>X PROJECT</h1><p>Küçük bir masa. Büyük bir hayal.</p></div></div><div class="opening-content">
       ${has ? '<button class="primary block" data-act="continue">Kayıtlı kariyere devam et</button>' : ''}
       ${SLOTS.some((k) => store((st) => st.getItem(k))) ? `<details class="box"><summary><h3>Kayıt yuvaları</h3></summary>${u.slotRows(false)}</details>` : ''}
       <label class="filebtn small">Dosyadan kayıt yükle<input type="file" accept=".json,application/json" id="imp-file0" data-import="1"></label>
       ${has ? '<hr>' : ''}
-      <div class="form">
-        <label>Stüdyo adı<input id="n-company" value="Piksel & Kaos"></label>
+      <h2>Hikâyen burada başlıyor.</h2><p class="opening-intro">İlk oyununu geliştir, ekibini kur, ofisini büyüt.</p><div class="form">
+        <label>Stüdyo adı<input id="n-company" value="Pikselhane"></label>
         <label>Kurucu adı<input id="n-founder" value="Sen"></label>
+      </div><details class="career-options"><summary>Kariyer ayarları <small>Bölge, geçmiş ve zorluk</small></summary><div class="form">
         <label>Kurucunun alanı<select id="n-spec">${PACK.disciplines.map((d) => `<option value="${d.id}">${d.name} · ${Staff.career({ pack: PACK }, PACK.careerRules.founderCareer[d.id]).name}</option>`).join('')}</select></label>
         <label class="wide">Geçmişin (1976'dan önce ne yapıyordun?)<select id="n-bg">${Genres.BACKGROUNDS.map((b) => `<option value="${b.id}">${b.icon} ${esc(b.name)} · ${b.genres.map((gid) => PACK.genres.find((x) => x.id === gid).name).join(' + ')} · ${esc(b.desc)}</option>`).join('')}</select></label>
         <label class="wide">Ana bölge (garajın nerede?)<select id="n-home">${Regions.HOMES.map((h) => `<option value="${h.id}" ${h.id === 'na' ? 'selected' : ''}>${Regions.R(h.id).flag} ${esc(h.title)} · ${esc(h.feel)}</option>`).join('')}</select></label>
-        <p class="muted small wide">${Regions.HOMES.map((h) => `<b>${Regions.R(h.id).flag} ${esc(Regions.R(h.id).name)}:</b> ${esc(h.text)}`).join('<br>')}</p>
+        <p class="muted small wide region-notes">${Regions.HOMES.map((h) => `<b>${Regions.R(h.id).flag} ${esc(Regions.R(h.id).name)}:</b> ${esc(h.text)}`).join('<br>')}</p>
         <label>Zorluk<select id="n-diff">${PACK.difficulties.map((d) => `<option value="${d.id}" ${d.id === 'kolay' ? 'selected' : ''}>${d.name} · ${money(d.startCash)}</option>`).join('')}</select></label>
         <label>Kariyer uzunluğu<select id="n-len">${Object.keys(PACK.meta.gameLengths).map((l) => `<option value="${l}" ${+l === PACK.meta.defaultLength ? 'selected' : ''}>${+l === 50 ? '50 yıl · tam tarih 1976–2025' : `${l} yıl`}</option>`).join('')}</select></label>
         <label>Tohum<input id="n-seed" type="number" value="${(Date.now() % 100000) | 0}"></label>
       </div>
-      <button class="primary block big" data-act="begin">1976'da garajı aç</button>`, 'setup');
+      </details><button class="primary block big" data-act="begin">1976'da garajı aç →</button><small class="opening-save">Kariyerin bu cihazda otomatik kaydedilir.</small></div>`, 'setup');
   }
   return { dialog, closeDialog, showEvent, phaseDialog, updatePhasePct, readyDialog, reviewDialog, setupScreen };
 }

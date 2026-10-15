@@ -140,7 +140,7 @@ export function seedStarter(ctx) {
   ensureOffice(ctx.state, ctx.pack);
   const model = ctx.state.rooms[0];
   const room = ctx.state.officeWorld.rooms[model.id];
-  if (!room.items.length) { room.w = 10; room.h = 9; room.door = 5; grantWorkplace(room, 'pc-kit-76'); ctx.state.officeWorld.revision++; }
+  if (!room.items.length) { room.w = 8; room.h = 7; room.door = 4; grantWorkplace(room, 'pc-kit-76'); ctx.state.officeWorld.revision++; }
 }
 export const price = (ctx, sku) => Math.round((SKU[sku]?.cost || 0) * Math.pow(ctx.pack.economy.inflation, (year(ctx) - ctx.pack.meta.startYear) * 0.35));
 export function catalog(ctx, roomId) {

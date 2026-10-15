@@ -17,7 +17,7 @@ node tools/balance.mjs 8 --md docs/DENGE.md   # tam denge raporu
 
 Node 18+ gerekir. Ofis sahnesi Phaser 3.90.0 kullanır; esbuild tüm oyun kodunu ve motoru `dist/app.js` içine paketler. Oyun açılırken motor CDN'den indirilmez. `dist/` klasörü statik sunucuya bütünüyle konabilir; çift tıklayarak `file://` üzerinden açmak desteklenen çalıştırma yöntemi değildir. Kaynak değişikliklerinden sonra `npm start` yeniden başlatılmalıdır.
 
-Bu dalda odalar taşınır ve boyutlandırılır; masa, sandalye ve dönemine uygun bilgisayar ayrı alınır. Fiziksel donanım, ısı ve ihtiyaç alanları üretimi etkiler. Nihai sanat çalışması henüz tamamlanmadı.
+Bu dalda odalar taşınır ve boyutlandırılır; masa, sandalye ve dönemine uygun bilgisayar ayrı alınır. Fiziksel donanım, ısı ve ihtiyaç alanları üretimi etkiler. Başlangıç mobilyaları, dört animasyonlu karakter ve açılış illüstrasyonu yeniden çizildi. Arayüz; görselli mağaza, ayrı yerleştirme çubuğu ve mobil çekmece kullanır. Sanat kaynakları ve sınırlar [ART-DIRECTION.md](docs/ART-DIRECTION.md) içinde.
 
 Kapsam ve doğrulama sınırları: [Phaser geçiş notları](docs/PHASER-MIGRATION.md).
 

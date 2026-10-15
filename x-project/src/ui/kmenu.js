@@ -16,7 +16,7 @@ export function make(u) {
     const c = ctx(), car = Staff.career(c, p.career), pe = personaOf(p);
     const likes = (p.likes || []).map((g) => PACK.genres.find((x) => x.id === g)?.name).filter(Boolean).join(', ');
     const trait = [p.trait, p.trait2].filter(Boolean).map((t) => PACK.traits.find((x) => x.id === t)?.name).filter(Boolean).join(', ');
-    return `<div class="kcard"><div class="kc-head"><b>${esc(p.name)}</b>${role ? `<span class="pill">${role}</span>` : ''}</div>
+    return `<div class="kcard"><div class="kc-head">${u.R.portrait(p) ? `<img class="crew-mini" src="${u.R.portrait(p)}" alt="">` : ''}<b>${esc(p.name)}</b>${role ? `<span class="pill">${role}</span>` : ''}</div>
       <small>${esc(car.name)} ${p.careers[p.career] || 0} · ${esc(pe.name)} · liderlik ${leadOf(p)}</small>
       <p class="kc-say">“${esc(pe.lines[(G().state.week + p.id) % pe.lines.length])}”</p>
       <div class="kc-bars"><span>Moral</span>${bar(p.morale, 'm')}<span>Stres</span>${bar(p.stress, 's')}</div>
