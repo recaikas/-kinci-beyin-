@@ -441,7 +441,8 @@ export function boot(root, hotData = {}) {
       case 'wiz': {
         if (+id > 0 && app.wiz === 2 && !app.draft.platforms.length) return note('En az bir platform seç.', 'bad');
         app.wiz = Math.max(1, Math.min(4, app.wiz + +id));
-        if (app.wiz === 3 && !u.hasTechStep()) app.wiz += +id; // Konu H: seçilecek motor yoksa teknoloji adımı atlanır el.winBody.scrollTop = 0; return renderWindow();
+        if (app.wiz === 3 && !u.hasTechStep()) app.wiz += +id; // Konu H: seçilecek motor yoksa teknoloji adımı atlanır
+        el.winBody.scrollTop = 0; return renderWindow();
       }
       case 'new': app.wizOn = true; app.wiz = 1; app.draft = null; el.winBody.scrollTop = 0; return renderWindow();
       case 'back': app.sel = null; app.wizOn = false; app.confirm = null; el.winBody.scrollTop = 0; return renderWindow();
