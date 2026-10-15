@@ -3,7 +3,9 @@
 // penceresi, yayında eleştirmen ekranı. Oyun mantığı game.js'te; burası yalnızca çağırır ve gösterir.
 import { newGame, loadGame, M, Staff, Co, Charts, Engines, Crew } from '../game.js';
 import { PACK } from '../data/pack.js';
-import { makeRenderer, menuIcon } from './render.js';
+import { menuIcon } from './icons.js';
+import { makeOfficeRenderer } from '../office/renderer.js';
+import { FURNITURE } from '../systems/office.js';
 import { money } from '../kernel.js';
 import { SAVE_KEY, esc, fmt, pct, bar, discName, SPEEDS, kaosLabel, store, WIN_NAMES, ICON_OF, SUBS, move } from './util.js';
 import * as Menu from './menu.js';
@@ -29,13 +31,23 @@ import { makeAudio } from './audio.js';
 
 export function boot(root, hotData = {}) {
   const app = {
-    game: null, running: false, speed: 1, frame: 0, timer: null, win: null, sub: {}, wasRunning: false, wasRunningD: false, dialog: null,
+    game: null, running: false, speed: 1, timer: null, win: null, sub: {}, wasRunning: false, wasRunningD: false, dialog: null,
+    editOffice: false, officeEditInfo: null,
     draft: null, wiz: 1, engineSel: new Set(), engineName: 'Motor', consoleDraft: { type: 'konsol', series: 'yeni', seriesName: 'X Kutu', price: 'normal', parts: {} },
     confirm: null, expanded: new Set(), seenNews: 0, phaseSeen: {}, readySeen: {}, sel: null, selGame: null, wizOn: false, dlgPid: null, charts: {},
   };
   const $ = (id) => root.querySelector(id);
   const el = { pop: $('#kpop'), bnav: $('#bnav'), market: $('#market'), stage: $('#stage'), canvas: $('#scene'), hud: $('#hud'), menu: $('#menu'), notes: $('#notes'), win: $('#win'), winTitle: $('#win-title'), winBody: $('#win-body'), modal: $('#modal') };
-  const R = makeRenderer(el.canvas);
+  el.officeTools = $('#office-tools');
+  const R = makeOfficeRenderer(el.canvas, {
+    view: () => ({ game: app.game, building: app.game ? curBuilding().id : 'ana', paused: !app.running || !!blocked(), speed: app.speed,
+      editing: app.editOffice, blocked: !!(app.win || app.dialog || !el.modal.hidden || u.tutorialOpen?.()) }),
+    onHit: (h) => officeHit(h),
+    onEditChange: (info) => { app.officeEditInfo = info; renderOfficeTools(); },
+    onPlace: (roomId, item) => { const res = G().placeFurniture(roomId, item); if (res.ok) save(); else note(res.msg, 'bad'); return res; },
+    onRemove: (roomId, id) => { const res = G().removeFurniture(roomId, id); if (res.ok) save(); else note(res.msg, 'bad'); return res; },
+    onMessage: (text) => note(text, 'warn'), onReady: () => fit(),
+  });
   // Ortak bağlam: pencere modülleri (src/ui/win_*.js, dialogs.js, chart.js) buradan okur ve fonksiyonlarını buraya ekler.
   const u = { app, el, root, R, G: () => app.game, ctx: () => app.game.ctx, audio: makeAudio() };
   const audio = u.audio;
@@ -75,13 +87,11 @@ export function boot(root, hotData = {}) {
   window.claude?.hot?.snapshot?.(() => ({ save: G() ? G().save() : null }));
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 
-  // --- sahne boyutu: kapsayıcıya göre düşük çözünürlük (piksel ~4 masaüstü, ~1,6 telefon)
+  // Phaser kamerayı ölçekler; dünya koordinatları ve eşya konumları değişmez.
   function fit() {
     const r = el.stage.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const scale = Math.max(1.5, Math.min(5, Math.min(r.width / 340, r.height / 210)));
-    const w = Math.floor(r.width / scale), h = Math.floor(r.height / scale);
-    if (el.canvas.width !== w || el.canvas.height !== h) { el.canvas.width = w; el.canvas.height = h; }
+    R.resize(r.width, r.height);
   }
   new ResizeObserver(fit).observe(el.stage);
 
@@ -102,8 +112,9 @@ export function boot(root, hotData = {}) {
     clearInterval(app.timer);
     if (on) app.timer = setInterval(step, PACK.meta.msPerWeek[app.speed]);
     renderHud();
+    renderOfficeTools();
   }
-  const blocked = () => app.win || app.pop || app.dialog || !el.modal.hidden || u.tutorialOpen?.();
+  const blocked = () => app.editOffice || app.win || app.pop || app.dialog || !el.modal.hidden || u.tutorialOpen?.();
   function step() {
     const g = G();
     if (!g || blocked()) return;
@@ -121,19 +132,12 @@ export function boot(root, hotData = {}) {
       if (pj.status === 'debug' && !app.readySeen[pj.id]) return readyDialog(pj);
     }
   }
-  // Animasyon sayacı yalnız zaman akarken ilerler: duraklatınca (ya da pencere açıkken) ofis donar.
-  function loop() {
-    const paused = !app.running || !!blocked();
-    if (!paused) app.frame++;
-    el.stage?.classList.toggle('paused', !!G() && paused && !app.win);
-    if (G()) R.draw(G().state, PACK, app.frame, { building: curBuilding().id, paused });
-    requestAnimationFrame(loop);
-  }
   function render() {
     renderHud();
     renderMarket();
     renderBnav();
     renderMenu();
+    renderOfficeTools();
     if (app.pop) u.renderPop();
     if (app.win) {
       const a = document.activeElement;
@@ -285,22 +289,57 @@ export function boot(root, hotData = {}) {
     setHTML(el.bnav, `<button data-act="bprev" aria-label="Önceki bina">◀</button><span class="bname">${esc(b.name)}<small>${list.map((x, i) => `<i class="${i === app.bIdx ? 'on' : ''}"></i>`).join('')}</small></span><button data-act="bnext" aria-label="Sonraki bina">▶</button>`);
   }
   const goBuilding = (d) => { const n = buildings().length; app.bIdx = ((app.bIdx || 0) + d + n) % n; renderBnav(); };
-  // Sahneye dokunma: kısa dokunuş = odaya/kişiye tıklama, yatay sürükleme = bina değiştirme
-  let down = null;
-  el.canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
-  el.canvas.addEventListener('pointerup', (e) => {
-    if (!down || !G()) return;
-    const dx = e.clientX - down.x, dy = e.clientY - down.y; down = null;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return goBuilding(dx < 0 ? 1 : -1);
-    const r = el.canvas.getBoundingClientRect();
-    const h = R.hit((e.clientX - r.left) * (el.canvas.width / r.width), (e.clientY - r.top) * (el.canvas.height / r.height));
+  // Phaser girdi olayları: boş zeminde sürükleme kamerayı taşır; bina okları korunur.
+  function officeHit(h) {
+    if (!G() || !h) return;
     if (app.pop) return u.closePop(); // açık menü: sahneye dokunmak kapatır
     if (!h) return;
     if (h.kind === 'boss') return u.openPop({ kind: 'founder', cat: null }); // Konu H: ana karakter → Kairosoft menüsü
     if (h.kind === 'slot') { app.buildFor = h.building; return openWin('insaat'); }
     if (h.kind === 'locked') return openWin('ofis');
     u.openPop({ kind: 'room', roomId: h.room || h.id, personId: h.kind === 'person' ? h.id : null }); // departman menüsü
-  });
+  }
+
+  function renderOfficeTools() {
+    el.officeTools.hidden = !G();
+    el.stage.classList.toggle('paused', !!G() && !app.editOffice && (!app.running || !!blocked()) && !app.win);
+    if (!G()) return;
+    const edit = el.officeTools.querySelector('[data-office=edit]');
+    edit.setAttribute('aria-pressed', String(app.editOffice)); edit.textContent = app.editOffice ? '✓ Düzenlemeyi bitir' : 'Ofisi düzenle';
+    el.officeTools.querySelector('.office-edit').hidden = !app.editOffice;
+    if (!app.editOffice) return;
+    const info = app.officeEditInfo, draft = info?.draft;
+    const select = el.officeTools.querySelector('[data-office-room]');
+    const options = (info?.rooms || []).map((r) => `<option value="${r.roomId}">${esc(Staff.roomType(ctx(), G().state.rooms.find((x) => x.id === r.roomId).type).name)} #${r.roomId}</option>`).join('');
+    setHTML(select, options); if (info?.roomId != null) select.value = String(info.roomId);
+    const status = el.officeTools.querySelector('output');
+    status.textContent = draft ? `${FURNITURE[draft.type].name} · ${info.valid?.ok ? 'Yerleştirmeye uygun' : info.valid?.msg || ''}` : info?.rooms.length ? 'Eşyaya dokun, sürükle ve Yerleştir ile onayla.' : 'Önce bu binada bir oda kur.';
+    status.classList.toggle('invalid', !!draft && !info.valid?.ok);
+    for (const b of el.officeTools.querySelectorAll('[data-office=rotate], [data-office=cancel]')) b.disabled = !draft;
+    el.officeTools.querySelector('[data-office=confirm]').disabled = !draft || !info.valid?.ok;
+    const model = G().state.rooms.find((r) => r.id === info?.roomId);
+    el.officeTools.querySelector('[data-office=remove]').disabled = !draft?.id || !FURNITURE[draft.type]?.removable || draft.type === 'sofa' && model?.type === 'mola';
+    for (const b of el.officeTools.querySelectorAll('[data-office=add]')) b.disabled = !info?.rooms.length;
+  }
+  function endOfficeEdit() {
+    if (!app.editOffice) return;
+    app.editOffice = false; R.setEditing();
+    if (app.editWasRunning && !blocked()) play(true);
+    renderOfficeTools();
+  }
+  function officeAction(action, value) {
+    if (!G()) return;
+    if (action === 'edit') {
+      if (app.editOffice) return endOfficeEdit();
+      if (app.win || app.dialog || u.tutorialOpen()) return;
+      if (app.pop) u.closePop();
+      app.editWasRunning = app.running; app.editOffice = true; play(false); R.setEditing(); return renderOfficeTools();
+    }
+    if (action === 'zoom-in') return R.zoom(1.2);
+    if (action === 'zoom-out') return R.zoom(1 / 1.2);
+    if (action === 'fit') return R.fit();
+    R.action(action, value);
+  }
 
   // --- pencereler
   function openWin(id, fromHub = false) {
@@ -338,6 +377,7 @@ export function boot(root, hotData = {}) {
   }
 
   function start(game) {
+    app.editOffice = false; app.officeEditInfo = null; app.bIdx = 0;
     app.game = game; app.draft = null; app.wiz = 1; app.engineSel = new Set(); app.seenNews = game.state.news.length;
     app.phaseSeen = Object.fromEntries(game.state.projects.map((p) => [p.id, p.phase])); app.readySeen = Object.fromEntries(game.state.projects.filter((p) => p.status === 'debug').map((p) => [p.id, true]));
     app.sel = null; app.selGame = null; app.wizOn = false; app.cat = null; app.fromCat = null; app.item = null;
@@ -352,7 +392,7 @@ export function boot(root, hotData = {}) {
     if (fresh) wizard();
   }
 
-  Object.assign(u, { setHTML, save, fit, note, run, play, step, loop, render, renderHud, signed, profitSpark, panelOpen, renderMarket, renderMenu, buildings, curBuilding, renderBnav, goBuilding, openWin, closeWin, renderWindow, start });
+  Object.assign(u, { setHTML, save, fit, note, run, play, step, render, renderHud, signed, profitSpark, panelOpen, renderMarket, renderMenu, buildings, curBuilding, renderBnav, goBuilding, openWin, closeWin, renderWindow, start });
   Object.assign(u, make_win_hub(u));
   Object.assign(u, make_win_develop(u));
   Object.assign(u, make_win_staff(u));
@@ -373,11 +413,14 @@ export function boot(root, hotData = {}) {
 
   // --- etkileşim
   root.addEventListener('click', (e) => {
+    const officeButton = e.target.closest('[data-office]');
+    if (officeButton) { if (!officeButton.disabled) officeAction(officeButton.dataset.office, officeButton.dataset.value); return; }
     if (e.target === el.win) return closeWin();
     const row = e.target.closest('tr[data-game]');
     if (row) { app.selGame = +row.dataset.game; el.winBody.scrollTop = 0; return renderWindow(); }
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
+    endOfficeEdit();
     audio.play('click');
     const g = G();
     if (b.dataset.pcat) { app.pop.cat = app.pop.cat === b.dataset.pcat ? null : b.dataset.pcat; return u.renderPop(); }
@@ -554,6 +597,7 @@ export function boot(root, hotData = {}) {
     }
   });
   root.addEventListener('change', (e) => {
+    if (e.target.matches('[data-office-room]')) return R.action('room', e.target.value);
     const t = e.target, g = G();
     if (t.dataset.import && t.files?.[0]) { u.importSave(t.files[0]); t.value = ''; return; }
     if (!g) return;
@@ -585,13 +629,17 @@ export function boot(root, hotData = {}) {
   });
   document.addEventListener('keydown', (e) => {
     if (!G()) return;
+    if (app.editOffice && e.key === 'Escape') { e.preventDefault(); return endOfficeEdit(); }
+    if (app.editOffice && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '')) {
+      if (e.key.toLowerCase() === 'r') { e.preventDefault(); return R.action('rotate'); }
+      if (e.key === 'Enter') { e.preventDefault(); return R.action('confirm'); }
+    }
     if (e.key === 'Escape' && u.tutorialOpen()) return u.tutNext(true);
     if (e.key === 'Escape' && app.pop) return u.closePop();
     if (e.key === 'Escape' && app.win) return closeWin();
     if (e.key === ' ' && !blocked() && !/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement?.tagName || '')) { e.preventDefault(); play(!app.running); }
   });
 
-  requestAnimationFrame(loop);
   fit();
   const fresh = (j) => { try { return JSON.parse(j).version >= 2; } catch { return false; } };
   if (hotData.save && fresh(hotData.save)) start(loadGame(hotData.save));

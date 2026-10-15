@@ -7,5 +7,9 @@ tmp-brief/
 __pycache__/
 *.py[cod]
 
+# X Project: yerel bağımlılıklar ve derlenen oyun
+x-project/node_modules/
+x-project/dist/
+
 # Yerel release çıktıları GitHub Release varlığı olarak yayınlanır
 release/

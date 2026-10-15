@@ -1,23 +1,25 @@
-// Yerel sunucu: node tools/serve.mjs → http://localhost:8080
-// index.html yayın sırasında bir belge iskeletine sarılır; yerelde iskeleti burada ekliyoruz.
+// npm start → bağımlılıklar dahil derle, yalnız oyun çıktısını sun.
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { extname, join, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import { buildGame } from './build.mjs';
 
-const root = join(fileURLToPath(import.meta.url), '..', '..');
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json' };
+const root = await mkdtemp(join(tmpdir(), 'x-project-'));
+await buildGame(root, { minify: false });
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.map': 'application/json', '.txt': 'text/plain' };
 const port = +process.env.PORT || 8080;
 
-createServer(async (req, res) => {
-  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const rel = normalize(url === '/' ? '/index.html' : url).replace(/^(\.\.[/\\])+/, '');
+const server = createServer(async (req, res) => {
   try {
-    let body = await readFile(join(root, rel));
-    if (rel === '/index.html') body = `<!doctype html><html lang="tr"><head><meta charset="utf-8"></head><body style="margin:0">${body}</body></html>`;
-    res.writeHead(200, { 'content-type': types[extname(rel)] || 'application/octet-stream' });
+    const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname), file = resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
+    if (!file.startsWith(root + sep)) { res.writeHead(403); res.end('erişim yok'); return; }
+    const body = await readFile(file);
+    res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
     res.end(body);
   } catch {
     res.writeHead(404); res.end('yok');
   }
-}).listen(port, () => console.log(`X Project: http://localhost:${port}`));
+});
+server.listen(port, '0.0.0.0', () => console.log(`X Project (Phaser): http://localhost:${port}\nKaynak değişince sunucuyu yeniden başlat.`));
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { server.close(async () => { await rm(root, { recursive: true, force: true }); process.exit(0); }); });

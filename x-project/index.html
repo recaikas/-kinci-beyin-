@@ -1,4 +1,9 @@
 <title>X Project</title>
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>X Project — Oyun Stüdyosu</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +36,7 @@
 html, body { height: 100%; }
 [hidden] { display: none !important; }
 * { box-sizing: border-box; }
-body { background: var(--night); color: var(--ink); font-family: var(--font-body); font-size: var(--s0); line-height: 1.4; overflow: hidden; }
+body { margin: 0; background: var(--night); color: var(--ink); font-family: var(--font-body); font-size: var(--s0); line-height: 1.4; overflow: hidden; }
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text-wrap: balance; letter-spacing: 0.03em; }
 h2 { font-size: var(--s1); } h3 { font-size: var(--s0); }
@@ -170,7 +175,18 @@ details.box[open] > summary h3::before { content: '▾ '; }
 .bname { display: grid; justify-items: center; padding: 3px 12px; background: color-mix(in srgb, var(--panel) 90%, transparent); border: 2px solid var(--line); font-family: var(--font-display); font-size: var(--s-1); white-space: nowrap; }
 .bname small { display: flex; gap: 4px; margin-top: 2px; }
 .bname i { width: 6px; height: 6px; background: var(--line); } .bname i.on { background: var(--candy); }
-#scene { cursor: pointer; touch-action: pan-y; }
+#scene { cursor: grab; touch-action: none; }
+#scene:active { cursor: grabbing; }
+#office-tools { position: absolute; top: 10px; left: 10px; z-index: 3; max-width: min(390px, calc(100% - 20px)); display: grid; gap: 6px; }
+#office-tools .office-camera { display: flex; flex-wrap: wrap; gap: 4px; }
+#office-tools button { min-height: 40px; padding: 5px 10px; background: #fff8e9; }
+#office-tools button[aria-pressed=true], #office-tools button[data-office=confirm] { background: #d3e5d5; }
+.office-edit { display: grid; gap: 8px; padding: 10px; border: 2px solid var(--shadow); background: #fff8e9f5; box-shadow: 3px 3px 0 #34404a30; max-height: min(46vh, 280px); overflow-y: auto; }
+.office-edit .office-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.office-edit output { font-size: 0.8rem; color: #426151; }
+.office-edit output.invalid { color: #a34136; }
+.office-edit label { display: grid; gap: 3px; }
+@media (max-height: 500px) { .office-edit { max-height: 40vh; } #office-tools button { min-height: 34px; } }
 .hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .hubtile { display: grid; justify-items: start; gap: 4px; padding: 12px; text-align: left; min-height: 92px; }
 .hubtile img { width: 28px; height: 28px; image-rendering: pixelated; }
@@ -519,11 +535,38 @@ button { border-color: var(--shadow); }
   #kpop { top: 46px; left: 8px; max-height: calc(100vh - 100px); max-width: 46vw; }
 }
 </style>
+</head>
+<body>
 
 <div id="game">
   <header id="hud"></header>
   <div id="stage">
     <canvas id="scene" aria-label="Stüdyonun piksel görünümü"></canvas>
+    <section id="office-tools" aria-label="Ofis yerleşimi ve kamera" hidden>
+      <div class="office-camera">
+        <button type="button" data-office="edit" aria-pressed="false">Ofisi düzenle</button>
+        <button type="button" data-office="zoom-out" aria-label="Uzaklaş">−</button>
+        <button type="button" data-office="zoom-in" aria-label="Yakınlaş">+</button>
+        <button type="button" data-office="fit">Sığdır</button>
+      </div>
+      <div class="office-edit" hidden>
+        <label>Oda<select data-office-room aria-label="Düzenlenecek oda"></select></label>
+        <output aria-live="polite">Eşyaya dokun, sürükle ve Yerleştir ile onayla.</output>
+        <div class="office-actions">
+          <button type="button" data-office="rotate" disabled>Döndür</button>
+          <button type="button" data-office="confirm" disabled>Yerleştir</button>
+          <button type="button" data-office="cancel" disabled>İptal</button>
+          <button type="button" data-office="remove" disabled>Kaldır</button>
+        </div>
+        <div class="office-actions" aria-label="Dekor ekle">
+          <button type="button" data-office="add" data-value="plant">+ Bitki</button>
+          <button type="button" data-office="add" data-value="shelf">+ Kitaplık</button>
+          <button type="button" data-office="add" data-value="sofa">+ Kanepe</button>
+          <button type="button" data-office="add" data-value="coffee">+ Kahve</button>
+        </div>
+        <small>Boş zemini sürükleyerek etrafa bak. Dekorasyon üretim kapasitesini değiştirmez.</small>
+      </div>
+    </section>
     <div id="notes" aria-live="polite"></div>
     <div id="market" aria-label="Satıştaki oyunlar"></div>
     <div id="bnav" aria-label="Binalar"></div>
@@ -539,8 +582,6 @@ button { border-color: var(--shadow); }
 </div>
 <div id="modal" hidden></div>
 
-<script type="module">
-  import { boot } from './src/ui/ui.js';
-  const go = (data) => boot(document.body, data || {});
-  window.claude?.hot?.ready ? window.claude.hot.ready(go) : go(window.claude?.hot?.data ?? {});
-</script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

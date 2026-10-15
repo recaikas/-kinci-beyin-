@@ -7,12 +7,17 @@ Mekanikler `Hibrit Yönetim Oyunu — Mekanik Çözümleme Derlemesi` (Mad Games
 ## Çalıştırma
 
 ```bash
-node tools/serve.mjs        # http://localhost:8080
-node test/validate.mjs      # 199 kalibrasyon ve tutarlılık kontrolü (50 yıllık bot dumanı dahil, ~17 sn)
+npm ci                     # sabitlenmiş Phaser ve geliştirme bağımlılıkları
+npm start                  # http://localhost:8080 (başlangıçta derler)
+npm run build              # statik yayın çıktısı: dist/
+npm run test:office        # yerleşim + gerçek Phaser Canvas/DOM entegrasyon kontrolleri (Node)
+node test/validate.mjs      # mevcut 422 kontrol; bilinen 11 eski beklenti başarısızlığı var
 node tools/balance.mjs 8 --md docs/DENGE.md   # tam denge raporu
 ```
 
-Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
+Node 18+ gerekir. Ofis sahnesi Phaser 3.90.0 kullanır; esbuild tüm oyun kodunu ve motoru `dist/app.js` içine paketler. Oyun açılırken motor CDN'den indirilmez. `dist/` klasörü statik sunucuya bütünüyle konabilir; çift tıklayarak `file://` üzerinden açmak desteklenen çalıştırma yöntemi değildir. Kaynak değişikliklerinden sonra `npm start` yeniden başlatılmalıdır.
+
+Bu daldaki geçişin kapsamı ve doğrulama sınırları: [Phaser geçiş notları](docs/PHASER-MIGRATION.md).
 
 ## Mimari (şartnameye göre)
 
@@ -23,17 +28,21 @@ Node 18+ gerekir. Derleme adımı ve bağımlılık yok.
 | Modeller | `src/models.js` | Üretim, değerlendirme (`T_d = H·D·τ·1,11^P`), satış (`zirve = B·Pz·Z·S(n)·…`) |
 | Sistemler | `src/systems/*.js` | Kadro, üretim, pazar, ekonomi, olaylar |
 | Oyun | `src/game.js` | Haftalık tik ve oyuncu eylemleri |
-| Arayüz | `src/ui/ui.js` (çekirdek: HUD, satış paneli, menü, olay dinleyicileri), `win_*.js` (pencere grupları), `dialogs.js`, `chart.js`, `util.js`, `render.js` (piksel sahne), `index.html` | Her pencere grubu ortak bağlam nesnesini alan bir fabrika |
+| Ofis dünyası | `src/systems/office.js` | Kayıtlı hücre konumları, eşya dönüşleri, çakışma ve erişilebilirlik, yol bulma |
+| Ofis sahnesi | `src/office/renderer.js`, `assets.js` | Phaser sahnesi, kamera, çalışan hareketi, sprite atlası ve yerleşim önizlemesi |
+| Arayüz | `src/ui/ui.js`, `win_*.js`, `dialogs.js`, `chart.js`, `util.js`, `icons.js`, `index.html` | HTML/CSS yönetim pencereleri ve sahne bağlantısı |
 
 Kurallar: kodda sayı yok; her para hareketi `ledger.post` üzerinden; `Math.random` yok; sistemler olay veriyoluyla haberleşir.
 
 ## Arayüz
 
-Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi. Üstte ince bir HUD ve GDT tarzı proje sayacı (disiplin puanları + hata), altta ikonlu menü var. Yönetim panelleri sahnenin üstünde pencere olarak açılır; pencere açıkken oyun durur. Yeni oyun adım adım bir sihirbazla başlar (fikir → platform → teknoloji → onay; seçilecek motor yokken teknoloji adımı atlanır), her fazın başında zaman dağılımı sorulur, yayında eleştirmen ekranı gelir. Sahne 3/4 perspektifle çizilir: duvar kalınlıkları, gölgeler, gün-gece ışığı, oda tipine göre mobilya, çalışanların kafasından yükselen puan baloncukları.
+Game Dev Tycoon ve Kairosoft oyunlarından esinli: ekranın tamamı ofis sahnesi. Üstte HUD ve proje sayacı, altta menü var. Yönetim pencereleri açıkken oyun durur. Yeni oyun adım adım bir sihirbazla başlar (fikir → platform → teknoloji → onay; seçilecek motor yokken teknoloji adımı atlanır), her fazın başında zaman dağılımı sorulur, yayında eleştirmen ekranı gelir. Bu dalda ofisi Phaser çizer; dünya ekran boyutundan bağımsızdır. Karakterler masalarına ve aynı odadaki kahve noktasına yürür. Yürüyüş ve durum simgeleri görseldir; haftalık üretim/maaş hesabının sahibi mevcut oyun çekirdeğidir.
 
 ### Kontroller (MGT/GDT tarzı)
 
-Alt çubukta Kairosoft gibi yalnız Kaydet, Günlük ve Menü var. Taçlı kurucuya ya da Menü'ye dokununca solda küçük bir menü açılır; başlığa dokununca seçenekleri, seçeneğe dokununca ekranı açılır. Henüz açılmamış başlıklar ve seçenekler görünmez. Odalardaki çalışanlara dokunmak departman menüsünü açar. Sahnede bir odaya dokunmak o odanın penceresini açar: görev, hedef proje, çalışanlar, odaya işe alım. Boş alana dokunmak oda kurar, kilitli alana dokunmak taşınma seçeneklerini açar. Binalar (Ana ofis, Stüdyolar, Ar-Ge, Yayın ve destek) arasında sahneyi yatay kaydırarak ya da oklarla geçilir.
+Alt çubukta Kaydet, Günlük ve Menü var. Taçlı kurucu veya Menü kurucu menüsünü; çalışan veya oda departman menüsünü açar. Binalar alt oklarla değiştirilir. Boş zemini sürüklemek kamerayı taşır; +/−, fare tekerleği ve Sığdır kamerayı ayarlar. Oda kurmak için sahnedeki + ODA KUR yazısı veya mevcut yönetim menüsü kullanılır.
+
+**Ofisi düzenle:** eşya seç, sürükle, gerekirse Döndür, sonra Yerleştir. Yeşil önizleme uygundur; kırmızı önizleme kaydedilmez. İptal taslağı siler. Yeni dekor ekledikten sonra boş zeminde konum seçilebilir. R döndürür, Enter onaylar, Escape düzenlemeyi bitirir. Kapı ve bütün kullanılabilir masa/oturma noktaları erişilebilir kalmalıdır. Çalışma masaları ve mola odasının koltukları kaldırılamaz. Dekorlar ücretsiz görsel yerleşimdir; oda kapasitesini değiştirmez. Onaylı konumlar otomatik kayda ve kayıt dosyasına dahildir.
 
 ## İçerik
 

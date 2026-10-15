@@ -1,1 +1,1 @@
-{"type":"module","name":"x-project","private":true,"scripts":{"test":"node test/validate.mjs","start":"node tools/serve.mjs"}}
+{"type":"module","name":"x-project","private":true,"scripts":{"test":"node test/validate.mjs","start":"node tools/serve.mjs","build":"node tools/build.mjs","test:office":"node --test test/office.test.mjs test/scene.test.mjs test/ui-startup.test.mjs"},"dependencies":{"phaser":"3.90.0"},"devDependencies":{"@napi-rs/canvas":"0.1.80","esbuild":"0.28.2","jsdom":"26.1.0"}}

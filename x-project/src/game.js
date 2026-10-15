@@ -23,6 +23,7 @@ import * as Genres from './systems/genres.js';
 import * as Engines from './systems/engines.js';
 import * as Platform from './systems/platform.js';
 import * as Crew from './systems/crew.js';
+import * as Office from './systems/office.js';
 
 export function createState({ companyName = 'X Project Stüdyo', founderName = 'Sen', difficulty = 'orta', length = PACK.meta.defaultLength, seed = 1976, founderSpec = 'oyn', home = 'na', background = 'salon' } = {}) {
   const diff = PACK.difficulties.find((d) => d.id === difficulty);
@@ -70,6 +71,7 @@ function migrate(state) {
   Engines.migrate(state);
   Platform.migrate(state);
   Crew.migrate(state);
+  Office.ensureOffice(state, PACK);
   if (state.rivals?.length && !state.rivals.some((r) => r.cid)) state.rivals = state.rivals.filter((r) => r.acquired);
   state.version = 3;
 }
@@ -115,6 +117,7 @@ export function makeGame(state, pack = PACK) {
       Market.initRivals(ctx);
       Market.weeklyTrend(ctx);
       ctx.news(`🏚️ ${state.companyName} bir garajda kuruldu. Masada tek bir bilgisayar, kafada büyük hayaller.`, 'info');
+      Office.ensureOffice(state, pack);
       return api;
     },
 
@@ -274,8 +277,10 @@ export function makeGame(state, pack = PACK) {
     train: (id, tid) => Staff.train(ctx, id, tid),
     raise: (id) => Staff.raise(ctx, id, pack.economy.raiseOnDemand),
     // --- Odalar ve kariyer
-    buildRoom: (type) => Staff.buildRoom(ctx, type),
-    demolishRoom: (id) => Staff.demolishRoom(ctx, id),
+    buildRoom(type) { const res = Staff.buildRoom(ctx, type); if (res.ok) Office.ensureOffice(state, pack); return res; },
+    demolishRoom(id) { const res = Staff.demolishRoom(ctx, id); if (res.ok) Office.ensureOffice(state, pack); return res; },
+    placeFurniture: (roomId, item) => Office.placeFurniture(ctx, roomId, item),
+    removeFurniture: (roomId, id) => Office.removeFurniture(ctx, roomId, id),
     // mode: 'otomatik' | 'oyun' | 'sozlesme' | 'destek:<projeId>'
     setRoomMode(id, mode) {
       const r = state.rooms.find((x) => x.id === id);
@@ -334,7 +339,7 @@ export function makeGame(state, pack = PACK) {
     startTech: (fid) => Engines.startTech(ctx, fid),
 
     // --- Ekonomi
-    moveOffice: () => Eco.moveOffice(ctx),
+    moveOffice() { const res = Eco.moveOffice(ctx); if (res.ok) Office.ensureOffice(state, pack); return res; },
     upgradeStations: () => Eco.upgradeStations(ctx),
     takeLoan: (a) => Eco.takeLoan(ctx, a),
     acquireRival: (id) => Market.acquireRival(ctx, id),
@@ -351,7 +356,7 @@ export function makeGame(state, pack = PACK) {
       const avg = state.games.length ? state.games.reduce((a, g) => a + g.score, 0) / state.games.length : 0;
       return Math.round(Math.max(0, state.cash) / s.cashDiv + state.fans / s.fansDiv + avg * state.games.length / s.gameScoreDiv + state.prestige * s.prestigeMult + state.awards.length * s.prestigeMult);
     },
-    save() { return JSON.stringify(state); },
+    save() { Office.ensureOffice(state, pack); return JSON.stringify(state); },
   };
   return api;
 }
